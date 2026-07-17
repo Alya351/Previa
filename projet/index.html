@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Projets IA — Présentation</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root{
+  --bg:#06080a;
+  --bg-alt:#0b0f12;
+  --ink:#f3f6f4;
+  --dim:#93a19c;
+  --line:#1e2926;
+  --acid:#a6ff5c;
+  --alert:#ff5c5c;
+  --amber:#ffb54d;
+  --mono:'JetBrains Mono', monospace;
+  --disp:'Space Grotesk', sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--disp);
+  overflow-x:hidden;
+}
+
+.grid-bg{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(166,255,92,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(166,255,92,0.05) 1px, transparent 1px);
+  background-size:42px 42px;
+  mask-image:radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 90%);
+}
+.scanline{
+  position:fixed;left:0;right:0;height:2px;z-index:1;pointer-events:none;
+  background:linear-gradient(90deg, transparent, rgba(166,255,92,0.5), transparent);
+  animation:scan 7s linear infinite;
+  box-shadow:0 0 12px 1px rgba(166,255,92,0.4);
+}
+@keyframes scan{0%{top:-2px;}100%{top:100%;}}
+
+.progress{position:fixed;top:0;left:0;height:2px;background:var(--acid);z-index:50;width:0%;transition:width .15s;box-shadow:0 0 8px var(--acid);}
+.dock{position:fixed;right:22px;top:50%;transform:translateY(-50%);z-index:40;display:flex;flex-direction:column;gap:10px;}
+.dock a{width:8px;height:8px;border-radius:50%;background:var(--line);border:1px solid var(--dim);display:block;transition:.25s;}
+.dock a.active{background:var(--acid);box-shadow:0 0 10px var(--acid);transform:scale(1.3);border-color:var(--acid);}
+
+.tag{position:fixed;top:24px;left:28px;z-index:40;font-family:var(--mono);font-size:.78rem;letter-spacing:.15em;color:var(--dim);display:flex;align-items:center;gap:8px;}
+.tag .dot{width:6px;height:6px;border-radius:50%;background:var(--alert);animation:pulse 1.8s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+
+.idx{position:fixed;top:24px;right:44px;z-index:40;font-family:var(--mono);font-size:.78rem;color:var(--dim);letter-spacing:.08em;text-align:right;}
+
+main{position:relative;z-index:2;height:100vh;overflow-y:scroll;scroll-snap-type:y mandatory;}
+section{min-height:100vh;width:100%;display:flex;flex-direction:column;justify-content:center;padding:9vh 8vw;scroll-snap-align:start;position:relative;border-bottom:1px solid var(--line);}
+
+.ghost-num{position:absolute;right:4vw;top:50%;transform:translateY(-50%);font-family:var(--mono);font-weight:700;font-size:min(38vw,420px);color:transparent;-webkit-text-stroke:1px rgba(166,255,92,0.09);line-height:1;z-index:-1;user-select:none;pointer-events:none;}
+
+.eyebrow{font-family:var(--mono);font-size:.9rem;letter-spacing:.22em;color:var(--acid);text-transform:uppercase;margin-bottom:20px;display:flex;align-items:center;gap:10px;}
+.eyebrow::before{content:'';width:26px;height:1px;background:var(--acid);}
+
+h1.hero{font-size:clamp(3.1rem,7.6vw,7.2rem);font-weight:700;line-height:.98;letter-spacing:-.02em;max-width:16ch;}
+h1.hero .fade{color:var(--dim);}
+.lede{font-size:clamp(1.2rem,1.8vw,1.5rem);color:var(--dim);max-width:56ch;margin-top:28px;line-height:1.55;}
+
+h2{font-size:clamp(2.1rem,4vw,3.6rem);font-weight:600;letter-spacing:-.01em;max-width:18ch;margin-bottom:10px;}
+.sub{color:var(--dim);font-size:clamp(1.1rem,1.5vw,1.3rem);max-width:60ch;margin-bottom:46px;line-height:1.5;}
+
+/* inline source link — sits at the bottom of a claim */
+.src{display:inline-flex;align-items:flex-start;gap:7px;margin-top:14px;font-family:var(--mono);font-size:.96rem;color:var(--dim);text-decoration:none;line-height:1.4;border-bottom:1px solid transparent;}
+.src::before{content:'↳';color:var(--acid);flex:none;}
+.src:hover{color:var(--acid);}
+.src u{text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;}
+
+/* problem list */
+.problems{display:grid;gap:0;max-width:900px;margin-top:6px;}
+.problems li{list-style:none;display:flex;gap:24px;padding:26px 0;border-top:1px solid var(--line);align-items:baseline;}
+.problems li:last-child{border-bottom:1px solid var(--line);}
+.problems li b{font-family:var(--mono);color:var(--alert);font-weight:700;font-size:.95rem;width:44px;flex:none;}
+.problems li .txt{font-size:clamp(1.2rem,1.9vw,1.45rem);color:var(--ink);}
+
+/* stat grid */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);max-width:1240px;}
+.stat{background:var(--bg);padding:34px 28px;transition:.25s;}
+.stat:hover{background:var(--bg-alt);}
+.stat .n{font-family:var(--mono);font-weight:700;font-size:clamp(2.9rem,4.8vw,4.4rem);color:var(--acid);line-height:1;letter-spacing:-.02em;}
+.stat .n.red{color:var(--alert);}
+.stat .n.amber{color:var(--amber);}
+.stat .u{font-family:var(--mono);font-size:1.2rem;color:var(--dim);margin-left:2px;}
+.stat p{margin-top:14px;font-size:1.16rem;color:var(--ink);line-height:1.4;}
+
+/* victims split */
+.split{display:grid;grid-template-columns:1.1fr .9fr;gap:70px;max-width:1200px;align-items:center;}
+@media(max-width:900px){.split{grid-template-columns:1fr;gap:36px;}}
+.bars{display:flex;flex-direction:column;gap:26px;}
+.bar-row .lbl{display:flex;justify-content:space-between;gap:12px;font-family:var(--mono);font-size:.95rem;color:var(--dim);margin-bottom:9px;}
+.bar-row .lbl b{color:var(--ink);font-family:var(--disp);font-size:1.12rem;font-weight:500;}
+.bar-track{height:11px;background:var(--line);border-radius:2px;overflow:hidden;}
+.bar-fill{height:100%;background:linear-gradient(90deg,var(--acid),var(--amber));width:0;transition:width 1.4s cubic-bezier(.2,.8,.2,1);border-radius:2px;}
+.note-card{border:1px solid var(--line);padding:28px 30px;background:var(--bg-alt);font-size:1.16rem;color:var(--dim);line-height:1.6;}
+.note-card b{color:var(--ink);}
+
+/* two-card layout (existant / limits) */
+.two-cards{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);max-width:1240px;}
+@media(max-width:820px){.two-cards{grid-template-columns:1fr;}}
+.card{background:var(--bg);padding:36px 32px;}
+.card h3{font-family:var(--mono);font-size:.88rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:16px;color:var(--amber);}
+.card h3.bad{color:var(--alert);}
+.card .big{font-family:var(--mono);font-weight:700;font-size:2.6rem;color:var(--ink);margin-bottom:12px;}
+.card p{color:var(--dim);font-size:1.14rem;line-height:1.55;}
+
+/* solution steps */
+.steps{display:flex;flex-direction:column;max-width:920px;gap:0;}
+.step{display:grid;grid-template-columns:70px 1fr;gap:24px;padding:26px 0;border-top:1px solid var(--line);}
+.step:last-child{border-bottom:1px solid var(--line);}
+.step .num{font-family:var(--mono);color:var(--acid);font-weight:700;font-size:1.4rem;}
+.step h4{font-size:clamp(1.15rem,1.7vw,1.4rem);font-weight:600;margin-bottom:8px;}
+.step p{color:var(--dim);font-size:1.02rem;line-height:1.55;max-width:65ch;}
+
+/* comparison table */
+.tbl-wrap{max-width:1240px;overflow-x:auto;border:1px solid var(--line);}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:1.1rem;}
+table th,table td{padding:16px 18px;text-align:left;border-top:1px solid var(--line);border-right:1px solid var(--line);}
+table th:last-child,table td:last-child{border-right:none;}
+table thead th{font-family:var(--mono);font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-top:none;background:var(--bg-alt);}
+table tbody tr.us{background:rgba(166,255,92,0.06);}
+table tbody tr.us td:first-child{color:var(--acid);font-weight:600;}
+table td{color:var(--dim);}
+table tbody tr td:first-child{color:var(--ink);font-weight:500;}
+
+/* clients grid */
+.clients{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);max-width:1240px;}
+.client{background:var(--bg);padding:28px 26px;}
+.client .zone{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;color:var(--acid);margin-bottom:10px;}
+.client h4{font-size:1.2rem;font-weight:600;margin-bottom:8px;}
+.client p{color:var(--dim);font-size:1.08rem;line-height:1.5;}
+
+footer.hint{position:fixed;bottom:22px;left:28px;z-index:40;font-family:var(--mono);font-size:.75rem;color:var(--dim);letter-spacing:.1em;display:flex;gap:8px;align-items:center;}
+footer.hint .k{border:1px solid var(--line);padding:2px 6px;border-radius:3px;}
+
+::-webkit-scrollbar{width:0;}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="scanline"></div>
+<div class="progress" id="progress"></div>
+<div class="tag"><span class="dot"></span> PRÉSENTATION — SÉCURITÉ &amp; IA</div>
+<div class="idx" id="idx">01 / 24</div>
+<div class="dock" id="dock"></div>
+<footer class="hint">SCROLL OU <span class="k">↑</span><span class="k">↓</span> POUR NAVIGUER</footer>
+
+<main id="main">
+
+  <!-- 0 : COVER -->
+  <section id="s0" data-label="Accueil">
+    <div class="eyebrow">Deux projets · Intelligence artificielle</div>
+    <h1 class="hero">Là où l'infrastructure<br><span class="fade">n'arrive pas.</span></h1>
+    <p class="lede">Deux systèmes indépendants, pensés pour l'Afrique : anticiper l'infraction avant qu'elle n'ait lieu, et apporter le savoir là où le réseau n'existe pas. Chaque partie se lit comme un projet à part entière.</p>
+    <div class="two-cards" style="margin-top:48px;">
+      <div class="card">
+        <h3>Partie 01</h3>
+        <div class="big">Sécurité prédictive</div>
+        <p>Un modèle qui repère les signaux comportementaux avant l'infraction, branché sur les caméras déjà installées — Afrique du Sud, Kenya, Rwanda.</p>
+      </div>
+      <div class="card">
+        <h3>Partie 02 — SiKa</h3>
+        <div class="big">Hub numérique solaire</div>
+        <p>Une boîte hors ligne qui apporte l'école, la santé et le réseau aux villages du Burkina Faso que le réseau n'atteint pas.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 1 : PART 1 HERO -->
+  <section id="s1" data-label="Partie 01">
+    <div class="ghost-num">01</div>
+    <div class="eyebrow">Partie 01 — Vision par ordinateur</div>
+    <h1 class="hero">Prédire l'infraction<br><span class="fade">avant le geste.</span></h1>
+    <p class="lede">Un modèle entraîné à reconnaître les signaux comportementaux qui précèdent le passage à l'acte, à partir de flux caméra existants — pour alerter avant l'infraction, pas après. Pensé pour le terrain africain.</p>
+  </section>
+
+  <!-- 2 : PROBLEM -->
+  <section id="s2" data-label="Le problème">
+    <div class="eyebrow">Le problème</div>
+    <h2>La caméra regarde,<br>elle n'anticipe rien.</h2>
+    <p class="sub">Que le parc de caméras soit ancien (Afrique du Sud) ou tout neuf (Burkina Faso), il reste passif : il filme, il ne prévient pas.</p>
+    <ul class="problems">
+      <li><b>ZA</b><div class="txt">En Afrique du Sud, 27 494 meurtres ont été enregistrés en 2023/2024 — environ 76 par jour, l'un des taux les plus élevés au monde.
+        <a class="src" href="https://www.ourpower.co.za/crime-stats" target="_blank"><u>SAPS — South African Police Service</u></a>
+      </div></li>
+      <li><b>BF</b><div class="txt">Le Burkina Faso vient d'investir 52 milliards FCFA (≈90M$) dans 900 caméras à Ouagadougou et Bobo-Dioulasso — pour filmer, pas pour prévenir.
+        <a class="src" href="https://fr.africanews.com/2021/07/08/burkina-faso-quelque-900-cameras-de-videosurveillance-contre-l-insecurite/" target="_blank"><u>Africanews, projet SMART Burkina</u></a>
+      </div></li>
+      <li><b>OMS</b><div class="txt">32% des femmes d'Afrique subsaharienne ont subi des violences conjugales ou sexuelles — l'un des taux les plus élevés au monde.
+        <a class="src" href="https://www.who.int/fr/news-room/fact-sheets/detail/violence-against-women" target="_blank"><u>OMS, Violence à l'égard des femmes</u></a>
+      </div></li>
+      <li><b>AFR</b><div class="txt">11 gouvernements africains ont dépensé plus de 2 milliards de dollars en caméras de surveillance IA — sans que la criminalité recule pour autant.
+        <a class="src" href="https://restofworld.org/2026/africa-china-ai-surveillance/" target="_blank"><u>Rest of World, enquête surveillance IA en Afrique</u></a>
+      </div></li>
+    </ul>
+  </section>
+
+  <!-- 3 : NUMBERS — VIOLENCE -->
+  <section id="s3" data-label="Chiffres — Violence">
+    <div class="eyebrow">Chiffres — la violence en Afrique</div>
+    <h2>Une échelle continentale.</h2>
+    <p class="sub">SAPS, UNODC, OMS, ministère de la Sécurité du Burkina Faso — chiffres officiels 2023-2026.</p>
+    <div class="stats">
+      <div class="stat">
+        <div class="n red">76<span class="u">/jour</span></div>
+        <p>Meurtres enregistrés en Afrique du Sud en 2023/2024</p>
+        <a class="src" href="https://www.ourpower.co.za/crime-stats" target="_blank"><u>SAPS, statistiques 2023/2024</u></a>
+      </div>
+      <div class="stat">
+        <div class="n amber">27 494</div>
+        <p>Meurtres au total en Afrique du Sud sur l'année 2023/2024</p>
+        <a class="src" href="https://www.ourpower.co.za/crime-stats" target="_blank"><u>SAPS, statistiques 2023/2024</u></a>
+      </div>
+      <div class="stat">
+        <div class="n">11,9<span class="u">/100k</span></div>
+        <p>Taux d'homicides moyen en Afrique subsaharienne (2023)</p>
+        <a class="src" href="https://www.unodc.org/documents/data-and-analysis/gsh/2023/Global_study_on_homicide_2023_web.pdf" target="_blank"><u>UNODC, Global Study on Homicide 2023</u></a>
+      </div>
+      <div class="stat">
+        <div class="n red">32<span class="u">%</span></div>
+        <p>Des femmes d'Afrique subsaharienne victimes de violence conjugale</p>
+        <a class="src" href="https://www.who.int/fr/news-room/fact-sheets/detail/violence-against-women" target="_blank"><u>OMS, 2024</u></a>
+      </div>
+      <div class="stat">
+        <div class="n amber">1 700</div>
+        <p>Interpellations lors d'une seule opération anti-criminalité au Burkina Faso (WIBGA 2)</p>
+        <a class="src" href="https://www.moussonews.com/wibga-2-1-700-interpellations-7-000-engins-saisis-wibga-3-prend-le-relais/" target="_blank"><u>Mousso News, 2026</u></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 : NUMBERS — SURVEILLANCE -->
+  <section id="s4" data-label="Chiffres — Surveillance">
+    <div class="eyebrow">Chiffres — la surveillance en Afrique</div>
+    <h2>Un continent qui s'équipe vite.</h2>
+    <p class="sub">Afrique du Sud, Rwanda, Kenya, Burkina Faso : quatre modèles de vidéosurveillance en forte croissance.</p>
+    <div class="stats">
+      <div class="stat">
+        <div class="n amber">6 469</div>
+        <p>Caméras du réseau privé Vumacam à Johannesburg</p>
+        <a class="src" href="https://www.citizen.co.za/northcliff-melville-times/news-headlines/2024/11/18/cameras-against-crime/" target="_blank"><u>Northcliff Melville Times, nov. 2024</u></a>
+      </div>
+      <div class="stat">
+        <div class="n">55<span class="u">%</span></div>
+        <p>De Kigali (Rwanda) couvert par un réseau de vidéosurveillance</p>
+        <a class="src" href="https://observer.ug/technology/new-report-exposes-african-smart-cities-as-hubs-for-digital-surveillance/" target="_blank"><u>The Observer, rapport Smart Cities</u></a>
+      </div>
+      <div class="stat">
+        <div class="n">2 000</div>
+        <p>Caméras du système Huawei-Safaricom à Nairobi</p>
+        <a class="src" href="https://www.codastory.com/authoritarian-tech/africa-surveillance-china-magnum/" target="_blank"><u>Coda Story</u></a>
+      </div>
+      <div class="stat">
+        <div class="n amber">900</div>
+        <p>Caméras du projet SMART Burkina (Ouagadougou, Bobo-Dioulasso), financées à 90% par un prêt chinois</p>
+        <a class="src" href="https://fr.africanews.com/2021/07/08/burkina-faso-quelque-900-cameras-de-videosurveillance-contre-l-insecurite/" target="_blank"><u>Africanews</u></a>
+      </div>
+      <div class="stat">
+        <div class="n red">2<span class="u">Md$</span></div>
+        <p>Investis par 11 gouvernements africains en caméras IA</p>
+        <a class="src" href="https://restofworld.org/2026/africa-china-ai-surveillance/" target="_blank"><u>Rest of World</u></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 : VICTIMS -->
+  <section id="s5" data-label="Personnes touchées">
+    <div class="eyebrow">Qui est touché — Afrique</div>
+    <h2>Des victimes très majoritairement des femmes.</h2>
+    <div class="split">
+      <div class="bars">
+        <div class="bar-row">
+          <div class="lbl"><b>Mali — femmes victimes de violences physiques ou sexuelles</b><span>45%</span></div>
+          <div class="bar-track"><div class="bar-fill" data-w="45"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="lbl"><b>Côte d'Ivoire — femmes victimes au cours de leur vie</b><span>33%</span></div>
+          <div class="bar-track"><div class="bar-fill" data-w="33"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="lbl"><b>Moyenne Afrique subsaharienne — violence conjugale</b><span>32%</span></div>
+          <div class="bar-track"><div class="bar-fill" data-w="32"></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="lbl"><b>Burkina Faso — violence conjugale (12 derniers mois)</b><span>11,2%</span></div>
+          <div class="bar-track"><div class="bar-fill" data-w="11.2"></div></div>
+        </div>
+      </div>
+      <div class="note-card">
+        L'Afrique subsaharienne affiche l'un des taux de violence envers les femmes les plus élevés au monde rapporté à sa population féminine : <b>32%</b> en moyenne, jusqu'à <b>45%</b> au Mali. Au Burkina Faso, <b>91%</b> des cas de violence basée sur le genre recensés concernent des personnes déplacées.
+        <a class="src" href="https://www.who.int/fr/news-room/fact-sheets/detail/violence-against-women" target="_blank"><u>OMS, Violence à l'égard des femmes, 2024</u></a>
+        <a class="src" href="https://donnees.banquemondiale.org/indicator/SG.VAW.1549.ZS?locations=BF" target="_blank"><u>Banque mondiale, Burkina Faso</u></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 : EXISTANT — CE QUI FONCTIONNE -->
+  <section id="s6" data-label="L'existant">
+    <div class="eyebrow">L'existant — l'infrastructure est déjà là</div>
+    <h2>Pas besoin de tout reconstruire.</h2>
+    <div class="two-cards">
+      <div class="card">
+        <h3>Johannesburg — Vumacam</h3>
+        <div class="big">476 interceptions</div>
+        <p>Réseau de 6 469 caméras couplé à la reconnaissance de plaques ; en 100 jours : 476 interceptions, 104 arrestations, temps de réponse ramené de 18-30 min à 5-10 min. Détecte des véhicules, pas des comportements humains.</p>
+        <a class="src" href="https://www.citizen.co.za/northcliff-melville-times/news-headlines/2024/11/18/cameras-against-crime/" target="_blank"><u>Northcliff Melville Times</u></a>
+      </div>
+      <div class="card">
+        <h3>11+ pays — smart cities</h3>
+        <div class="big">2 Md$ investis</div>
+        <p>Nigeria (470M$), Kenya (219M$) et neuf autres gouvernements africains ont déjà payé pour des caméras IA. Le Burkina Faso a fait de même hors de cette liste : 52 milliards FCFA pour 900 caméras à Ouagadougou et Bobo-Dioulasso. Le matériel existe — il manque l'analyse comportementale pour le rendre préventif.</p>
+        <a class="src" href="https://restofworld.org/2026/africa-china-ai-surveillance/" target="_blank"><u>Rest of World</u></a>
+        <a class="src" href="https://fr.africanews.com/2021/07/08/burkina-faso-quelque-900-cameras-de-videosurveillance-contre-l-insecurite/" target="_blank"><u>Africanews, SMART Burkina</u></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 : EXISTANT — CE QUI NE MARCHE PAS -->
+  <section id="s7" data-label="Les limites">
+    <div class="eyebrow">L'existant — ce qui ne marche pas</div>
+    <h2>La preuve par Nairobi.</h2>
+    <div class="two-cards">
+      <div class="card">
+        <h3 class="bad">Promesse retirée</h3>
+        <div class="big">4,2% jugent ça efficace</div>
+        <p>Huawei annonçait -46% de criminalité à Nairobi en 2014-2015 ; le rapport a depuis été retiré de son site. Dès 2017, la criminalité dépassait son niveau d'avant l'installation des caméras.</p>
+        <a class="src" href="https://www.codastory.com/authoritarian-tech/africa-surveillance-china-magnum/" target="_blank"><u>Coda Story</u></a>
+      </div>
+      <div class="card">
+        <h3 class="bad">Caméra classique</h3>
+        <div class="big">0 alerte</div>
+        <p>Une caméra de vidéoprotection standard ne déclenche rien avant l'acte : elle sert de preuve après coup. Des milliards de dollars ont été investis sur le continent dans du matériel qui regarde, sans jamais prévenir.</p>
+        <a class="src" href="https://restofworld.org/2026/africa-china-ai-surveillance/" target="_blank"><u>Rest of World</u></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 : INTÉGRITÉ -->
+  <section id="s8" data-label="Intégrité">
+    <div class="ghost-num">"</div>
+    <div class="eyebrow">Avant de proposer</div>
+    <h2>Rien ne sert de mentir.</h2>
+    <p class="sub">Tout ce qui précède est vérifiable : chaque chiffre est sourcé, daté, cliquable. Aucune statistique gonflée pour rendre le problème plus impressionnant qu'il ne l'est.</p>
+    <div class="note-card" style="max-width:760px;">
+      Ce qui suit change de nature : ce n'est plus un constat, c'est une proposition. <b>Aucun modèle n'existe à ce jour</b> — c'est une idée de projet à construire entièrement : collecte de données, entraînement, tests terrain, validation. Rien n'est encore fait.
+    </div>
+  </section>
+
+  <!-- 9 : LA SOLUTION -->
+  <section id="s9" data-label="La solution">
+    <div class="ghost-num">S</div>
+    <div class="eyebrow">Notre proposition — à l'état d'idée</div>
+    <h2>Lire le comportement, pas seulement la scène.</h2>
+    <p class="sub">Un modèle d'analyse posturale et gestuelle, à concevoir et entraîner, pour le brancher sur des caméras déjà en place — et repérer les signaux précurseurs avant l'acte.</p>
+    <div class="steps">
+      <div class="step"><div class="num">01</div><div><h4>Squelette, pas visage</h4><p>Extraire les points clés du corps (posture, démarche, gestuelle) en temps réel — sans stocker de donnée biométrique faciale. Reste à développer.</p></div></div>
+      <div class="step"><div class="num">02</div><div><h4>Signaux précurseurs</h4><p>Entraîner le modèle à reconnaître les micro-comportements qui précèdent statistiquement un passage à l'acte : rôdage, dissimulation, posture d'agression, encerclement. Reste à collecter et annoter les données.</p></div></div>
+      <div class="step"><div class="num">03</div><div><h4>Alerte, pas décision</h4><p>Envoyer l'alerte à un opérateur humain qui validerait avant toute intervention — l'IA signalerait, elle ne jugerait jamais seule. Reste à concevoir et tester.</p></div></div>
+    </div>
+  </section>
+
+  <!-- 9 : NOTRE PLUS -->
+  <section id="s10" data-label="Notre plus">
+    <div class="eyebrow">Notre plus</div>
+    <h2>Ce que personne ne fait encore.</h2>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Solution</th><th>Analyse</th><th>Avant l'acte</th><th>Terrain</th></tr></thead>
+        <tbody>
+          <tr><td>Caméra classique</td><td>Aucune</td><td>Non</td><td>Tout le continent</td></tr>
+          <tr><td>Nairobi (Huawei-Safaricom)</td><td>Vidéo passive</td><td>Non (4,2% jugée efficace)</td><td>Kenya</td></tr>
+          <tr><td>Vumacam</td><td>Plaque / véhicule</td><td>Non (interception après coup)</td><td>Afrique du Sud</td></tr>
+          <tr><td>SMART Burkina</td><td>Vidéo passive</td><td>Non</td><td>Burkina Faso</td></tr>
+          <tr class="us"><td>Notre système</td><td>Comportement individuel</td><td>Oui, alerte humaine avant l'acte</td><td>Afrique, infra existante</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 11 : MODULARITÉ -->
+  <section id="s11" data-label="Modularité">
+    <div class="eyebrow">La solution — modularité</div>
+    <h2>Un boîtier, pas une caméra de plus.</h2>
+    <p class="sub">Le boîtier d'analyse est pensé pour se greffer sur ce qui existe déjà — caméra, réseau, alimentation. Chaque extension reste à concevoir et tester, rien n'est branché aujourd'hui.</p>
+    <div class="clients">
+      <div class="client"><div class="zone">CAMÉRA</div><h4>Compatible ONVIF / RTSP</h4><p>Vumacam, Hikvision, Dahua, ou toute caméra IP déjà en place — pas de matériel propriétaire imposé.</p></div>
+      <div class="client"><div class="zone">AUDIO</div><h4>Micro additionnel</h4><p>Pour détecter un cri ou une détonation, en complément de l'image.</p></div>
+      <div class="client"><div class="zone">ÉNERGIE</div><h4>Batterie de secours</h4><p>Pour les coupures de courant fréquentes en Afrique du Sud (load shedding).</p></div>
+      <div class="client"><div class="zone">RÉSEAU</div><h4>Modem 4G de secours</h4><p>Pour les sites hors couverture réseau fixe.</p></div>
+      <div class="client"><div class="zone">ALERTE LOCALE</div><h4>Sirène ou signal lumineux</h4><p>Sur site, en plus de l'alerte envoyée à l'opérateur humain.</p></div>
+      <div class="client"><div class="zone">MULTI-CAMÉRA</div><h4>Plusieurs flux, un seul boîtier</h4><p>Un boîtier peut traiter plusieurs caméras sur un même site.</p></div>
+    </div>
+  </section>
+
+  <!-- 12 : MISE EN PLACE -->
+  <section id="s12" data-label="Mise en place">
+    <div class="eyebrow">Mise en place — de l'idée au prototype</div>
+    <h2>Quatre phases à construire, zéro nouvelle caméra.</h2>
+    <p class="sub">Rien de ceci n'existe encore : c'est la feuille de route pour passer du concept à un premier prototype testable.</p>
+    <div class="steps">
+      <div class="step"><div class="num">01</div><div><h4>Diagnostic &amp; partenariat</h4><p>Trouver un partenaire pilote et brancher un premier modèle sur un parc caméra déjà en place — quartier type Vumacam (Afrique du Sud) ou réseau municipal type Nairobi (Kenya).</p></div></div>
+      <div class="step"><div class="num">02</div><div><h4>Collecte &amp; calibration</h4><p>Collecter et annoter des données locales anonymisées pour entraîner le modèle au contexte : gestuelle, densité de foule, luminosité — pas de reconnaissance faciale.</p></div></div>
+      <div class="step"><div class="num">03</div><div><h4>Boucle humaine</h4><p>Construire le circuit d'alerte vers un opérateur (vigile, centre de supervision urbaine, société de sécurité privée) qui validerait avant toute action — pour limiter faux positifs et biais.</p></div></div>
+      <div class="step"><div class="num">04</div><div><h4>Extension</h4><p>Si le prototype fonctionne : déploiement multi-sites, tableau de bord centralisé, API vers les partenaires existants (police municipale, sécurité privée).</p></div></div>
+    </div>
+  </section>
+
+  <!-- 11 : CLIENTS POTENTIELS -->
+  <section id="s13" data-label="Clients potentiels">
+    <div class="eyebrow">Clients potentiels</div>
+    <h2>Un marché déjà armé, pas encore équipé.</h2>
+    <div class="clients">
+      <div class="client">
+        <div class="zone">AFRIQUE DU SUD</div><h4>Sécurité privée</h4>
+        <p>16 000 sociétés, 600 000+ agents — 3 fois plus nombreux que la police (184 106 agents). Le plus gros marché de sécurité privée d'Afrique.</p>
+        <a class="src" href="https://www.africanews.com/2024/01/05/south-africa-private-security-industry-booming/" target="_blank"><u>Africanews / PSIRA 2023-24</u></a>
+      </div>
+      <div class="client"><div class="zone">JOHANNESBURG · LE CAP</div><h4>Opérateurs type Vumacam</h4><p>Réseaux de caméras privés déjà connectés à une réponse humaine, cherchant à passer du véhicule au comportement.</p></div>
+      <div class="client">
+        <div class="zone">BURKINA FASO</div><h4>Sécurité privée</h4>
+        <p>500+ sociétés, le leader BBS employant à lui seul 2 500 agents — un secteur en plein boom, à équiper.</p>
+        <a class="src" href="https://www.privatesecurityobservatory.org/media/pdf/baseline-studies/2022-burkina-faso_fr.pdf" target="_blank"><u>Private Security Observatory</u></a>
+      </div>
+      <div class="client"><div class="zone">LAGOS · NAIROBI · ABIDJAN</div><h4>Centres commerciaux urbains</h4><p>Croissance rapide des malls et de la sécurité privée dans les grandes villes africaines.</p></div>
+      <div class="client">
+        <div class="zone">KENYA · NIGERIA · RWANDA</div><h4>Gouvernements &amp; smart cities</h4>
+        <p>11 pays ont déjà investi 2 milliards de dollars en caméras IA — un budget matériel existant, un besoin de résultats concrets.</p>
+        <a class="src" href="https://restofworld.org/2026/africa-china-ai-surveillance/" target="_blank"><u>Rest of World</u></a>
+      </div>
+      <div class="client"><div class="zone">CONTINENT</div><h4>Sites sensibles</h4><p>Mines, banques, résidences fermées — zones à forte densité de caméras déjà installées.</p></div>
+      <div class="client"><div class="zone">CONTINENT</div><h4>Transport &amp; évènementiel</h4><p>Gares, stades, aéroports — forte densité de public, forte densité de caméras.</p></div>
+    </div>
+  </section>
+
+  <!-- 13 : PART 2 HERO -->
+  <section id="s14" data-label="Partie 02">
+    <div class="ghost-num">02</div>
+    <div class="eyebrow">Partie 02 — Infrastructure numérique · SiKa</div>
+    <h1 class="hero">Le savoir, là où<br><span class="fade">le réseau n'arrive pas.</span></h1>
+    <p class="lede">Une boîte solaire qui transforme une école ou un village du Burkina Faso en hub numérique autonome — bibliothèque, IA, réseau et voix, sans Internet. Projet SiKa, Orange Summer Challenge 2026.</p>
+  </section>
+
+  <!-- 14 : PROBLÈME -->
+  <section id="s15" data-label="Le problème">
+    <div class="eyebrow">Le problème</div>
+    <h2>Trois conditions qui tombent en même temps.</h2>
+    <p class="sub">Le numérique éducatif classique suppose une connexion, un appareil par élève, un enseignant disponible. Au Burkina rural, ces trois hypothèses s'effondrent ensemble.</p>
+    <ul class="problems">
+      <li><b>BF</b><div class="txt">5 300+ écoles fermées pour raisons sécuritaires — 800 000+ élèves affectés.
+        <a class="src" href="https://www.unicef.org/burkinafaso/communiques-de-presse/le-burkina-faso-abrite-pres-de-la-moitie-des-ecoles-fermees" target="_blank"><u>UNICEF Burkina Faso</u></a>
+      </div></li>
+      <li><b>AFR</b><div class="txt">98 millions d'enfants et de jeunes sont privés d'école en Afrique subsaharienne — la seule région du monde où ce nombre continue d'augmenter.
+        <a class="src" href="https://news.un.org/fr/story/2024/10/1150196" target="_blank"><u>ONU / UNESCO, 2024</u></a>
+      </div></li>
+      <li><b>BF</b><div class="txt">2 062 534 déplacés internes au Burkina Faso — 77% de tous les déplacés de la crise du Sahel central.
+        <a class="src" href="https://dtm.iom.int/fr/reports/afrique-de-louest-et-du-centre-tableau-de-bord-sur-la-crise-du-liptako-gourma-et-sahel" target="_blank"><u>OIM, Displacement Tracking Matrix, déc. 2025</u></a>
+      </div></li>
+      <li><b>AFR</b><div class="txt">590 millions de personnes vivent sans électricité en Afrique subsaharienne — le socle même sur lequel le numérique classique repose leur manque.
+        <a class="src" href="https://www.agenceecofin.com/actualites-industries/1210-132278-avec-590-millions-de-personnes-privees-d-electricite-en-2024-selon-l-aie-l-afrique-subsaharienne-stagne" target="_blank"><u>AIE / Banque mondiale, 2024</u></a>
+      </div></li>
+      <li><b>BF</b><div class="txt">Seulement 24% d'accès internet réel au Burkina — déjà sous la moyenne africaine, elle-même la plus faible au monde (38%).
+        <a class="src" href="https://digitalmagazine.bf/2026/01/24/burkina-faso-digital-report-2025-rapport-sur-les-utilisateurs-internet-les-utilisateurs-des-reseaux-sociaux-et-linclusion-financiere-au-burkina-en-2025/" target="_blank"><u>Digital Report Burkina Faso, 2025</u></a>
+      </div></li>
+    </ul>
+  </section>
+
+  <!-- 15 : CHIFFRES CLÉS -->
+  <section id="s16" data-label="Chiffres clés">
+    <div class="eyebrow">Chiffres clés — Burkina Faso &amp; Afrique</div>
+    <h2>Une fracture locale, un phénomène continental.</h2>
+    <p class="sub">UNICEF, ONU/UNESCO, OIM, AIE/Banque mondiale, ITU — chiffres 2024-2025.</p>
+    <div class="stats">
+      <div class="stat">
+        <div class="n red">5 300+</div>
+        <p>Burkina Faso — écoles fermées pour raisons sécuritaires</p>
+        <a class="src" href="https://www.unicef.org/burkinafaso/communiques-de-presse/le-burkina-faso-abrite-pres-de-la-moitie-des-ecoles-fermees" target="_blank"><u>UNICEF Burkina Faso</u></a>
+      </div>
+      <div class="stat">
+        <div class="n amber">98M</div>
+        <p>Afrique subsaharienne — enfants et jeunes non scolarisés</p>
+        <a class="src" href="https://news.un.org/fr/story/2024/10/1150196" target="_blank"><u>ONU / UNESCO, 2024</u></a>
+      </div>
+      <div class="stat">
+        <div class="n">31 000</div>
+        <p>Burkina Faso — enseignants empêchés de rejoindre leur poste</p>
+        <a class="src" href="https://www.unicef.org/burkinafaso/communiques-de-presse/le-burkina-faso-abrite-pres-de-la-moitie-des-ecoles-fermees" target="_blank"><u>UNICEF Burkina Faso</u></a>
+      </div>
+      <div class="stat">
+        <div class="n red">590M</div>
+        <p>Afrique subsaharienne — personnes sans accès à l'électricité</p>
+        <a class="src" href="https://www.agenceecofin.com/actualites-industries/1210-132278-avec-590-millions-de-personnes-privees-d-electricite-en-2024-selon-l-aie-l-afrique-subsaharienne-stagne" target="_blank"><u>AIE / Banque mondiale, 2024</u></a>
+      </div>
+      <div class="stat">
+        <div class="n amber">2 062 534</div>
+        <p>Burkina Faso — déplacés internes</p>
+        <a class="src" href="https://dtm.iom.int/fr/reports/afrique-de-louest-et-du-centre-tableau-de-bord-sur-la-crise-du-liptako-gourma-et-sahel" target="_blank"><u>OIM, déc. 2025</u></a>
+      </div>
+      <div class="stat">
+        <div class="n">38<span class="u">%</span></div>
+        <p>Afrique — taux moyen de connexion internet, le plus faible au monde</p>
+        <a class="src" href="https://fr.statista.com/infographie/26789/part-de-la-population-africaine-utilisant-internet/" target="_blank"><u>ITU, 2024</u></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 16 : QUI EST TOUCHÉ -->
+  <section id="s17" data-label="Qui est touché">
+    <div class="eyebrow">Qui est touché — Burkina Faso &amp; Afrique</div>
+    <h2>Des personnes, pas des statistiques.</h2>
+    <p class="sub">Le même phénomène, à l'échelle du pays et du continent.</p>
+    <div class="clients">
+      <div class="client">
+        <div class="zone">BURKINA FASO</div><h4>800 000+ élèves sans salle de classe</h4>
+        <p>École fermée ou enseignant qui ne peut plus s'y rendre — pas de solution de continuité.</p>
+        <a class="src" href="https://www.unicef.fr/article/burkina-faso-1-million-denfants-non-scolarises-en-raison-de-la-violence-et-linsecurite/" target="_blank"><u>UNICEF France</u></a>
+      </div>
+      <div class="client">
+        <div class="zone">AFRIQUE SUBSAHARIENNE</div><h4>98 millions d'enfants et de jeunes non scolarisés</h4>
+        <p>Plus de la moitié des enfants non scolarisés dans le monde vivent dans la région — la seule où ce nombre augmente.</p>
+        <a class="src" href="https://news.un.org/fr/story/2024/10/1150196" target="_blank"><u>ONU / UNESCO, 2024</u></a>
+      </div>
+      <div class="client">
+        <div class="zone">BURKINA FASO</div><h4>31 000 enseignants empêchés d'exercer</h4>
+        <p>Ne peuvent plus rejoindre leur poste en zone à risque, sans pouvoir continuer à distance.</p>
+        <a class="src" href="https://www.unicef.org/burkinafaso/communiques-de-presse/le-burkina-faso-abrite-pres-de-la-moitie-des-ecoles-fermees" target="_blank"><u>UNICEF Burkina Faso</u></a>
+      </div>
+      <div class="client">
+        <div class="zone">SAHEL CENTRAL</div><h4>3,44 millions de personnes déplacées</h4>
+        <p>Burkina Faso, Mali, Niger confondus — 77% de ce total se trouve au seul Burkina Faso.</p>
+        <a class="src" href="https://dtm.iom.int/fr/reports/afrique-de-louest-et-du-centre-tableau-de-bord-sur-la-crise-du-liptako-gourma-et-sahel" target="_blank"><u>OIM, déc. 2025</u></a>
+      </div>
+      <div class="client">
+        <div class="zone">BURKINA FASO</div><h4>2 062 534 déplacés internes</h4>
+        <p>Déracinés, souvent relégués dans des zones sans aucune infrastructure numérique.</p>
+        <a class="src" href="https://dtm.iom.int/fr/reports/afrique-de-louest-et-du-centre-tableau-de-bord-sur-la-crise-du-liptako-gourma-et-sahel" target="_blank"><u>OIM, déc. 2025</u></a>
+      </div>
+      <div class="client">
+        <div class="zone">AFRIQUE SUBSAHARIENNE</div><h4>590 millions sans électricité</h4>
+        <p>Le socle même sur lequel le numérique classique repose leur manque — l'argument même du solaire.</p>
+        <a class="src" href="https://www.agenceecofin.com/actualites-industries/1210-132278-avec-590-millions-de-personnes-privees-d-electricite-en-2024-selon-l-aie-l-afrique-subsaharienne-stagne" target="_blank"><u>AIE / Banque mondiale, 2024</u></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 17 : LA SOLUTION — SOCLE -->
+  <section id="s18" data-label="La solution">
+    <div class="ghost-num">S</div>
+    <div class="eyebrow">La solution — SiKa</div>
+    <h2>Une plateforme, pas une application.</h2>
+    <p class="sub">Une infrastructure posée une fois dans l'école ou le village, alimentée au solaire, sur laquelle se greffent les services dont la communauté a besoin.</p>
+    <div class="steps">
+      <div class="step"><div class="num">01</div><div><h4>Wi-Fi communautaire</h4><p>Tous les appareils s'y connectent, même les vieux téléphones — sans forfait, sans carte SIM.</p></div></div>
+      <div class="step"><div class="num">02</div><div><h4>Voix locale</h4><p>Les villageois s'appellent entre eux via le Wi-Fi de SiKa, sans aucune couverture cellulaire.</p></div></div>
+      <div class="step"><div class="num">03</div><div><h4>Énergie solaire autonome</h4><p>Indépendant du réseau électrique et des coupures de courant.</p></div></div>
+      <div class="step"><div class="num">04</div><div><h4>Hors ligne d'abord</h4><p>Fonctionne sans Internet et se met à jour à distance dès qu'un nœud capte une fenêtre de connexion.</p></div></div>
+    </div>
+    <div class="note-card" style="max-width:760px;margin-top:36px;">
+      Trois ans de prototypes déjà éprouvés sur Raspberry Pi. SiKa change aujourd'hui d'échelle en passant au NVIDIA Jetson Orin, pour embarquer l'intelligence artificielle en local.
+    </div>
+  </section>
+
+  <!-- 18 : LES MODULES -->
+  <section id="s19" data-label="Les modules">
+    <div class="eyebrow">La solution — les modules</div>
+    <h2>Le couteau suisse numérique du village.</h2>
+    <p class="sub">L'éducation reste le cœur du projet, présent depuis trois ans ; les autres modules s'ajoutent selon les besoins de la communauté.</p>
+    <div class="clients">
+      <div class="client"><div class="zone">ÉDUCATION · CŒUR DU PROJET</div><h4>IA pédagogique</h4><p>Un LLM qui accompagne l'élève et répond à ses questions, adossé à une bibliothèque de plusieurs téraoctets alignée au programme national.</p></div>
+      <div class="client"><div class="zone">AGRICULTURE</div><h4>Diagnostic des plantes</h4><p>Une IA de reconnaissance des maladies et de conseils de culture pour le cultivateur.</p></div>
+      <div class="client"><div class="zone">SANTÉ</div><h4>Suivi de grossesse</h4><p>Une application pour accompagner les femmes du village.</p></div>
+      <div class="client"><div class="zone">RÉSEAU SOCIAL LOCAL</div><h4>Réseau &amp; messagerie</h4><p>100% locaux, pour relier la communauté sans Internet.</p></div>
+      <div class="client"><div class="zone">SERVICES</div><h4>Max it embarqué</h4><p>La super-app d'Orange, pour amener ses services jusqu'aux villages déconnectés.</p></div>
+    </div>
+  </section>
+
+  <!-- 19 : SOUS LE CAPOT -->
+  <section id="s20" data-label="Sous le capot">
+    <div class="eyebrow">La solution — sous le capot</div>
+    <h2>Une architecture dimensionnée pour le terrain.</h2>
+    <div class="steps">
+      <div class="step"><div class="num">01</div><div><h4>Cerveau</h4><p>Un NVIDIA Jetson Orin exécute les modèles en local (edge AI) — 7 à 25 W seulement, compatible solaire. Les versions précédentes tournaient sur Raspberry Pi.</p></div></div>
+      <div class="step"><div class="num">02</div><div><h4>Réseau</h4><p>Wi-Fi local + serveur de téléphonie (SIP) pour la voix ; extension possible par répéteurs à bas coût.</p></div></div>
+      <div class="step"><div class="num">03</div><div><h4>Énergie</h4><p>Panneau solaire + batterie LiFePO4, environ une journée d'autonomie, indépendant des coupures de courant.</p></div></div>
+      <div class="step"><div class="num">04</div><div><h4>Flotte</h4><p>Supervision et mises à jour via le cloud — fonctionnement hors ligne d'abord, synchronisation dès qu'un nœud capte le réseau.</p></div></div>
+    </div>
+  </section>
+
+  <!-- 20 : L'EXISTANT — FILIATION ORANGE -->
+  <section id="s21" data-label="L'existant">
+    <div class="eyebrow">L'existant — la filiation Orange</div>
+    <h2>Un vrai problème, sur lequel on travaille déjà.</h2>
+    <p class="sub">Depuis 2014, la Fondation Orange a distribué plus de 1 700 kits Écoles Numériques dans 17 pays d'Afrique, Burkina Faso inclus. Ce n'est pas une hypothèse d'école : c'est un besoin déjà documenté, financé, pris au sérieux par un acteur majeur du secteur.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Génération</th><th>Calcul</th><th>Contenu</th><th>Portée</th></tr></thead>
+        <tbody>
+          <tr><td>Écoles Numériques (depuis 2014)</td><td>Raspberry Pi</td><td>Contenu figé sur carte SD</td><td>Serveur d'une école</td></tr>
+          <tr class="us"><td>SiKa (aujourd'hui)</td><td>Jetson Orin — edge AI</td><td>IA vivante qui dialogue avec l'élève</td><td>Hub d'un village entier</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <a class="src" href="https://www.fondationorange.com/en/access-education" target="_blank" style="margin-top:20px;"><u>Fondation Orange, programme Écoles Numériques</u></a>
+  </section>
+
+  <!-- 21 : MODULARITÉ PHYSIQUE -->
+  <section id="s22" data-label="Modularité">
+    <div class="eyebrow">La solution — modularité</div>
+    <h2>Une base, pas une boîte fermée.</h2>
+    <p class="sub">Le socle Jetson + panneau + réseau est pensé comme un point d'ancrage : d'autres éléments physiques pourraient s'y brancher selon les besoins du site. Chaque extension reste à concevoir et tester — rien n'est branché aujourd'hui.</p>
+    <div class="clients">
+      <div class="client"><div class="zone">RÉSEAU</div><h4>Répéteurs Wi-Fi</h4><p>Étendre la couverture au-delà d'un bâtiment, jusqu'au village entier.</p></div>
+      <div class="client"><div class="zone">AGRICULTURE</div><h4>Capteurs de terrain</h4><p>Humidité du sol, météo locale — pour nourrir le module de diagnostic des plantes.</p></div>
+      <div class="client"><div class="zone">ÉDUCATION</div><h4>Écran ou vidéoprojecteur</h4><p>Projeter les cours pour toute une classe plutôt que sur un seul téléphone.</p></div>
+      <div class="client"><div class="zone">STOCKAGE</div><h4>Disques additionnels</h4><p>Étendre la bibliothèque au-delà de quelques téraoctets.</p></div>
+      <div class="client"><div class="zone">ÉNERGIE</div><h4>Panneau solaire supplémentaire</h4><p>Pour les sites à forte utilisation : plusieurs salles, plusieurs modules actifs.</p></div>
+      <div class="client"><div class="zone">SYNCHRONISATION</div><h4>Modem 4G / satellite de secours</h4><p>Raccourcir les fenêtres d'attente pour la mise à jour de la flotte.</p></div>
+    </div>
+  </section>
+
+  <!-- 22 : MODÈLE ÉCONOMIQUE — QUI ACHÈTE, QUI LOUE -->
+  <section id="s23" data-label="Modèle économique">
+    <div class="eyebrow">Modèle économique — qui achète, qui loue</div>
+    <h2>Un investissement piloté, pas un don jetable.</h2>
+    <p class="sub">Qui paie et qui bénéficie sont deux choses distinctes, par conception : l'accès reste gratuit pour les élèves et les familles.</p>
+    <div class="clients">
+      <div class="client"><div class="zone">CLIENT</div><h4>État &amp; ministères</h4><p>Marché public, dans le prolongement des programmes d'éducation numérique déjà existants.</p></div>
+      <div class="client"><div class="zone">CLIENT</div><h4>ONG &amp; bailleurs</h4><p>Éducation, santé, agriculture, inclusion numérique : la nature multi-usages de SiKa multiplie les guichets de financement possibles.</p></div>
+      <div class="client"><div class="zone">CLIENT</div><h4>Orange, partenaire opérateur</h4><p>Réseau, Max it, et héritier direct du programme Écoles Numériques.</p></div>
+    </div>
+    <div class="note-card" style="max-width:820px;margin-top:36px;">
+      <b>Précédent qui valide la location plutôt que l'achat :</b> en Afrique de l'Est, M-KOPA a électrifié plus de 400 000 foyers depuis 2012 grâce à un paiement à l'usage (dépôt d'environ 35$, puis ~0,52$/jour). Pour SiKa, la cible ne serait pas le foyer mais l'institution — une école, un village, une ONG — louant l'infrastructure au mois plutôt que de l'acheter d'un coup. Reste à structurer.
+      <a class="src" href="https://techcabal.com/2023/11/22/m-kopa-expands-to-south-africa-with-pay-as-you-go-solar-panels/" target="_blank"><u>TechCabal, M-KOPA</u></a>
+    </div>
+  </section>
+
+  <!-- 23 : PRIX DU MATÉRIEL -->
+  <section id="s24" data-label="Prix du matériel">
+    <div class="eyebrow">Modèle économique — le prix du matériel</div>
+    <h2>Combien coûte une unité SiKa ?</h2>
+    <p class="sub">Un système simple, pas un chantier : deuxième révision à la baisse, sur la charge minimale réellement nécessaire. Prix officiels convertis en FCFA (BCEAO) au taux du 13 juillet 2026 : 1$ ≈ 573 FCFA.</p>
+    <div class="stats">
+      <div class="stat">
+        <div class="n">143 000<span class="u">F</span></div>
+        <p>NVIDIA Jetson Orin Nano Super Developer Kit — 249$ (le cerveau, incompressible)</p>
+        <a class="src" href="https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/nano-super-developer-kit/" target="_blank"><u>NVIDIA, prix officiel</u></a>
+      </div>
+      <div class="stat">
+        <div class="n amber">45 800<span class="u">F</span></div>
+        <p>Panneau solaire 50W — 80$ (revu depuis 100W)</p>
+        <a class="src" href="https://www.renogy.com/products/50-watt-12-volt-flexible-monocrystalline-solar-panel" target="_blank"><u>Renogy, prix officiel</u></a>
+      </div>
+      <div class="stat">
+        <div class="n amber">51 600<span class="u">F</span></div>
+        <p>Batterie LiFePO4 12V / 20Ah — 90$ (revue depuis 50Ah)</p>
+        <a class="src" href="https://www.renogy.com/products/12v-20ah-trolling-motor-lithium-iron-phosphate-battery" target="_blank"><u>Renogy, prix officiel</u></a>
+      </div>
+      <div class="stat">
+        <div class="n">22 900<span class="u">F</span></div>
+        <p>Réseau, boîtier, câblage (estimation) — 40$</p>
+      </div>
+    </div>
+    <div class="note-card" style="max-width:820px;margin-top:36px;">
+      <b>≈ 263 000 FCFA (≈ 459$) par unité</b> — 47% de moins que la première estimation. Loyer mensuel estimé : 12 000 à 18 000 FCFA par site.
+      <a class="src" href="https://www.xe.com/en-us/currencyconverter/convert/?Amount=1&From=USD&To=XOF" target="_blank"><u>Xe.com, taux USD/XOF</u></a>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const sections = [...document.querySelectorAll('main section')];
+const dock = document.getElementById('dock');
+const idx = document.getElementById('idx');
+const progress = document.getElementById('progress');
+const main = document.getElementById('main');
+
+sections.forEach((s)=>{
+  const a = document.createElement('a');
+  a.href = '#'+s.id;
+  a.title = s.dataset.label;
+  dock.appendChild(a);
+});
+const dots = [...dock.children];
+
+let currentIndex = 0;
+function update(){
+  const scrollTop = main.scrollTop;
+  const max = main.scrollHeight - main.clientHeight;
+  progress.style.width = (scrollTop/max*100)+'%';
+
+  let current = 0;
+  sections.forEach((s,i)=>{
+    if(scrollTop >= s.offsetTop - main.clientHeight*0.5) current = i;
+  });
+  currentIndex = current;
+  dots.forEach((d,i)=>d.classList.toggle('active', i===current));
+  idx.textContent = String(current+1).padStart(2,'0') + ' / ' + String(sections.length).padStart(2,'0') + ' — ' + sections[current].dataset.label;
+}
+main.addEventListener('scroll', update);
+update();
+
+function goTo(i){
+  i = Math.max(0, Math.min(sections.length-1, i));
+  sections[i].scrollIntoView({behavior:'smooth', block:'start'});
+}
+window.addEventListener('keydown', (e)=>{
+  const nextKeys = ['ArrowDown','ArrowRight','PageDown',' '];
+  const prevKeys = ['ArrowUp','ArrowLeft','PageUp'];
+  if(nextKeys.includes(e.key)){ e.preventDefault(); goTo(currentIndex+1); }
+  else if(prevKeys.includes(e.key)){ e.preventDefault(); goTo(currentIndex-1); }
+  else if(e.key==='Home'){ e.preventDefault(); goTo(0); }
+  else if(e.key==='End'){ e.preventDefault(); goTo(sections.length-1); }
+});
+
+const io = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      e.target.querySelectorAll('.bar-fill').forEach(b=>{ b.style.width = b.dataset.w + '%'; });
+    }
+  });
+},{threshold:.4});
+document.querySelectorAll('#s5').forEach(s=>io.observe(s));
+</script>
+
+</body>
+</html>
