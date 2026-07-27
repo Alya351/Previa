@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pt
+*.onnx
+db/
+v1_yolo/certs/
+
+# secrets
+.env
+llm/.env
+
+# environnements virtuels Python
+.venv/
+venv/
