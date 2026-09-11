@@ -1,0 +1,235 @@
+/* Porté depuis frontend/web/cam/cam.js + index.html — même comportement
+   (capture, redimensionnement avant envoi, séquence /voir puis /qui),
+   restylé dans le langage visuel clair déjà établi (.db-*) pour le reste
+   du frontend — sauf le viewport vidéo, gardé sombre (un flux vidéo
+   ressort mieux sur fond sombre, quel que soit le thème général). */
+.cam-page {
+  min-height: 100vh;
+  background: #f4f7fc;
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #0f172a;
+}
+
+.cam-page *, .cam-page *::before, .cam-page *::after { box-sizing: border-box; }
+
+.cam-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  background: #fff;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.cam-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cam-header-brand img { height: 30px; }
+.cam-header-brand span { font-size: 12.5px; color: #94a3b8; font-weight: 500; }
+
+.cam-lien-admin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid #dbeafe;
+}
+.cam-lien-admin:hover { background: #eff6ff; }
+
+.cam-corps {
+  max-width: 780px;
+  margin: 24px auto 60px;
+  padding: 0 20px;
+}
+
+.cam-selecteur {
+  background: #fff;
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
+}
+
+.cam-selecteur label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.cam-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 13.5px;
+  font-family: inherit;
+}
+
+/* --- Viewport vidéo (gardé sombre, style "HUD") --- */
+.cam-viewport {
+  position: relative;
+  background: #05070d;
+  border-radius: 18px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+
+.cam-viewport video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cam-hud-coin {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-color: rgba(37, 99, 235, 0.7);
+  border-style: solid;
+  border-width: 0;
+}
+.cam-hud-coin.tl { top: 14px; left: 14px; border-top-width: 2px; border-left-width: 2px; border-top-left-radius: 6px; }
+.cam-hud-coin.tr { top: 14px; right: 14px; border-top-width: 2px; border-right-width: 2px; border-top-right-radius: 6px; }
+.cam-hud-coin.bl { bottom: 14px; left: 14px; border-bottom-width: 2px; border-left-width: 2px; border-bottom-left-radius: 6px; }
+.cam-hud-coin.br { bottom: 14px; right: 14px; border-bottom-width: 2px; border-right-width: 2px; border-bottom-right-radius: 6px; }
+
+.cam-overlay-haut {
+  position: absolute;
+  top: 14px;
+  left: 50px;
+  right: 50px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cam-rec-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(225, 29, 72, 0.85);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.cam-rec-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #fff;
+  animation: cam-blink 1s infinite;
+}
+@keyframes cam-blink { 50% { opacity: 0.2; } }
+
+.cam-fps-badge {
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.cam-vide-message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+}
+
+/* --- Contrôles --- */
+.cam-controles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.cam-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 11px;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.cam-btn:disabled { opacity: 0.45; cursor: default; }
+
+.cam-btn.primaire { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #fff; }
+.cam-btn.danger { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.cam-btn.secondaire { background: #fff; color: #475569; border: 1px solid #e2e8f0; }
+
+/* --- Télémétrie --- */
+.cam-telemetrie {
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
+}
+
+.cam-tel-titre {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.cam-tel-statut {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.cam-tel-statut.actif { background: rgba(34, 197, 94, 0.15); color: #16a34a; }
+.cam-tel-statut.inactif { background: #f1f5f9; color: #94a3b8; }
+.cam-tel-statut.erreur { background: rgba(239, 68, 68, 0.15); color: #dc2626; }
+
+.cam-tel-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.cam-tel-item { background: #f8fafc; border-radius: 10px; padding: 10px 12px; }
+.cam-tel-label { font-size: 10.5px; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; }
+.cam-tel-val { font-size: 15px; font-weight: 700; font-family: ui-monospace, monospace; }
+.cam-tel-val.ok { color: #16a34a; }
+.cam-tel-val.err { color: #dc2626; }
+
+.cam-erreur {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12.5px;
+}

@@ -1,0 +1,310 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  X,
+  Camera,
+  Lightbulb,
+  Volume2,
+  ShieldAlert,
+  CheckCircle2,
+  Maximize2,
+  Download,
+  Radio,
+  Play,
+  Pause,
+  RotateCcw
+} from 'lucide-react';
+import { useFluxDirect } from '../lib/useFluxDirect.js';
+import { FluxCamera } from './FluxCamera.jsx';
+
+// `camera.image` : URL de GET /cameras/{id}/image, réinterrogée toutes
+// les 2s ci-dessous (?t= change à chaque tick) — même cadence que
+// camera.jsx (l'appareil qui filme réellement) ; sert de repli tant que
+// le flux direct (vraie vidéo WebRTC, voir lib/useFluxDirect.js,
+// Infrastructure/signalisation_webrtc.py côté backend) n'est pas encore
+// connecté. `camera.nombrePersonnes` : vraie donnée du dernier rapport
+// de cette caméra, remplace les boîtes de détection factices
+// ("TGT-01"...) de la maquette d'origine.
+export function CameraViewModal({ camera, onClose, onSignalAlert }) {
+  const [useWebcam, setUseWebcam] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [lightOn, setLightOn] = useState(false);
+  const [alarmOn, setAlarmOn] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [tick, setTick] = useState(0);
+  const videoRef = useRef(null);
+  const streamDirect = useFluxDirect(camera.id);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  const imageUrlRepli = camera.image.includes('?') ? `${camera.image}&t=${tick}` : `${camera.image}?t=${tick}`;
+
+  // Basculer sur la webcam locale
+  const toggleWebcam = async () => {
+    if (!useWebcam) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        setUseWebcam(true);
+        showToast("Flux vidéo de votre webcam connecté en direct.");
+      } catch (err) {
+        showToast("Impossible d'accéder à la webcam : " + err.message);
+      }
+    } else {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const tracks = videoRef.current.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+      setUseWebcam(false);
+      showToast("Retour au flux de la caméra distante.");
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const tracks = videoRef.current.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const takeSnapshot = () => {
+    showToast("Photo instantanée capturée et enregistrée.");
+  };
+
+  const toggleCameraLight = () => {
+    const next = !lightOn;
+    setLightOn(next);
+    showToast(next ? "Lumière de la caméra allumée." : "Lumière de la caméra éteinte.");
+  };
+
+  const toggleCameraAlarm = () => {
+    const next = !alarmOn;
+    setAlarmOn(next);
+    showToast(next ? "Alarme de sécurité déclenchée sur cette zone." : "Alarme de sécurité arrêtée.");
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div 
+        className="modal-content" 
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '960px', width: '95%', background: '#091124', color: '#ffffff', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}
+      >
+        {/* TOAST D'ACTION */}
+        {toast && (
+          <div 
+            style={{
+              position: 'absolute',
+              top: '20px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: '#0284c7',
+              color: '#ffffff',
+              padding: '10px 20px',
+              borderRadius: '10px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              zIndex: 9999,
+              boxShadow: '0 8px 20px rgba(0,0,0,0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <CheckCircle2 size={16} />
+            <span>{toast}</span>
+          </div>
+        )}
+
+        {/* MODAL HEADER */}
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(2,132,199,0.2)', border: '1px solid #0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38bdf8' }}>
+              <Radio size={18} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>
+                {camera.name} : {camera.location}
+              </h3>
+              <span style={{ fontSize: '0.76rem', color: '#94a3b8' }}>
+                Flux vidéo direct en haute définition
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button 
+              onClick={toggleWebcam}
+              style={{
+                background: useWebcam ? '#0284c7' : 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#ffffff',
+                padding: '7px 12px',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Camera size={15} />
+              <span>{useWebcam ? 'Vue Caméra Distante' : 'Tester ma Webcam'}</span>
+            </button>
+
+            <button 
+              onClick={onClose}
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: 'none',
+                color: '#ffffff',
+                width: '34px',
+                height: '34px',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* HUD VIDEO VIEWPORT */}
+        <div style={{ position: 'relative', background: '#000000', aspectRatio: '16/9', overflow: 'hidden' }}>
+          {useWebcam ? (
+            <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <FluxCamera
+              stream={streamDirect}
+              imageRepli={imageUrlRepli}
+              alt={camera.name}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          )}
+
+          {/* STREAM OVERLAY */}
+          <div style={{ position: 'absolute', top: '14px', left: '16px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span style={{ background: 'rgba(239, 68, 68, 0.85)', color: '#ffffff', fontSize: '0.72rem', fontWeight: 800, padding: '3px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff' }} />
+              EN DIRECT
+            </span>
+            <span style={{ background: 'rgba(9, 17, 36, 0.75)', color: '#ffffff', fontSize: '0.72rem', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}>
+              {camera.location}
+            </span>
+          </div>
+
+          {/* COMPTEUR RÉEL DE CIBLES — pas de boîtes de détection ici :
+              le backend ne renvoie pas encore de coordonnées de boîte
+              exploitables côté frontend (voir mappageCibles.js), donc
+              pas de fausses boîtes affichées comme si elles étaient
+              réelles. Juste un compteur honnête. */}
+          {typeof camera.nombrePersonnes === 'number' && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '54px',
+                right: '16px',
+                background: camera.nombrePersonnes > 0 ? 'rgba(2, 132, 199, 0.9)' : 'rgba(9, 17, 36, 0.75)',
+                color: '#ffffff',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: '4px 10px',
+                borderRadius: '6px'
+              }}
+            >
+              {camera.nombrePersonnes} personne(s) détectée(s)
+            </div>
+          )}
+        </div>
+
+        {/* BOTTOM CONTROLS TOOLBAR */}
+        <div style={{ padding: '14px 20px', background: '#091124', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={takeSnapshot}
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#ffffff',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Camera size={14} />
+              <span>Prendre une photo</span>
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              onClick={toggleCameraLight}
+              style={{
+                background: lightOn ? '#facc15' : 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: lightOn ? '#000000' : '#ffffff',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Lightbulb size={15} />
+              <span>{lightOn ? 'Lumière Allumée' : 'Allumer Lumière'}</span>
+            </button>
+
+            <button
+              onClick={toggleCameraAlarm}
+              style={{
+                background: alarmOn ? '#ef4444' : 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#ffffff',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Volume2 size={15} />
+              <span>{alarmOn ? 'Alarme qui sonne' : 'Déclencher Alarme'}</span>
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+export default CameraViewModal;

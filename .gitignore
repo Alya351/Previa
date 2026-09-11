@@ -1,14 +1,60 @@
+# Python
 __pycache__/
 *.pyc
 *.pt
 *.onnx
-db/
-v1_yolo/certs/
-
-# secrets
-.env
-llm/.env
-
-# environnements virtuels Python
 .venv/
 venv/
+
+# secrets — jamais sur GitHub
+.env
+**/.env
+*.pem
+*.key
+
+# Node / builds front (web + mobile)
+node_modules/
+migration/frontend/*/dist/
+migration/frontend/mobile/.expo/
+migration/frontend/mobile/web-build/
+
+# Projet Android généré par `expo prebuild` (voir migration/frontend/mobile/) —
+# régénérable à tout moment (`npx expo prebuild --platform android`), jamais
+# committé dans un projet Expo managé : contient des chemins de SDK propres à
+# la machine et des dossiers de build volumineux.
+migration/frontend/mobile/android/
+
+# Modèles IA (~3 Go) — téléchargés séparément (voir
+# migration/models/TELECHARGEMENT.md et migration/telecharger_modeles.py),
+# trop lourd pour git. On garde quand même la doc de téléchargement.
+migration/models/*
+!migration/models/TELECHARGEMENT.md
+migration/models.zip
+migration/modelOptimus/
+
+# Données réelles générées à l'exécution (comptes, alertes, images de
+# caméras, historique...) — pas du code source, et potentiellement des
+# données personnelles.
+migration/db/
+
+# Paquets wheels Python pré-téléchargés pour l'install hors-ligne (~500 Mo,
+# voir docker/backend.Dockerfile) — reconstruit depuis requirements.txt.
+docker/wheels/
+**/wheels-cache/
+
+# Images Docker exportées (voir previastart, ~1-4 Go) + archives de partage
+docker/*.tar
+*.zip
+
+# Dossier assemblé pour le partage (voir previa-a-envoyer.zip) — juste une
+# copie de fichiers déjà présents ailleurs dans le dépôt (docker/) plus des
+# gros binaires (previa.tar, models.zip), jamais du code source en soi.
+/previa-a-envoyer/
+
+# Captures/images/vidéos de travail à la racine (logos sources, captures
+# d'écran, démos) — les VRAIS assets du projet vivent dans
+# migration/frontend/*/assets/, pas ici.
+/*.png
+/*.jpeg
+/*.jpg
+/*.mp4

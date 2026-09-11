@@ -1,0 +1,124 @@
+#!/bin/sh
+# previastart — lance tout le système PREVIA (migration/) en une seule
+# commande : construit les images si besoin, télécharge les modèles IA
+# au premier démarrage (voir docker/entrypoint-backend.sh), puis
+# démarre le backend et le frontend. Pour Windows natif (pas de shell
+# POSIX), voir previastart.bat dans ce même dossier.
+#
+# Usage :
+#   ./previastart
+#
+# Nom choisi pour ne jamais entrer en conflit avec le `previarun` des
+# collègues (autre système, port 8011 — jamais touché ici).
+set -e
+
+cd "$(dirname "$0")"
+
+if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker n'est pas installé — voir https://docs.docker.com/get-docker/" >&2
+    exit 1
+fi
+
+# Charge previa.tar automatiquement s'il est là et que les images n'y
+# sont pas encore (cas d'une clé USB/dossier copié tel quel : la
+# personne n'a qu'à double-cliquer, pas besoin de taper `docker load`
+# elle-même). Ne fait rien si les images sont déjà chargées, ni si
+# previa.tar est absent (cas où on construit depuis les sources).
+if [ -f "previa.tar" ]; then
+    if ! docker image inspect previa-backend:latest >/dev/null 2>&1; then
+        echo "previastart : chargement de previa.tar (une seule fois)..."
+        docker load -i previa.tar
+        echo
+    fi
+fi
+
+# Si models.zip est là (voir LISEZMOI_PARTAGE.md), on l'extrait
+# DIRECTEMENT dans le volume Docker des modèles — pas besoin que le
+# backend le retélécharge depuis Google Drive au premier démarrage.
+# Utilise l'image previa-backend elle-même (déjà chargée juste avant,
+# contient Python) pour dézipper, plutôt qu'une image supplémentaire à
+# télécharger — aucun accès réseau requis pour cette étape. Ne fait rien
+# si les modèles sont déjà dans le volume (marqueur : yolo11x-pose.pt).
+if [ -f "models.zip" ]; then
+    deja=$(docker run --rm -v previa_models:/m --entrypoint sh previa-backend:latest \
+        -c "test -f /m/yolo11x-pose.pt && echo oui" 2>/dev/null || true)
+    if [ "$deja" != "oui" ]; then
+        echo "previastart : extraction de models.zip dans le volume (une seule fois, ~3 Go, prend un moment)..."
+        docker run --rm \
+            -v previa_models:/dest \
+            -v "$(pwd)/models.zip:/models.zip:ro" \
+            --entrypoint python3 previa-backend:latest \
+            -c "import zipfile, shutil; zipfile.ZipFile('/models.zip').extractall('/tmp/x'); shutil.copytree('/tmp/x/models', '/dest', dirs_exist_ok=True)"
+        echo
+    fi
+fi
+
+# Détecte l'adresse IP de cette machine sur le réseau local, transmise
+# au conteneur backend (voir docker-compose.yml, PREVIA_IP_PUBLIQUE) —
+# nécessaire avec le réseau Docker standard (voir sa docstring) : sans
+# ça, le certificat HTTPS serait généré pour l'adresse interne du
+# conteneur, invisible depuis un téléphone sur le même Wi-Fi.
+if [ -z "$PREVIA_IP_PUBLIQUE" ]; then
+    if command -v ip >/dev/null 2>&1; then
+        # Linux
+        PREVIA_IP_PUBLIQUE=$(ip route get 1.1.1.1 2>/dev/null | sed -n 's/.*src \([0-9.]*\).*/\1/p')
+    elif command -v route >/dev/null 2>&1 && command -v ipconfig >/dev/null 2>&1; then
+        # macOS
+        iface=$(route get 1.1.1.1 2>/dev/null | awk '/interface:/{print $2}')
+        if [ -n "$iface" ]; then
+            PREVIA_IP_PUBLIQUE=$(ipconfig getifaddr "$iface" 2>/dev/null)
+        fi
+    fi
+fi
+export PREVIA_IP_PUBLIQUE
+
+if [ -z "$PREVIA_IP_PUBLIQUE" ]; then
+    echo "⚠️  Adresse IP locale non détectée automatiquement — le certificat HTTPS" >&2
+    echo "   pourrait ne pas correspondre à ton adresse réseau. Tu peux la fixer" >&2
+    echo "   toi-même : PREVIA_IP_PUBLIQUE=192.168.x.x ./previastart" >&2
+else
+    echo "previastart : adresse détectée -> $PREVIA_IP_PUBLIQUE"
+fi
+
+# Annonce previa.local sur le réseau local (mDNS, voir mdns_previa.py)
+# — pour que le téléphone (et les futures caméras physiques) trouvent
+# le serveur tout seuls, sans qu'on cherche une IP à chaque changement
+# de réseau. Tourne SUR CETTE MACHINE (pas dans Docker) : sur Windows/
+# Mac, Docker Desktop tourne dans une VM cachée, le multicast n'en sort
+# jamais vers le vrai réseau (même raison que l'abandon de
+# `network_mode: host`, voir docker-compose.yml). Optionnel : si
+# python3 ou le paquet zeroconf manquent, previastart continue quand
+# même SANS mDNS — juste un message, jamais une erreur bloquante,
+# l'adresse IP détectée ci-dessus reste toujours utilisable.
+MDNS_PID=""
+if command -v python3 >/dev/null 2>&1 && python3 -c "import zeroconf" >/dev/null 2>&1; then
+    python3 mdns_previa.py >/tmp/previa_mdns.log 2>&1 &
+    MDNS_PID=$!
+    echo "previastart : previa.local annoncé sur le réseau local (mDNS)"
+else
+    echo "previastart : mDNS non disponible (python3/paquet zeroconf manquant) — utilise l'adresse IP ci-dessus"
+fi
+
+# Coupe l'annonce mDNS en même temps que Docker (Ctrl+C ou fin normale)
+# — sinon elle continuerait à tourner en arrière-plan, orpheline.
+nettoyer() {
+    [ -n "$MDNS_PID" ] && kill "$MDNS_PID" 2>/dev/null
+}
+trap nettoyer EXIT INT TERM
+
+echo "previastart : démarrage de PREVIA (Ctrl+C pour arrêter)"
+echo "  - images + modèles déjà reçus (previa.tar + models.zip) : démarrage direct"
+echo "  - sinon : construction depuis les sources + téléchargement des modèles (~3 Go)"
+echo "  - lancements suivants : quasi instantané (tout est déjà en cache)"
+echo
+
+# PAS de --build ici, volontairement : Compose ne construit une image que
+# si elle n'existe pas déjà — quelqu'un qui a reçu previa.tar (voir
+# `docker load`) démarre directement les images toutes prêtes, sans
+# avoir besoin des sources ni des paquets Python (docker/wheels/).
+# `--build` forcerait une reconstruction à chaque fois, même inutile.
+# PAS de `exec` ici (contrairement à avant) : `exec` remplacerait ce
+# script par `docker compose up`, empêchant le `trap` ci-dessus de
+# jamais s'exécuter — on perd le remplacement de processus, mais on
+# gagne un nettoyage propre du processus mDNS à l'arrêt.
+docker compose up

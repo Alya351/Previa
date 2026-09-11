@@ -1,0 +1,45 @@
+# Utilisé par `eas build` (voir migration/frontend/mobile/eas.json) —
+# sans ce fichier, EAS essaie d'embarquer TOUT le dépôt git (racine de
+# ce projet), y compris des fichiers qui n'ont rien à voir avec l'app
+# mobile : previa-a-envoyer.zip (~4 Go), previa-a-envoyer/ (~4 Go),
+# web.zip, migration/models(.zip) (~5,6 Go de modèles IA)...
+#
+# IMPORTANT : on exclut chaque dossier/fichier INDÉSIRABLE par son
+# CHEMIN COMPLET, on ne fait JAMAIS correspondre un dossier PARENT de
+# migration/frontend/mobile/ à un motif d'exclusion (donc jamais
+# `migration/` ou `migration/frontend/` seuls, même si presque tout
+# leur contenu est par ailleurs exclu explicitement ci-dessous). Se
+# heurte sinon à une vraie limite de Git : "il n'est pas possible de
+# réintégrer un fichier dont un dossier parent est exclu" — `/*` puis
+# `!/mobile/**` avait semblé logique lors d'un essai précédent (avant
+# le déplacement de mobile/ dans migration/frontend/) mais excluait
+# mobile/ en premier, donc plus aucune négation ne pouvait le
+# récupérer. Résultat vu en vrai à l'époque : build EAS échoué avec
+# "package.json does not exist in .../build/mobile" (le dossier
+# existait dans l'archive mais était vide).
+.git/
+app/
+backend/
+collegues/
+db/
+docker/
+mobile.zip
+models/
+previa-a-envoyer/
+previa-a-envoyer.zip
+traiteComportement/
+web/
+web.zip
+
+migration/backend/
+migration/db/
+migration/docker/
+migration/models/
+migration/models.zip
+migration/modelOptimus/
+migration/frontend/web/
+
+migration/frontend/mobile/node_modules/
+migration/frontend/mobile/dist/
+migration/frontend/mobile/.expo/
+migration/frontend/mobile/web-build/

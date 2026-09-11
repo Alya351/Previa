@@ -1,0 +1,118 @@
+import React from 'react';
+import {
+  Home,
+  Cctv,
+  FileVideo,
+  Bell,
+  FileText,
+  Building2,
+  Users,
+  Package,
+  Router
+} from 'lucide-react';
+import PreviaLogo from './PreviaLogo';
+
+// `showOrganisation` : item de menu en plus par rapport au design
+// d'origine — fonctionnalité présente dans l'ancien migration/admin
+// (defaultAdmin.jsx : comptes/bâtiments/pièces/caméras) mais absente de
+// cette interface, réservée au compte admin par défaut (voir App.jsx).
+export function Sidebar({ currentTab, onSelectTab, isCollapsed = false, unreadAlerts = 3, showOrganisation = false }) {
+  const menuItems = [
+    { id: 'dashboard', label: 'Tableau de bord', icon: Home },
+    { id: 'cameras', label: 'Caméras', icon: Cctv },
+    { id: 'personnes', label: 'Personnes', icon: Users },
+    { id: 'objets', label: 'Objets', icon: Package },
+    { id: 'events', label: 'Événements', icon: FileVideo },
+    { id: 'alerts', label: 'Alertes', icon: Bell, badge: unreadAlerts },
+    { id: 'reports', label: 'Rapports', icon: FileText },
+    ...(showOrganisation ? [
+      { id: 'organisation', label: 'Organisation', icon: Building2 },
+      { id: 'configAlerte', label: 'Config Alarme', icon: Router },
+    ] : []),
+  ];
+
+  return (
+    <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+      <div className="sidebar-top">
+        {/* CENTERED & ENLARGED ORIGINAL PREVIA LOGO */}
+        <div 
+          className="sidebar-logo"
+          onClick={() => onSelectTab('dashboard')}
+          title="PREVIA Operations Center"
+          style={{ 
+            cursor: 'pointer', 
+            marginBottom: '32px', 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            width: '100%' 
+          }}
+        >
+          <PreviaLogo size={isCollapsed ? "small" : "medium"} />
+        </div>
+
+        {/* NAVIGATION LINKS */}
+        <nav className="sidebar-nav">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentTab === item.id;
+
+            return (
+              <button
+                key={item.id}
+                className={`nav-item ${isActive ? 'active' : ''}`}
+                onClick={() => onSelectTab(item.id)}
+                title={item.label}
+              >
+                <Icon className="nav-icon" size={19} strokeWidth={isActive ? 2.4 : 1.8} />
+                {!isCollapsed && (
+                  <>
+                    <span className="nav-label">{item.label}</span>
+                    {item.badge && item.badge > 0 && !isActive && (
+                      <span className="nav-badge">{item.badge}</span>
+                    )}
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* FLUID BLUE WAVES DECOR IN BOTTOM CORNER */}
+      <div className="sidebar-bottom-waves">
+        <svg 
+          viewBox="0 0 250 110" 
+          fill="none" 
+          preserveAspectRatio="none" 
+          style={{ width: '100%', height: '100%', display: 'block' }}
+        >
+          <defs>
+            <linearGradient id="sideWaveTopGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#0891b2" stopOpacity="0.85" />
+              <stop offset="50%" stopColor="#0284c7" stopOpacity="0.75" />
+              <stop offset="100%" stopColor="#0369a1" stopOpacity="0.9" />
+            </linearGradient>
+            <linearGradient id="sideWaveBottomGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#0284c7" />
+              <stop offset="60%" stopColor="#0369a1" />
+              <stop offset="100%" stopColor="#0077b6" />
+            </linearGradient>
+          </defs>
+          
+          <path 
+            d="M0 48C45 28 110 65 175 42C210 30 235 15 250 8V110H0V48Z" 
+            fill="url(#sideWaveTopGrad)" 
+          />
+          
+          <path 
+            d="M0 72C50 52 115 85 180 62C215 50 235 38 250 30V110H0V72Z" 
+            fill="url(#sideWaveBottomGrad)" 
+          />
+        </svg>
+      </div>
+    </aside>
+  );
+}
+
+export default Sidebar;

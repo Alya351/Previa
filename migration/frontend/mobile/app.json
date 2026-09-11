@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "Previa Security",
+    "slug": "previa",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/logo_previa_original.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0b1736"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.previa.security",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon_adaptive.png",
+        "backgroundColor": "#0b1736"
+      },
+      "package": "com.previa.security",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.CHANGE_WIFI_MULTICAST_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-status-bar",
+      "expo-audio",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5d621e20-2f30-4e26-bdf4-f3f2c826dfbb"
+      }
+    },
+    "owner": "khalis"
+  }
+}

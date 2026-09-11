@@ -1,0 +1,95 @@
+# Lance tout PREVIA (backend + frontend) en une commande — voir les
+# scripts `previastart` (Linux/Mac) et `previastart.bat` (Windows) dans
+# ce même dossier. Contexte de construction = `..` (/home/rakine/osc/),
+# le dossier PARENT de celui-ci : permet aux Dockerfile de copier à la
+# fois le code (../migration/) et les paquets Python déjà téléchargés
+# (./wheels/, voir backend.Dockerfile).
+#
+# Réseau standard (pont Docker), PAS `network_mode: host` : ce dernier
+# ne donne le vrai réseau de la machine que sur Linux — sur Windows/Mac,
+# Docker Desktop tourne dans une VM cachée, et `host` pointerait vers
+# CETTE VM, pas vers le PC de la personne qui lance previastart. Un
+# réseau pont + ports mappés marche pareil sur les trois systèmes.
+#
+# `PREVIA_IP_PUBLIQUE` (transmise au backend, voir _ip_locale() dans
+# migration/backend/fonctionnalites/main/main.py) : sans elle, le
+# backend ne peut détecter QUE l'adresse interne du conteneur, invisible
+# depuis un téléphone sur le même Wi-Fi — previastart la détecte et la
+# fournit automatiquement (voir ces scripts), pas besoin de la régler à
+# la main normalement.
+#
+# Le frontend parle au backend par son NOM DE SERVICE (`backend`, voir
+# docker/nginx.conf) — Docker Compose résout ce nom automatiquement en
+# interne, sur les trois systèmes, sans configuration supplémentaire.
+#
+# `image:` et `name:` (volumes) fixés explicitement partout ci-dessous :
+# sans ça, Compose nomme images ET volumes d'après le nom du DOSSIER qui
+# contient ce fichier (ex. "docker-backend" si ce dossier s'appelle
+# "docker") — quelqu'un qui reçoit previa.tar (voir `docker load`,
+# README de partage) et le place dans un dossier au nom différent ne
+# retrouverait pas les images déjà chargées, et Compose retenterait de
+# tout reconstruire depuis les sources à la place. Des noms fixes
+# rendent le partage indépendant du nom du dossier.
+
+services:
+  backend:
+    image: previa-backend:latest
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    ports:
+      - "8012:8012"
+    environment:
+      - PREVIA_IP_PUBLIQUE=${PREVIA_IP_PUBLIQUE:-}
+    volumes:
+      - previa_models:/app/models
+      - previa_db:/app/db
+      - previa_certs:/app/backend/certs
+      # Liste des ESP32 alarme détectés sur le réseau, écrite par
+      # mdns_previa.py (tourne sur l'HÔTE, pas ici — voir ce fichier pour
+      # pourquoi) — lue en lecture seule par
+      # Infrastructure/esp_decouverte.py pour la page admin
+      # "configAlerte". `:ro`, ce conteneur n'a jamais à y écrire.
+      # `../docker/esp_decouverts.json` (pas juste `./esp_decouverts.json`)
+      # : le contexte de ce fichier compose est déjà `docker/`, mais un
+      # bind mount source est relatif au dossier DE CE FICHIER, donc un
+      # chemin direct suffit — précisé en clair ici pour éviter toute
+      # ambiguïté avec le `context: ..` du service au-dessus.
+      - ./esp_decouverts.json:/app/esp_decouverts.json:ro
+    restart: unless-stopped
+
+  frontend:
+    image: previa-frontend:latest
+    build:
+      context: ..
+      dockerfile: docker/frontend.Dockerfile
+    ports:
+      - "5173:5173"
+      # Accès HTTP simple, dédié à l'app mobile Expo Go (voir nginx.conf,
+      # bloc `listen 8080` : Expo Go ne peut pas accepter notre
+      # certificat auto-signé du port 5173, contrairement à un
+      # navigateur). Le web continue de tout servir en HTTPS sur 5173.
+      - "8080:8080"
+    volumes:
+      - previa_certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  # Modèles IA (~3 Go, téléchargés au premier démarrage par
+  # telecharger_modeles.py, voir entrypoint-backend.sh), base de données
+  # (comptes, bâtiments, pièces, caméras, alertes, historique — voir
+  # local_store.py/rapport_cam.py/etat_persistant.py) et certificat HTTPS
+  # (régénéré automatiquement à chaque IP différente) — séparés de
+  # l'image pour qu'elle reste légère et que ces trois choses survivent à
+  # une reconstruction (`docker compose build`) ET à une recréation du
+  # conteneur (`docker compose down` puis `up`) — previa_db manquait
+  # jusqu'ici, ce qui effaçait silencieusement toutes les données à
+  # chaque fois qu'un conteneur était recréé.
+  previa_models:
+    name: previa_models
+  previa_db:
+    name: previa_db
+  previa_certs:
+    name: previa_certs

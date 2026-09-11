@@ -1,0 +1,49 @@
+# Dépendances réelles de migration/backend — générées à partir de ce qui
+# tourne effectivement sur la machine de développement (pip freeze filtré
+# aux seuls imports trouvés dans le code, pas un pip freeze brut : ça
+# évite d'embarquer tout ce qui traîne globalement sur cette machine pour
+# d'autres projets sans rapport).
+#
+# Pour l'image Docker (voir ../../docker/backend.Dockerfile) : ces
+# paquets sont installés depuis ../../docker/wheels/ (fichiers .whl déjà
+# présents localement, récupérés depuis le cache pip de cette machine —
+# voir la commande qui a rempli ce dossier), pas depuis internet. C'est
+# la variante CPU de torch/torchvision qui est disponible ainsi (celle
+# installée ici en ce moment) ; une variante GPU demanderait de
+# regénérer ce dossier de wheels sur une machine où le pilote CUDA est
+# actif.
+
+fastapi==0.135.1
+uvicorn==0.41.0
+# uvicorn seul ne gère pas les WebSocket (voir signalisation_webrtc.py,
+# routes /direct/emettre et /direct/regarder) — sans ça il répond 404 à
+# toute tentative d'upgrade WebSocket ("No supported WebSocket library
+# detected"), erreur trouvée en testant l'image Docker réelle.
+websockets==15.0.1
+pydantic==2.12.5
+python-multipart==0.0.22
+cryptography==46.0.5
+requests==2.34.2
+
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+
+torch==2.2.2
+torchvision==0.17.2
+torchreid==0.2.5
+transformers==4.46.3
+ultralytics==8.4.21
+insightface==1.0.1
+
+# Pas importés directement dans le code de migration/backend, mais requis
+# EN PRATIQUE au runtime par torchreid (qui les importe dès son chargement
+# — torch.utils.tensorboard et gdown, ce dernier même si on ne s'en sert
+# jamais dans ce sous-module précis, torchreid.reid.data.datasets.image
+# l'importe quand même). Trouvés en testant l'image Docker
+# (ModuleNotFoundError), absents du premier passage qui ne cherchait que
+# les imports directs de migration/backend lui-même. `telecharger_modeles.py`
+# installe gdown lui-même à la volée si besoin (voir sa docstring), mais
+# ne pas compter uniquement là-dessus : si les modèles sont déjà présents,
+# ce chemin n'est jamais emprunté et gdown resterait absent.
+tensorboard==2.20.0
+gdown==6.1.0

@@ -1,0 +1,85 @@
+/* Page "Liens & accès rapides" — même langage visuel clair que le
+   reste du frontend (voir camera.css, defaultAdmin.css). */
+.rs-page {
+  min-height: 100vh;
+  background: #f4f7fc;
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #0f172a;
+}
+
+.rs-page *, .rs-page *::before, .rs-page *::after { box-sizing: border-box; }
+
+.rs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  background: #fff;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.rs-header-brand { display: flex; align-items: center; gap: 12px; }
+.rs-header-brand img { height: 30px; }
+.rs-header-brand span { font-size: 12.5px; color: #94a3b8; font-weight: 500; }
+
+.rs-lien-retour {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid #dbeafe;
+}
+.rs-lien-retour:hover { background: #eff6ff; }
+
+.rs-corps {
+  max-width: 980px;
+  margin: 28px auto 60px;
+  padding: 0 20px;
+}
+
+.rs-groupe { margin-bottom: 28px; }
+
+.rs-groupe h2 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #64748b;
+  margin: 0 0 12px;
+}
+
+.rs-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.rs-carte {
+  position: relative;
+  display: block;
+  background: #fff;
+  border-radius: 14px;
+  padding: 16px 18px;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
+  border: 1px solid transparent;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.rs-carte:hover { border-color: #dbeafe; transform: translateY(-1px); }
+
+.rs-carte strong { display: block; font-size: 14.5px; font-weight: 700; margin-bottom: 6px; }
+.rs-carte p { margin: 0; font-size: 12.5px; color: #64748b; line-height: 1.5; padding-right: 20px; }
+
+.rs-carte-flèche {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  color: #94a3b8;
+  font-weight: 700;
+}
