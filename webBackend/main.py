@@ -21,6 +21,8 @@ alors aussi ouvert que l'était l'appel direct depuis le navigateur).
 """
 import base64
 import os
+import secrets
+import string
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -64,6 +66,11 @@ DUREE_SESSION = timedelta(days=10)
 FIREBASE_DATABASE_SECRET = os.environ.get("FIREBASE_DATABASE_SECRET", "")
 
 NOEUD_COMPTES = "comptes"
+NOEUD_OTP_AMORCAGE = "otp_amorcage"
+NOEUD_DEMANDES_AMORCAGE = "demandes_amorcage"
+
+DUREE_OTP = timedelta(minutes=10)
+DUREE_CODE_AMORCAGE = timedelta(days=365)
 
 app = FastAPI(title="PREVIA — Backend site vitrine")
 
@@ -93,24 +100,28 @@ def _email_vers_cle(email: str) -> str:
     return b64.rstrip("=")
 
 
-def _lire_compte(cle: str) -> dict | None:
-    reponse = requests.get(
-        f"{FIREBASE_DATABASE_URL}/{NOEUD_COMPTES}/{cle}.json",
-        params=_params(),
-        timeout=8,
-    )
+def _lire_noeud(chemin: str) -> dict | None:
+    reponse = requests.get(f"{FIREBASE_DATABASE_URL}/{chemin}.json", params=_params(), timeout=8)
     reponse.raise_for_status()
-    return reponse.json()  # None si rien à cette clé
+    return reponse.json()  # None si rien à ce chemin
+
+
+def _ecrire_noeud(chemin: str, donnees: dict) -> None:
+    reponse = requests.put(f"{FIREBASE_DATABASE_URL}/{chemin}.json", params=_params(), json=donnees, timeout=8)
+    reponse.raise_for_status()
+
+
+def _supprimer_noeud(chemin: str) -> None:
+    reponse = requests.delete(f"{FIREBASE_DATABASE_URL}/{chemin}.json", params=_params(), timeout=8)
+    reponse.raise_for_status()
+
+
+def _lire_compte(cle: str) -> dict | None:
+    return _lire_noeud(f"{NOEUD_COMPTES}/{cle}")
 
 
 def _ecrire_compte(cle: str, donnees: dict) -> None:
-    reponse = requests.put(
-        f"{FIREBASE_DATABASE_URL}/{NOEUD_COMPTES}/{cle}.json",
-        params=_params(),
-        json=donnees,
-        timeout=8,
-    )
-    reponse.raise_for_status()
+    _ecrire_noeud(f"{NOEUD_COMPTES}/{cle}", donnees)
 
 
 def _creer_token(email: str) -> str:
@@ -246,3 +257,107 @@ def moi(authorization: str | None = Header(None)):
         entreprise=compte.get("entreprise", ""),
         email=compte["email"],
     )
+
+
+# ========================================================================
+# Code d'amorçage — voir components/code-amorcage/ côté frontend.
+# Parcours : compte (déjà fait) -> demande d'un code (OTP à 4 chiffres
+# pour confirmer l'intention, voir /amorcage/demander et /confirmer) ->
+# "en attente" -> un·e admin valide (PAS encore construit ici,
+# volontairement : demande explicite de le faire "après en admin" --
+# exposer une route de validation MAINTENANT, sans aucun système de rôle
+# admin pour la protéger, laisserait n'importe qui s'auto-valider un
+# code. Le modèle de données ci-dessous (statut/code/code_expire_le/
+# active) est déjà prêt pour ça : construire la route de validation plus
+# tard n'est qu'un simple ajout, pas une refonte).
+#
+# Pas de vrai envoi d'e-mail/SMS pour l'OTP (aucun service configuré) --
+# le code généré est renvoyé directement dans la réponse de
+# /amorcage/demander, comme la bulle "MESSAGE - 4719 is your
+# verification code" de la maquette servant de référence design : une
+# simulation assumée, pas une vraie 2FA pour l'instant.
+# ========================================================================
+def _maintenant() -> float:
+    return time.time()
+
+
+class ReponseOTP(BaseModel):
+    otp: str
+    expire_dans_secondes: int
+
+
+class ConfirmerOTP(BaseModel):
+    code: str
+
+
+class DemandeAmorcage(BaseModel):
+    statut: str  # "aucune" | "en_attente" | "validee" | "refusee"
+    demandee_le: float | None = None
+    code: str | None = None
+    code_expire_le: float | None = None
+    active: bool | None = None
+
+
+def _etat_demande(cle: str) -> DemandeAmorcage:
+    demande = _lire_noeud(f"{NOEUD_DEMANDES_AMORCAGE}/{cle}")
+    if demande is None:
+        return DemandeAmorcage(statut="aucune")
+    return DemandeAmorcage(
+        statut=demande["statut"],
+        demandee_le=demande.get("demandee_le"),
+        code=demande.get("code"),
+        code_expire_le=demande.get("code_expire_le"),
+        active=demande.get("active"),
+    )
+
+
+@app.post("/amorcage/demander", response_model=ReponseOTP, summary="Démarre une demande de code d'amorçage (envoie un OTP)")
+def amorcage_demander(authorization: str | None = Header(None)):
+    email = _email_depuis_token(authorization)
+    cle = _email_vers_cle(email)
+
+    demande_existante = _lire_noeud(f"{NOEUD_DEMANDES_AMORCAGE}/{cle}")
+    if demande_existante is not None and demande_existante["statut"] in ("en_attente", "validee"):
+        raise HTTPException(409, "Tu as déjà une demande en cours ou un code actif.")
+
+    otp = "".join(secrets.choice(string.digits) for _ in range(4))
+    _ecrire_noeud(f"{NOEUD_OTP_AMORCAGE}/{cle}", {
+        "code": otp,
+        "expire_le": _maintenant() + DUREE_OTP.total_seconds(),
+    })
+
+    return ReponseOTP(otp=otp, expire_dans_secondes=int(DUREE_OTP.total_seconds()))
+
+
+@app.post("/amorcage/confirmer", response_model=DemandeAmorcage, summary="Confirme l'OTP et place la demande en attente de validation")
+def amorcage_confirmer(donnees: ConfirmerOTP, authorization: str | None = Header(None)):
+    email = _email_depuis_token(authorization)
+    cle = _email_vers_cle(email)
+
+    otp_stocke = _lire_noeud(f"{NOEUD_OTP_AMORCAGE}/{cle}")
+    if otp_stocke is None:
+        raise HTTPException(400, "Aucune demande de code en cours -- redemande un code.")
+    if _maintenant() > otp_stocke["expire_le"]:
+        _supprimer_noeud(f"{NOEUD_OTP_AMORCAGE}/{cle}")
+        raise HTTPException(400, "Code expiré -- redemande un code.")
+    if donnees.code.strip() != otp_stocke["code"]:
+        raise HTTPException(401, "Code incorrect.")
+
+    _supprimer_noeud(f"{NOEUD_OTP_AMORCAGE}/{cle}")
+    _ecrire_noeud(f"{NOEUD_DEMANDES_AMORCAGE}/{cle}", {
+        "email": email,
+        "statut": "en_attente",
+        "demandee_le": _maintenant(),
+        "code": None,
+        "code_expire_le": None,
+        "active": False,
+    })
+
+    return _etat_demande(cle)
+
+
+@app.get("/amorcage/etat", response_model=DemandeAmorcage, summary="État de la demande de code d'amorçage du compte connecté")
+def amorcage_etat(authorization: str | None = Header(None)):
+    email = _email_depuis_token(authorization)
+    cle = _email_vers_cle(email)
+    return _etat_demande(cle)
