@@ -58,3 +58,9 @@ docker/*.tar
 /*.jpeg
 /*.jpg
 /*.mp4
+
+# Site vitrine previa-SV — dépôt Git À PART ENTIÈRE (cloné depuis
+# github.com/Shady226/previa-SV, son propre .git), volontairement
+# jamais imbriqué dans CE dépôt. webBackend/ (son backend Firebase,
+# lui, sans dépôt propre) reste suivi normalement ci-dessous.
+/web/

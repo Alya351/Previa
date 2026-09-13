@@ -4,7 +4,7 @@ import {
   Activity, AlertTriangle, BarChart3, Building2, Cctv, Check, CheckCircle, CheckCircle2,
   Clock, DoorOpen, Download, Eye, FileSpreadsheet, FileText, Filter, Info, LayoutGrid,
   Lightbulb, List, Loader2, MapPin, Menu, Package, Play, Plus, RefreshCw, Save, Search,
-  Shield, ShieldAlert, ShieldCheck, Target, Trash2, TrendingUp, Undo2, Users, Volume2,
+  Router, Shield, ShieldAlert, ShieldCheck, Target, Trash2, TrendingUp, Undo2, Users, Volume2,
   VolumeX, Wifi, WifiOff, Zap, ZoomIn,
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
