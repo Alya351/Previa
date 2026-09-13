@@ -22,14 +22,37 @@ alors aussi ouvert que l'était l'appel direct depuis le navigateur).
 import base64
 import os
 import time
+from datetime import datetime, timedelta, timezone
 
 import bcrypt
+import jwt
 import requests
-from fastapi import FastAPI, HTTPException
+from dotenv import load_dotenv
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 
+load_dotenv()  # webBackend/.env en local (JWT_SECRET) -- sur Render,
+# la vraie variable d'environnement du service prend le relais, ce
+# fichier n'existe pas là-bas (jamais commité, voir .gitignore).
+
 FIREBASE_DATABASE_URL = "https://iplocal-ac419-default-rtdb.firebaseio.com"
+
+# Session de connexion : un jeton signé (JWT), pas de state côté serveur
+# à gérer (pas de table "sessions") -- juste l'email + une date
+# d'expiration, signés avec ce secret pour empêcher toute falsification.
+# MÊME secret requis en local (.env) et sur Render (variable
+# d'environnement JWT_SECRET) : sans ça, un déploiement qui tourne avec
+# un secret différent de celui qui a signé un jeton le rejette comme
+# invalide, et tout le monde serait déconnecté à chaque redéploiement.
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
+if not JWT_SECRET:
+    raise RuntimeError(
+        "JWT_SECRET manquant -- voir webBackend/.env en local, "
+        "ou la variable d'environnement du service sur Render."
+    )
+JWT_ALGORITHME = "HS256"
+DUREE_SESSION = timedelta(days=10)
 
 # Secret de base de données (Firebase Console -> Paramètres du projet ->
 # Comptes de service -> Secrets de base de données [ancien mode], ou
@@ -90,6 +113,30 @@ def _ecrire_compte(cle: str, donnees: dict) -> None:
     reponse.raise_for_status()
 
 
+def _creer_token(email: str) -> str:
+    maintenant = datetime.now(timezone.utc)
+    return jwt.encode(
+        {"sub": email, "iat": maintenant, "exp": maintenant + DUREE_SESSION},
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHME,
+    )
+
+
+def _email_depuis_token(autorisation: str | None) -> str:
+    """`autorisation` = en-tête "Authorization: Bearer <jeton>" tel que
+    reçu par FastAPI (voir Header(None) sur /moi plus bas)."""
+    if not autorisation or not autorisation.startswith("Bearer "):
+        raise HTTPException(401, "Non connecté.")
+    jeton = autorisation.removeprefix("Bearer ").strip()
+    try:
+        payload = jwt.decode(jeton, JWT_SECRET, algorithms=[JWT_ALGORITHME])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(401, "Session expirée, reconnecte-toi.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "Session invalide.")
+    return payload["sub"]
+
+
 class DonneesInscription(BaseModel):
     prenom: str
     nom: str
@@ -111,7 +158,16 @@ class Compte(BaseModel):
     email: str
 
 
-@app.post("/inscription", response_model=Compte, summary="Crée un compte (Realtime Database, pas de Firebase Auth)")
+class ReponseSession(BaseModel):
+    """Réponse de /inscription et /connexion : le compte, ET un jeton
+    valable 10 jours (voir DUREE_SESSION) -- le frontend le garde
+    (localStorage) et le renvoie ensuite sur /moi pour rester connecté
+    sans redemander le mot de passe à chaque visite."""
+    compte: Compte
+    token: str
+
+
+@app.post("/inscription", response_model=ReponseSession, summary="Crée un compte (Realtime Database, pas de Firebase Auth)")
 def inscription(donnees: DonneesInscription):
     email = donnees.email.strip().lower()
     cle = _email_vers_cle(email)
@@ -133,16 +189,19 @@ def inscription(donnees: DonneesInscription):
         "cree_le": time.time(),
     })
 
-    return Compte(
-        id=cle,
-        prenom=donnees.prenom.strip(),
-        nom=donnees.nom.strip(),
-        entreprise=donnees.entreprise.strip(),
-        email=email,
+    return ReponseSession(
+        compte=Compte(
+            id=cle,
+            prenom=donnees.prenom.strip(),
+            nom=donnees.nom.strip(),
+            entreprise=donnees.entreprise.strip(),
+            email=email,
+        ),
+        token=_creer_token(email),
     )
 
 
-@app.post("/connexion", response_model=Compte, summary="Vérifie un compte (Realtime Database, pas de Firebase Auth)")
+@app.post("/connexion", response_model=ReponseSession, summary="Vérifie un compte (Realtime Database, pas de Firebase Auth)")
 def connexion(donnees: DonneesConnexion):
     email = donnees.email.strip().lower()
     cle = _email_vers_cle(email)
@@ -157,6 +216,28 @@ def connexion(donnees: DonneesConnexion):
     )
     if not valide:
         raise HTTPException(401, "E-mail ou mot de passe incorrect.")
+
+    return ReponseSession(
+        compte=Compte(
+            id=cle,
+            prenom=compte["prenom"],
+            nom=compte["nom"],
+            entreprise=compte.get("entreprise", ""),
+            email=compte["email"],
+        ),
+        token=_creer_token(email),
+    )
+
+
+@app.get("/moi", response_model=Compte, summary="Vérifie un jeton de session et renvoie le compte associé")
+def moi(authorization: str | None = Header(None)):
+    email = _email_depuis_token(authorization)
+    cle = _email_vers_cle(email)
+
+    compte = _lire_compte(cle)
+    if compte is None:
+        # Jeton valide mais le compte a depuis été supprimé.
+        raise HTTPException(401, "Session invalide.")
 
     return Compte(
         id=cle,
