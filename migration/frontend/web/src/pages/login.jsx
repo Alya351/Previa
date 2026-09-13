@@ -11,7 +11,8 @@ import './admin.css';
 // email/mot de passe sans rien vérifier.
 // `codeSecret` : champ AJOUTÉ (absent de la maquette d'origine) —
 // /utilisateurs/amorcer l'exige pour créer le tout premier compte admin
-// (voir defaultAdmin.CODE_SECRET_PAR_DEFAUT côté backend).
+// : un vrai code d'amorçage obtenu sur previa-SV, vérifié en ligne puis
+// actif 1 an (voir Infrastructure/licence.py côté backend).
 export default function Login({ onLoginSuccess }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -207,21 +208,21 @@ export default function Login({ onLoginSuccess }) {
             {isSignUp && (
               <div>
                 <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink-secondary)', display: 'block', marginBottom: '6px' }}>
-                  Code secret d'amorçage
+                  Code d'amorçage
                 </label>
                 <div style={{ position: 'relative' }}>
                   <KeyRound size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-muted)' }} />
                   <input
                     type="text"
                     required
-                    placeholder="Code fourni par l'équipe PREVIA"
+                    placeholder="Code à 8 caractères obtenu sur previa-sv"
                     value={codeSecret}
                     onChange={(e) => setCodeSecret(e.target.value)}
                     style={{ width: '100%', padding: '12px 14px 12px 42px', borderRadius: '10px', border: '1px solid var(--border-light)', background: '#f8fafc', color: 'var(--ink-primary)', colorScheme: 'light', fontSize: '0.9rem', outline: 'none' }}
                   />
                 </div>
                 <p style={{ fontSize: '0.76rem', color: 'var(--ink-muted)', marginTop: '4px' }}>
-                  Réservé à la création du tout premier compte administrateur.
+                  Réservé à la création du tout premier compte administrateur — active aussi la licence de cette installation pour 1 an (voir Infrastructure/licence.py).
                 </p>
               </div>
             )}

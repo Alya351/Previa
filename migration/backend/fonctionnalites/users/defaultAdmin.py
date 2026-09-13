@@ -16,35 +16,40 @@ lister/modifier/supprimer POUR ce compte précis — utile par exemple pour
 en réinitialiser le mot de passe, ou le supprimer pour pouvoir refaire
 l'amorçage si la toute première saisie était une erreur.
 
-CODE_SECRET : un deuxième verrou en plus de "aucun compte n'existe
+`code_secret` : un deuxième verrou en plus de "aucun compte n'existe
 encore" — n'importe qui pourrait sinon amorcer le tout premier admin
 d'une installation PREVIA fraîchement téléchargée avant le vrai
-propriétaire. Valeur par défaut volontairement simple ("2026") : première
-étape, à revoir (config par installation, pas une constante partagée par
-tout le monde) avant un vrai déploiement — voir la remarque du même type
-déjà faite ailleurs dans ce projet (ex. les seuils "CALIBRATION DÉMO" de
-rodeur.py)."""
+propriétaire. Vérifié maintenant auprès de Infrastructure/licence.py —
+un VRAI code d'amorçage à 8 caractères obtenu sur previa-SV (remplace
+l'ancien secret statique partagé "2026", trop faible pour un vrai
+déploiement) qui, en plus de débloquer l'amorçage, active la licence de
+CETTE installation pour 1 an (voir licence.py pour le détail, notamment
+le fonctionnement hors ligne)."""
+from fonctionnalites.Infrastructure import licence
 from fonctionnalites.users import compte
-
-CODE_SECRET_PAR_DEFAUT = "2026"
 
 
 class CodeSecretInvalide(Exception):
-    """`code_secret` ne correspond pas à CODE_SECRET_PAR_DEFAUT — à
-    distinguer d'un ValueError "déjà amorcé" pour que main.py puisse
-    répondre 403 plutôt que 409."""
+    """`code_secret` n'est pas un code d'amorçage valide (voir
+    licence.CodeInvalide) — à distinguer d'un ValueError "déjà amorcé"
+    pour que main.py puisse répondre 403 plutôt que 409."""
 
 
 def initialiser_admin_par_defaut(nom: str, prenom: str, email: str, mot_de_passe: str, code_secret: str) -> dict:
-    """Crée le premier admin — uniquement si `code_secret` est correct ET
-    qu'aucun compte n'existe encore. Lève CodeSecretInvalide si le code
-    est faux, ValueError si un compte existe déjà (déjà amorcé)."""
-    if code_secret != CODE_SECRET_PAR_DEFAUT:
-        raise CodeSecretInvalide("Code secret incorrect.")
+    """Crée le premier admin — uniquement si `code_secret` est un code
+    d'amorçage valide (vérifié en ligne auprès de previa-SV, voir
+    licence.activer) ET qu'aucun compte n'existe encore. Lève
+    CodeSecretInvalide si le code est invalide/injoignable, ValueError si
+    un compte existe déjà (déjà amorcé) — vérifié EN PREMIER, pour ne pas
+    faire un appel réseau inutile sur une installation déjà amorcée."""
     if compte.lister_utilisateurs():
         raise ValueError(
             "Un compte existe déjà — l'amorçage du premier admin n'est possible qu'une seule fois."
         )
+    try:
+        licence.activer(code_secret)
+    except licence.CodeInvalide as exc:
+        raise CodeSecretInvalide(str(exc)) from exc
     return compte.creer_utilisateur(nom, prenom, email, mot_de_passe, role="admin", est_par_defaut=True)
 
 

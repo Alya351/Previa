@@ -41,7 +41,7 @@ from fonctionnalites.cam.batiment import batiment
 from fonctionnalites.cam.camera import camera
 from fonctionnalites.cam.pieces import piece
 from fonctionnalites.ComportementsSupects import profil_suspect
-from fonctionnalites.Infrastructure import alarme_physique, derniere_image, esp_decouverte, rapport_cam, signalisation_webrtc
+from fonctionnalites.Infrastructure import alarme_physique, derniere_image, esp_decouverte, licence, rapport_cam, signalisation_webrtc
 from fonctionnalites.zoneCam import enregitre as zone_module
 from fonctionnalites.Infrastructure.local_store import db
 from fonctionnalites.users import admin, compte, defaultAdmin, user
@@ -274,13 +274,14 @@ class DemandeZone(BaseModel):
     description=(
         "À utiliser une seule fois, au tout premier lancement de PREVIA chez "
         "une entreprise : personne n'est encore enregistré, ce compte devient "
-        "le premier admin. Exige `code_secret` (voir defaultAdmin.CODE_SECRET_PAR_DEFAUT) "
-        "— sans lui, impossible de s'inscrire. Refusé (409) si un compte "
+        "le premier admin. Exige `code_secret` — un vrai code d'amorçage à 8 "
+        "caractères obtenu sur previa-SV (voir Infrastructure/licence.py), "
+        "vérifié en ligne puis actif 1 an. Refusé (409) si un compte "
         "existe déjà — voir DELETE /utilisateurs/admin-defaut pour pouvoir "
         "refaire l'amorçage."
     ),
     responses={
-        403: {"description": "Code secret incorrect"},
+        403: {"description": "Code d'amorçage invalide, désactivé ou impossible à vérifier"},
         409: {"description": "Un compte existe déjà, l'amorçage n'est plus possible"},
     },
 )
@@ -1164,6 +1165,47 @@ def reactiver_alarme():
 # ========================================================================
 class DemandeComparateur(BaseModel):
     comportement: str
+
+
+# ------------------------------------------------------------------------
+# Licence — voir Infrastructure/licence.py. `/systeme/licence/etat` est
+# appelée par le frontend à chaque chargement de /admin (voir admin.jsx)
+# pour décider d'afficher l'app normale ou l'écran "système désactivé" —
+# fonctionne hors ligne, voir la docstring du module. `/activer` sert
+# aussi bien au tout premier amorçage (voir defaultAdmin.py) qu'à
+# renouveler la licence d'une installation déjà amorcée avec un nouveau
+# code, sans avoir à recréer le compte admin.
+# ------------------------------------------------------------------------
+class DemandeCodeLicence(BaseModel):
+    code: str
+
+
+@app.get(
+    "/systeme/licence/etat",
+    tags=["Système"],
+    summary="État de la licence de cette installation",
+    description="Voir Infrastructure/licence.py — calculable entièrement hors ligne.",
+)
+def etat_licence():
+    return licence.etat()
+
+
+@app.post(
+    "/systeme/licence/activer",
+    tags=["Système"],
+    summary="Active (ou renouvelle) la licence avec un code d'amorçage",
+    description=(
+        "Vérifie `code` en ligne auprès de previa-SV — exige une connexion "
+        "internet pour CET appel précis (voir licence.py, `etat()` lui ne "
+        "l'exige pas ensuite)."
+    ),
+    responses={403: {"description": "Code invalide, désactivé, ou previa-SV injoignable"}},
+)
+def activer_licence(demande: DemandeCodeLicence):
+    try:
+        return licence.activer(demande.code)
+    except licence.CodeInvalide as exc:
+        raise HTTPException(403, str(exc))
 
 
 @app.get(

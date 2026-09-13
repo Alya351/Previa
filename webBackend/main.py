@@ -374,6 +374,37 @@ def amorcage_etat(authorization: str | None = Header(None)):
     return _etat_demande(cle)
 
 
+class VerificationCode(BaseModel):
+    valide: bool
+    active: bool
+    code_expire_le: float | None = None
+
+
+@app.get(
+    "/amorcage/verifier",
+    response_model=VerificationCode,
+    summary="Vérifie un code d'amorçage (public, sans jeton)",
+    description=(
+        "Appelée par une installation PREVIA (migration/backend, voir "
+        "Infrastructure/licence.py) pour activer sa licence -- PAS par le "
+        "site vitrine, qui n'a donc pas de session utilisateur à présenter "
+        "ici : volontairement public, ne renvoie que le strict nécessaire "
+        "(jamais l'email associé)."
+    ),
+)
+def amorcage_verifier(code: str):
+    code_normalise = code.strip().upper()
+    toutes = _lire_noeud(NOEUD_DEMANDES_AMORCAGE) or {}
+    for demande in toutes.values():
+        if demande.get("statut") == "validee" and demande.get("code") == code_normalise:
+            return VerificationCode(
+                valide=True,
+                active=bool(demande.get("active")),
+                code_expire_le=demande.get("code_expire_le"),
+            )
+    return VerificationCode(valide=False, active=False, code_expire_le=None)
+
+
 # ========================================================================
 # Admin — voir components/admin/ côté frontend (page /previaAdmin, pas
 # liée depuis la navigation publique). Toutes les routes ci-dessous

@@ -87,3 +87,19 @@ export function basculerReseauEsp(idAppareil, ssid) {
     body: JSON.stringify({ ssid }),
   }).then(jsonOuErreur);
 }
+
+// Licence de cette installation (code d'amorçage à 8 caractères, obtenu
+// sur previa-SV, actif 1 an) — voir Infrastructure/licence.py côté
+// backend. `chargerEtatLicence` fonctionne hors ligne (le backend ne
+// recalcule que depuis l'horloge locale, voir sa docstring) ;
+// `activerLicence` exige elle une connexion (vérifie le code en ligne).
+export function chargerEtatLicence() {
+  return fetch(`${API_BASE}/systeme/licence/etat`).then(jsonOuErreur);
+}
+export function activerLicence(code) {
+  return fetch(`${API_BASE}/systeme/licence/activer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  }).then(jsonOuErreur);
+}

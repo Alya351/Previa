@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity, AlertTriangle, BarChart3, Building2, Cctv, Check, CheckCircle, CheckCircle2,
-  Clock, DoorOpen, Download, Eye, FileSpreadsheet, FileText, Filter, Info, LayoutGrid,
-  Lightbulb, List, Loader2, MapPin, Menu, Package, Play, Plus, RefreshCw, Save, Search,
+  Clock, DoorOpen, Download, Eye, FileSpreadsheet, FileText, Filter, Info, KeyRound, LayoutGrid,
+  Lightbulb, List, Loader2, Mail, MapPin, Menu, Package, Play, Plus, RefreshCw, Save, Search,
   Router, Shield, ShieldAlert, ShieldCheck, Target, Trash2, TrendingUp, Undo2, Users, Volume2,
   VolumeX, Wifi, WifiOff, Zap, ZoomIn,
 } from 'lucide-react';
@@ -14,7 +14,10 @@ import LiveCameraGrid from '../components/LiveCameraGrid';
 import AiAnalysisCard from '../components/AiAnalysisCard';
 import CameraViewModal from '../components/CameraViewModal';
 import PrecursorDetailModal from '../components/PrecursorDetailModal';
-import { API_BASE, chargerEtatAlarme, arreterAlarme, listerEsp, chargerEtatEsp, ajouterReseauEsp, supprimerReseauEsp, basculerReseauEsp } from '../api.js';
+import {
+  API_BASE, chargerEtatAlarme, arreterAlarme, listerEsp, chargerEtatEsp, ajouterReseauEsp,
+  supprimerReseauEsp, basculerReseauEsp, chargerEtatLicence, activerLicence,
+} from '../api.js';
 import { useFluxDirect } from '../lib/useFluxDirect.js';
 import { FluxCamera } from '../components/FluxCamera.jsx';
 import {
@@ -36,6 +39,110 @@ import './admin.css';
 // simplement des fonctions de ce module, plus bas ; seuls les
 // composants réellement partagés (Sidebar, cartes...) restent dans
 // ../components/.
+
+// ============================================================================
+// LICENCE — écran de remplacement TOTAL quand elle n'est plus active
+// (voir Infrastructure/licence.py côté backend). Aucun Sidebar, aucun
+// HeaderDecor, aucun onglet : un seul "menu", ce message, exactement
+// comme demandé — l'app normale (Admin(), plus bas) ne se rend PAS tant
+// que /systeme/licence/etat ne répond pas "active".
+// ============================================================================
+const MESSAGES_LICENCE = {
+  expiree: "Le code d'amorçage de cette installation a expiré (valable 1 an).",
+  desactivee: "Le code d'amorçage de cette installation a été désactivé.",
+};
+
+function LicenceDisabledScreen({ statut, onActivee }) {
+  const [code, setCode] = useState('');
+  const [enCours, setEnCours] = useState(false);
+  const [erreur, setErreur] = useState('');
+
+  async function activer(e) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setErreur('');
+    setEnCours(true);
+    try {
+      const nouvelEtat = await activerLicence(code.trim());
+      onActivee(nouvelEtat);
+    } catch (err) {
+      setErreur(err.message || 'Code invalide.');
+    } finally {
+      setEnCours(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh', width: '100vw', background: '#eaf2fe',
+        backgroundImage: 'radial-gradient(circle at 10% 20%, rgba(2, 132, 199, 0.08) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(0, 180, 216, 0.08) 0%, transparent 40%)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
+      }}
+    >
+      <div
+        style={{
+          background: '#ffffff', width: '100%', maxWidth: '440px', borderRadius: '24px',
+          boxShadow: '0 25px 70px rgba(2, 132, 199, 0.15), 0 10px 30px rgba(0, 0, 0, 0.04)',
+          padding: '44px 38px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+        }}
+      >
+        <div style={{
+          width: 64, height: 64, borderRadius: '50%', background: '#fee2e2',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20,
+        }}>
+          <ShieldAlert size={30} color="#dc2626" />
+        </div>
+
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--ink-primary)', margin: 0 }}>
+          Système désactivé
+        </h2>
+        <p style={{ fontSize: '0.92rem', color: 'var(--ink-muted)', marginTop: 10, lineHeight: 1.55 }}>
+          {MESSAGES_LICENCE[statut] || "La licence de cette installation n'est plus active."}
+          {' '}Payez un nouveau code ou contactez Previa sur le site officiel.
+        </p>
+
+        <form onSubmit={activer} style={{ width: '100%', marginTop: 26, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ position: 'relative' }}>
+            <KeyRound size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-muted)' }} />
+            <input
+              type="text"
+              placeholder="Nouveau code d'amorçage"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              style={{ width: '100%', padding: '12px 14px 12px 42px', borderRadius: '10px', border: '1px solid var(--border-light)', background: '#f8fafc', color: 'var(--ink-primary)', colorScheme: 'light', fontSize: '0.9rem', outline: 'none' }}
+            />
+          </div>
+
+          {erreur && (
+            <div style={{ background: '#fee2e2', color: '#dc2626', padding: '10px 14px', borderRadius: '10px', fontSize: '0.84rem', fontWeight: 600 }}>
+              {erreur}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={enCours || !code.trim()}
+            style={{
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: '#ffffff', border: 'none',
+              padding: '13px', borderRadius: '12px', fontSize: '0.92rem', fontWeight: 700, cursor: 'pointer',
+              opacity: enCours || !code.trim() ? 0.7 : 1, boxShadow: '0 8px 20px rgba(2, 132, 199, 0.3)',
+            }}
+          >
+            {enCours ? 'Vérification...' : 'Activer ce code'}
+          </button>
+        </form>
+
+        <a
+          href="mailto:contact@previa.app"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 22, fontSize: '0.86rem', color: '#0284c7', fontWeight: 700, textDecoration: 'none' }}
+        >
+          <Mail size={15} /> Contacter Previa
+        </a>
+      </div>
+    </div>
+  );
+}
 
 // ============================================================================
 // SECTION : TABLEAU DE BORD
@@ -2426,6 +2533,32 @@ export default function Admin() {
   const [alertes, setAlertes] = useState([]);
   const [audioActif, setAudioActif] = useState(true);
 
+  // Licence de cette installation (voir LicenceDisabledScreen plus haut
+  // et Infrastructure/licence.py côté backend) — `null` tant que le
+  // premier chargement n'a pas répondu, pour ne jamais flasher l'app
+  // normale puis la reprendre. Revérifiée toutes les 10 min (best-effort
+  // : une désactivation à distance doit finir par se voir sans recharger
+  // la page), mais la réponse elle-même vient d'un calcul local, donc
+  // fonctionne même hors ligne.
+  const [licence, setLicence] = useState(null);
+  useEffect(() => {
+    let annule = false;
+    async function verifierLicence() {
+      try {
+        const e = await chargerEtatLicence();
+        if (!annule) setLicence(e);
+      } catch {
+        // Backend hors ligne/injoignable : ne verrouille pas l'app sur un
+        // simple raté réseau — seul un statut explicite ("expiree",
+        // "desactivee"...) déclenche LicenceDisabledScreen.
+        if (!annule) setLicence((prev) => prev ?? { statut: 'active' });
+      }
+    }
+    verifierLicence();
+    const t = setInterval(verifierLicence, 10 * 60 * 1000);
+    return () => { annule = true; clearInterval(t); };
+  }, []);
+
   const alertesConnuesRef = useRef(null);
   const audioCtxRef = useRef(null);
   const audioActifRef = useRef(true);
@@ -2588,6 +2721,21 @@ export default function Admin() {
     }
   };
 
+  // Garde de licence — voir la docstring du useEffect ci-dessus. Coupe le
+  // rendu normal AVANT le Sidebar/HeaderDecor : demandé explicitement
+  // "tout le menu qui part et laisse un seul menu", pas juste un bandeau
+  // en plus de l'interface habituelle.
+  if (licence === null) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-muted)' }}>
+        Chargement...
+      </div>
+    );
+  }
+  if (licence.statut !== 'active') {
+    return <LicenceDisabledScreen statut={licence.statut} onActivee={setLicence} />;
+  }
+
   return (
     <div className="app-container">
       {/* PERSISTENT SAPPHIRE SIDEBAR IDENTICAL ACROSS ALL VIEWS */}
@@ -2597,6 +2745,7 @@ export default function Admin() {
         isCollapsed={isSidebarCollapsed}
         unreadAlerts={alertes.length}
         showOrganisation={estParDefaut}
+        joursRestantsLicence={licence.jours_restants}
       />
 
       {/* MAIN OPERATIONS WORKSPACE */}
