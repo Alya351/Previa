@@ -124,6 +124,17 @@ def _ecrire_compte(cle: str, donnees: dict) -> None:
     _ecrire_noeud(f"{NOEUD_COMPTES}/{cle}", donnees)
 
 
+def _compte_depuis_donnees(cle: str, data: dict) -> "Compte":
+    return Compte(
+        id=cle,
+        prenom=data["prenom"],
+        nom=data["nom"],
+        entreprise=data.get("entreprise", ""),
+        email=data["email"],
+        role=data.get("role", "user"),
+    )
+
+
 def _creer_token(email: str) -> str:
     maintenant = datetime.now(timezone.utc)
     return jwt.encode(
@@ -167,6 +178,7 @@ class Compte(BaseModel):
     nom: str
     entreprise: str
     email: str
+    role: str = "user"  # "user" | "admin" -- voir /admin/* plus bas
 
 
 class ReponseSession(BaseModel):
@@ -201,13 +213,12 @@ def inscription(donnees: DonneesInscription):
     })
 
     return ReponseSession(
-        compte=Compte(
-            id=cle,
-            prenom=donnees.prenom.strip(),
-            nom=donnees.nom.strip(),
-            entreprise=donnees.entreprise.strip(),
-            email=email,
-        ),
+        compte=_compte_depuis_donnees(cle, {
+            "prenom": donnees.prenom.strip(),
+            "nom": donnees.nom.strip(),
+            "entreprise": donnees.entreprise.strip(),
+            "email": email,
+        }),
         token=_creer_token(email),
     )
 
@@ -229,13 +240,7 @@ def connexion(donnees: DonneesConnexion):
         raise HTTPException(401, "E-mail ou mot de passe incorrect.")
 
     return ReponseSession(
-        compte=Compte(
-            id=cle,
-            prenom=compte["prenom"],
-            nom=compte["nom"],
-            entreprise=compte.get("entreprise", ""),
-            email=compte["email"],
-        ),
+        compte=_compte_depuis_donnees(cle, compte),
         token=_creer_token(email),
     )
 
@@ -250,13 +255,19 @@ def moi(authorization: str | None = Header(None)):
         # Jeton valide mais le compte a depuis été supprimé.
         raise HTTPException(401, "Session invalide.")
 
-    return Compte(
-        id=cle,
-        prenom=compte["prenom"],
-        nom=compte["nom"],
-        entreprise=compte.get("entreprise", ""),
-        email=compte["email"],
-    )
+    return _compte_depuis_donnees(cle, compte)
+
+
+def _exiger_admin(authorization: str | None) -> tuple[str, str]:
+    """Comme _email_depuis_token, mais exige en plus que le compte ait le
+    rôle "admin" -- utilisé par toutes les routes /admin/*. Retourne
+    (email, cle) du compte admin qui fait l'appel."""
+    email = _email_depuis_token(authorization)
+    cle = _email_vers_cle(email)
+    compte = _lire_compte(cle)
+    if compte is None or compte.get("role") != "admin":
+        raise HTTPException(403, "Réservé aux administrateurs.")
+    return email, cle
 
 
 # ========================================================================
@@ -361,3 +372,147 @@ def amorcage_etat(authorization: str | None = Header(None)):
     email = _email_depuis_token(authorization)
     cle = _email_vers_cle(email)
     return _etat_demande(cle)
+
+
+# ========================================================================
+# Admin — voir components/admin/ côté frontend (page /previaAdmin, pas
+# liée depuis la navigation publique). Toutes les routes ci-dessous
+# exigent le rôle "admin" (voir _exiger_admin plus haut) ; le tout
+# premier admin (khaliskone1@gmail.com) a été promu directement en base,
+# à la main -- pas de route pour ça, volontairement (un self-service de
+# "devenir admin" n'a pas de sens).
+# ========================================================================
+def _generer_code_amorcage() -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(8))
+
+
+class CompteAdmin(BaseModel):
+    """Vue admin d'un compte -- jamais le hash du mot de passe."""
+    id: str
+    prenom: str
+    nom: str
+    entreprise: str
+    email: str
+    role: str
+    cree_le: float | None = None
+
+
+class DemandeAdmin(BaseModel):
+    """Vue admin d'une demande de code -- inclut la clé (id du compte
+    concerné), le frontend en a besoin pour cibler les actions
+    valider/refuser/activer ci-dessous."""
+    cle: str
+    email: str
+    statut: str
+    demandee_le: float | None = None
+    code: str | None = None
+    code_expire_le: float | None = None
+    active: bool | None = None
+
+
+class RoleDemande(BaseModel):
+    role: str  # "user" | "admin"
+
+
+class ActifDemande(BaseModel):
+    active: bool
+
+
+@app.get("/admin/comptes", response_model=list[CompteAdmin], summary="Liste tous les comptes (admin)")
+def admin_lister_comptes(authorization: str | None = Header(None)):
+    _exiger_admin(authorization)
+    tous = _lire_noeud(NOEUD_COMPTES) or {}
+    return [
+        CompteAdmin(
+            id=cle,
+            prenom=data["prenom"],
+            nom=data["nom"],
+            entreprise=data.get("entreprise", ""),
+            email=data["email"],
+            role=data.get("role", "user"),
+            cree_le=data.get("cree_le"),
+        )
+        for cle, data in tous.items()
+    ]
+
+
+@app.post("/admin/comptes/{cle}/role", response_model=CompteAdmin, summary="Change le rôle d'un compte (admin)")
+def admin_changer_role(cle: str, donnees: RoleDemande, authorization: str | None = Header(None)):
+    _exiger_admin(authorization)
+    if donnees.role not in ("user", "admin"):
+        raise HTTPException(400, "Rôle invalide.")
+
+    compte = _lire_compte(cle)
+    if compte is None:
+        raise HTTPException(404, "Compte introuvable.")
+
+    compte["role"] = donnees.role
+    _ecrire_compte(cle, compte)
+    return CompteAdmin(
+        id=cle,
+        prenom=compte["prenom"],
+        nom=compte["nom"],
+        entreprise=compte.get("entreprise", ""),
+        email=compte["email"],
+        role=compte["role"],
+        cree_le=compte.get("cree_le"),
+    )
+
+
+@app.get("/admin/demandes", response_model=list[DemandeAdmin], summary="Liste toutes les demandes de code (admin)")
+def admin_lister_demandes(authorization: str | None = Header(None)):
+    _exiger_admin(authorization)
+    toutes = _lire_noeud(NOEUD_DEMANDES_AMORCAGE) or {}
+    return [
+        DemandeAdmin(
+            cle=cle,
+            email=data["email"],
+            statut=data["statut"],
+            demandee_le=data.get("demandee_le"),
+            code=data.get("code"),
+            code_expire_le=data.get("code_expire_le"),
+            active=data.get("active"),
+        )
+        for cle, data in toutes.items()
+    ]
+
+
+@app.post("/admin/demandes/{cle}/valider", response_model=DemandeAdmin, summary="Valide une demande : génère le code 8 caractères, 1 an (admin)")
+def admin_valider_demande(cle: str, authorization: str | None = Header(None)):
+    _exiger_admin(authorization)
+    demande = _lire_noeud(f"{NOEUD_DEMANDES_AMORCAGE}/{cle}")
+    if demande is None:
+        raise HTTPException(404, "Demande introuvable.")
+
+    demande["statut"] = "validee"
+    demande["code"] = _generer_code_amorcage()
+    demande["code_expire_le"] = _maintenant() + DUREE_CODE_AMORCAGE.total_seconds()
+    demande["active"] = True
+    _ecrire_noeud(f"{NOEUD_DEMANDES_AMORCAGE}/{cle}", demande)
+
+    return DemandeAdmin(cle=cle, **{k: demande.get(k) for k in ("email", "statut", "demandee_le", "code", "code_expire_le", "active")})
+
+
+@app.post("/admin/demandes/{cle}/refuser", response_model=DemandeAdmin, summary="Refuse une demande (admin)")
+def admin_refuser_demande(cle: str, authorization: str | None = Header(None)):
+    _exiger_admin(authorization)
+    demande = _lire_noeud(f"{NOEUD_DEMANDES_AMORCAGE}/{cle}")
+    if demande is None:
+        raise HTTPException(404, "Demande introuvable.")
+
+    demande["statut"] = "refusee"
+    _ecrire_noeud(f"{NOEUD_DEMANDES_AMORCAGE}/{cle}", demande)
+    return DemandeAdmin(cle=cle, **{k: demande.get(k) for k in ("email", "statut", "demandee_le", "code", "code_expire_le", "active")})
+
+
+@app.post("/admin/demandes/{cle}/actif", response_model=DemandeAdmin, summary="Active/désactive un code déjà validé (admin)")
+def admin_basculer_actif(cle: str, donnees: ActifDemande, authorization: str | None = Header(None)):
+    _exiger_admin(authorization)
+    demande = _lire_noeud(f"{NOEUD_DEMANDES_AMORCAGE}/{cle}")
+    if demande is None or demande.get("statut") != "validee":
+        raise HTTPException(404, "Aucun code validé pour cette demande.")
+
+    demande["active"] = donnees.active
+    _ecrire_noeud(f"{NOEUD_DEMANDES_AMORCAGE}/{cle}", demande)
+    return DemandeAdmin(cle=cle, **{k: demande.get(k) for k in ("email", "statut", "demandee_le", "code", "code_expire_le", "active")})
