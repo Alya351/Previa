@@ -30,12 +30,16 @@ URL_BASE = os.environ.get("PREVIA_LICENCE_URL", "https://tech-impact.onrender.co
 DELAI_S = 8  # Render (offre gratuite) peut se réveiller lentement — plus généreux qu'un relais ESP local
 
 # Entre deux vérifications en ligne, on ne retente qu'au plus une fois
-# par intervalle — pour repérer une désactivation anticipée (voir "Gérer
-# codes" > Désactiver côté previa-SV) avant l'expiration naturelle, sans
-# jamais DÉPENDRE d'internet pour autant : voir etat(), le compte à
-# rebours continue même si ce délai n'est jamais atteint faute de
-# connexion.
-INTERVALLE_REVALIDATION_S = 6 * 3600
+# par intervalle -- juste pour éviter des appels en rafale si etat() est
+# appelé plusieurs fois de suite (double montage React, plusieurs
+# onglets...), PAS pour espacer la détection d'une désactivation :
+# volontairement COURT (pas des heures) pour qu'une installation qui se
+# reconnecte après avoir été hors ligne soit re-vérifiée dès le
+# PROCHAIN appel (chargement de /admin, ou pire le sondage 10 min du
+# frontend, voir admin.jsx) plutôt que d'attendre un long délai fixe.
+# Ne dépend jamais d'internet pour autant : voir etat(), le compte à
+# rebours continue même si cette revalidation échoue faute de connexion.
+INTERVALLE_REVALIDATION_S = 60
 
 
 class CodeInvalide(Exception):
