@@ -80,24 +80,27 @@ export function Sidebar({
             );
           })}
         </nav>
-      </div>
 
-      {/* Licence de cette installation (voir Infrastructure/licence.py
-          côté backend, LicenceDisabledScreen dans admin.jsx) -- demandée
-          "visible dans le frontend du docker" ; discrète, pas un menu en
-          soi. `null` tant que jamais chargé/pas de date d'expiration. */}
-      {!isCollapsed && joursRestantsLicence != null && (
-        <div
-          title="Jours restants avant expiration du code d'amorçage"
-          style={{
-            fontSize: '0.72rem', fontWeight: 600, textAlign: 'center',
-            color: joursRestantsLicence <= 30 ? '#fca5a5' : 'rgba(255,255,255,0.55)',
-            padding: '0 12px 10px',
-          }}
-        >
-          Licence : {joursRestantsLicence} j restants
-        </div>
-      )}
+        {/* Licence de cette installation (voir Infrastructure/licence.py
+            côté backend, LicenceDisabledScreen dans admin.jsx) -- demandée
+            "visible dans le frontend du docker" ; discrète, pas un menu en
+            soi. Placée ICI (dans .sidebar-top, pas en 3e enfant flex de
+            .sidebar) pour rester au-dessus de .sidebar-bottom-waves,
+            positionnée en `absolute; bottom:0` et qui la recouvrirait sinon.
+            `null` tant que jamais chargé/pas de date d'expiration. */}
+        {!isCollapsed && joursRestantsLicence != null && (
+          <div
+            title="Jours restants avant expiration du code d'amorçage"
+            style={{
+              fontSize: '0.72rem', fontWeight: 600, textAlign: 'center',
+              color: joursRestantsLicence <= 30 ? '#fca5a5' : 'rgba(255,255,255,0.55)',
+              marginTop: '18px',
+            }}
+          >
+            Licence : {joursRestantsLicence} j restants
+          </div>
+        )}
+      </div>
 
       {/* FLUID BLUE WAVES DECOR IN BOTTOM CORNER */}
       <div className="sidebar-bottom-waves">
