@@ -30,8 +30,9 @@ import bcrypt
 import jwt
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import APIRouter, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 
 load_dotenv()  # webBackend/.env en local (JWT_SECRET) -- sur Render,
@@ -597,3 +598,269 @@ def admin_basculer_actif(cle: str, donnees: ActifDemande, authorization: str | N
     demande["active"] = donnees.active
     _ecrire_noeud(f"{NOEUD_DEMANDES_AMORCAGE}/{cle}", demande)
     return DemandeAdmin(cle=cle, **{k: demande.get(k) for k in ("email", "statut", "demandee_le", "code", "code_expire_le", "active")})
+
+
+# ========================================================================
+# /api/v1 — couche de COMPATIBILITÉ avec le cahier des specs remis par
+# l'équipe frontend (Previa_Specifications_APIs_Backend.pdf). Ce document
+# suppose un système bien plus large que celui qui existe réellement
+# (abonnements payants, paiement Mobile Money Orange/MTN/Moov/Wave, 2FA
+# TOTP, refresh tokens, rôles SUPERADMIN/OPERATEUR, journal d'audit...) --
+# RIEN de tout ça n'est implémenté ici, volontairement : PREVIA n'a pas de
+# facturation, un code d'amorçage est validé gratuitement par un admin,
+# pas acheté. Construire une intégration paiement/2FA sans compte
+# marchand réel (Wave/Orange/MTN) ou sans vrai besoin de double
+# authentification n'aurait aucun sens.
+#
+# Ce qui EST fait ici : les routes de la spec qui correspondent à une
+# fonctionnalité RÉELLE du backend sont exposées sous /api/v1/... avec
+# les mêmes noms de chemin et la même enveloppe de réponse
+# ({"success": true, "data": ...} / {"success": false, "error": {...}})
+# que le document -- en s'appuyant sur EXACTEMENT la même logique que les
+# routes historiques ci-dessus (aucune duplication de règles métier).
+# Les routes sans équivalent réel (paiement, abonnements, 2FA, refresh
+# token, audit log, rôle OPERATEUR...) sont ABSENTES plutôt que
+# simulées -- une fausse route qui répond 200 sans rien faire serait pire
+# qu'une 404 honnête.
+#
+# Les routes historiques (/inscription, /connexion, /admin/..., etc.)
+# restent inchangées au-dessus : previa-SV (web/lib/*.ts) les appelle
+# déjà en production, aucune raison de les toucher.
+# ========================================================================
+def _succes(data, **meta_extra) -> dict:
+    meta = {"timestamp": datetime.now(timezone.utc).isoformat()}
+    meta.update(meta_extra)
+    return {"success": True, "data": data, "meta": meta}
+
+
+class ErreurAPIv1(Exception):
+    """Levée par les routes /api/v1/* à la place de HTTPException -- pour
+    qu'elles seules (pas les routes historiques, inchangées) répondent
+    dans l'enveloppe d'erreur {"success": false, "error": {...}} du
+    document, sans toucher au format d'erreur {"detail": "..."} dont
+    previa-SV dépend déjà ailleurs (web/lib/*.ts lit `data.detail`)."""
+    def __init__(self, status_code: int, code: str, message: str, details: list | None = None):
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+        self.details = details or []
+
+
+@app.exception_handler(ErreurAPIv1)
+def _gerer_erreur_api_v1(request, exc: ErreurAPIv1):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"success": False, "error": {"code": exc.code, "message": exc.message, "details": exc.details}},
+    )
+
+
+v1 = APIRouter(prefix="/api/v1", tags=["Compatibilité spec frontend (/api/v1)"])
+
+
+# ------------------------------------------------------------------------
+# Auth (visiteur)
+# ------------------------------------------------------------------------
+@v1.post("/auth/register", summary="= POST /inscription, enveloppe {success,data}")
+def v1_register(donnees: DonneesInscription):
+    try:
+        reponse = inscription(donnees)  # même fonction, même règles (email unique, mdp >= 8)
+    except HTTPException as exc:
+        raise ErreurAPIv1(exc.status_code, "REGISTER_FAILED", exc.detail)
+    return _succes({"user": reponse.compte, "accessToken": reponse.token})
+
+
+@v1.post("/auth/login", summary="= POST /connexion, enveloppe {success,data}")
+def v1_login(donnees: DonneesConnexion):
+    try:
+        reponse = connexion(donnees)
+    except HTTPException as exc:
+        raise ErreurAPIv1(exc.status_code, "INVALID_CREDENTIALS", exc.detail)
+    return _succes({"user": reponse.compte, "accessToken": reponse.token})
+
+
+# ------------------------------------------------------------------------
+# User (client connecté) -- pas de refresh token : un seul jeton, 10
+# jours (voir DUREE_SESSION), contrairement au couple access 15min /
+# refresh 7j de la spec -- changer ce modèle de session casserait la
+# connexion déjà en place sur previa-SV pour un gain qui ne correspond à
+# aucun besoin exprimé.
+# ------------------------------------------------------------------------
+class DonneesProfil(BaseModel):
+    prenom: str | None = None
+    nom: str | None = None
+    entreprise: str | None = None
+
+
+class DonneesMotDePasse(BaseModel):
+    currentPassword: str
+    newPassword: str
+
+
+@v1.get("/user/profile", summary="= GET /moi, enveloppe {success,data}")
+def v1_profil(authorization: str | None = Header(None)):
+    email = _email_depuis_token(authorization)
+    cle = _email_vers_cle(email)
+    compte = _lire_compte(cle)
+    if compte is None:
+        raise ErreurAPIv1(401, "SESSION_INVALID", "Session invalide.")
+    return _succes(_compte_depuis_donnees(cle, compte))
+
+
+@v1.put("/user/profile", summary="Modifie prenom/nom/entreprise du compte connecté")
+def v1_modifier_profil(donnees: DonneesProfil, authorization: str | None = Header(None)):
+    email = _email_depuis_token(authorization)
+    cle = _email_vers_cle(email)
+    compte = _lire_compte(cle)
+    if compte is None:
+        raise ErreurAPIv1(401, "SESSION_INVALID", "Session invalide.")
+    for champ in ("prenom", "nom", "entreprise"):
+        valeur = getattr(donnees, champ)
+        if valeur is not None:
+            compte[champ] = valeur.strip()
+    _ecrire_compte(cle, compte)
+    return _succes(_compte_depuis_donnees(cle, compte))
+
+
+@v1.put("/user/password", summary="Change le mot de passe du compte connecté")
+def v1_changer_mot_de_passe(donnees: DonneesMotDePasse, authorization: str | None = Header(None)):
+    email = _email_depuis_token(authorization)
+    cle = _email_vers_cle(email)
+    compte = _lire_compte(cle)
+    if compte is None:
+        raise ErreurAPIv1(401, "SESSION_INVALID", "Session invalide.")
+    if not bcrypt.checkpw(donnees.currentPassword.encode("utf-8"), compte["mot_de_passe_hash"].encode("utf-8")):
+        raise ErreurAPIv1(400, "WRONG_PASSWORD", "Ancien mot de passe incorrect.")
+    if len(donnees.newPassword) < 8:
+        raise ErreurAPIv1(400, "PASSWORD_TOO_SHORT", "Le mot de passe doit faire au moins 8 caractères.")
+    compte["mot_de_passe_hash"] = bcrypt.hashpw(donnees.newPassword.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
+    _ecrire_compte(cle, compte)
+    return _succes({"message": "Mot de passe mis à jour"})
+
+
+@v1.post("/user/logout", summary="204 -- rien à invalider côté serveur (JWT sans état)")
+def v1_deconnexion(authorization: str | None = Header(None)):
+    _email_depuis_token(authorization)  # 401 si pas connecté, comme le reste
+    return JSONResponse(status_code=204, content=None)
+
+
+# ------------------------------------------------------------------------
+# Code d'amorçage (bootstrap-requests / bootstrap-code) -- même parcours
+# que /amorcage/*, juste republié sous les noms de la spec. `:id` dans
+# les chemins de la spec n'a pas d'équivalent ici (une seule demande par
+# compte à la fois, jamais un historique de plusieurs id) -- accepté
+# dans l'URL pour matcher le chemin, jamais utilisé.
+# ------------------------------------------------------------------------
+class DonneesVerifOtp(BaseModel):
+    otpCode: str
+
+
+@v1.get("/user/bootstrap-requests/latest", summary="= GET /amorcage/etat")
+def v1_demande_actuelle(authorization: str | None = Header(None)):
+    email = _email_depuis_token(authorization)
+    return _succes(_etat_demande(_email_vers_cle(email)))
+
+
+@v1.get("/user/bootstrap-requests/history", summary="Historique -- 0 ou 1 élément, voir docstring de section")
+def v1_historique_demandes(authorization: str | None = Header(None)):
+    email = _email_depuis_token(authorization)
+    etat = _etat_demande(_email_vers_cle(email))
+    return _succes([] if etat.statut == "aucune" else [etat])
+
+
+@v1.post("/user/bootstrap-requests/{id}/send-otp", summary="= POST /amorcage/demander")
+def v1_envoyer_otp(id: str, authorization: str | None = Header(None)):
+    try:
+        return _succes(amorcage_demander(authorization))
+    except HTTPException as exc:
+        raise ErreurAPIv1(exc.status_code, "OTP_REQUEST_FAILED", exc.detail)
+
+
+@v1.post("/user/bootstrap-requests/{id}/verify-otp", summary="= POST /amorcage/confirmer")
+def v1_verifier_otp(id: str, donnees: DonneesVerifOtp, authorization: str | None = Header(None)):
+    try:
+        etat = amorcage_confirmer(ConfirmerOTP(code=donnees.otpCode), authorization)
+    except HTTPException as exc:
+        raise ErreurAPIv1(exc.status_code, "OTP_INVALID", exc.detail)
+    return _succes({"verified": True, "demande": etat})
+
+
+@v1.get("/user/bootstrap-code", summary="Code d'amorçage -- seulement si la demande est validée")
+def v1_code_amorcage(authorization: str | None = Header(None)):
+    email = _email_depuis_token(authorization)
+    etat = _etat_demande(_email_vers_cle(email))
+    if etat.statut != "validee":
+        raise ErreurAPIv1(404, "NO_CODE_YET", "Pas encore de code d'amorçage disponible.")
+    return _succes(etat)
+
+
+# ------------------------------------------------------------------------
+# Admin (back-office) -- pas de 2FA/TOTP (aucun système en place), pas de
+# rôle OPERATEUR (seulement "user"/"admin", voir Compte.role) : un compte
+# créé via /admin/users est toujours "admin", jamais un rôle intermédiaire
+# qui n'existe pas dans ce backend.
+# ------------------------------------------------------------------------
+@v1.post("/admin/auth/login", summary="= POST /connexion + vérifie role=='admin'")
+def v1_admin_login(donnees: DonneesConnexion):
+    try:
+        reponse = connexion(donnees)
+    except HTTPException as exc:
+        raise ErreurAPIv1(exc.status_code, "INVALID_CREDENTIALS", exc.detail)
+    if reponse.compte.role != "admin":
+        raise ErreurAPIv1(403, "NOT_ADMIN", "Réservé aux administrateurs.")
+    return _succes({"adminUser": reponse.compte, "accessToken": reponse.token, "role": "admin"})
+
+
+@v1.get("/admin/auth/me", summary="= GET /moi, réservé admin")
+def v1_admin_me(authorization: str | None = Header(None)):
+    email, cle = _exiger_admin(authorization)
+    return _succes(_compte_depuis_donnees(cle, _lire_compte(cle)))
+
+
+@v1.get("/admin/clients", summary="Comptes role=='user' -- recherche + pagination simples")
+def v1_admin_clients(
+    authorization: str | None = Header(None),
+    search: str = "", page: int = 1, limit: int = 20,
+):
+    _exiger_admin(authorization)
+    tous = _lire_noeud(NOEUD_COMPTES) or {}
+    clients = [
+        _compte_depuis_donnees(cle, d) for cle, d in tous.items()
+        if d.get("role", "user") == "user"
+        and (not search or search.lower() in f"{d.get('prenom','')} {d.get('nom','')} {d.get('email','')}".lower())
+    ]
+    debut = (max(page, 1) - 1) * limit
+    return _succes({"clients": clients[debut:debut + limit], "total": len(clients)})
+
+
+@v1.get("/admin/demandes", summary="= GET /admin/demandes, enveloppe {success,data}")
+def v1_admin_demandes(authorization: str | None = Header(None)):
+    return _succes({"demandes": admin_lister_demandes(authorization)})
+
+
+@v1.post("/admin/demandes/{id}/valider", summary="= POST /admin/demandes/{cle}/valider")
+def v1_admin_valider(id: str, authorization: str | None = Header(None)):
+    return _succes(admin_valider_demande(id, authorization))
+
+
+@v1.post("/admin/demandes/{id}/refuser", summary="= POST /admin/demandes/{cle}/refuser")
+def v1_admin_refuser(id: str, authorization: str | None = Header(None)):
+    return _succes(admin_refuser_demande(id, authorization))
+
+
+@v1.get("/admin/users", summary="Comptes role=='admin'")
+def v1_admin_users(authorization: str | None = Header(None)):
+    _exiger_admin(authorization)
+    tous = _lire_noeud(NOEUD_COMPTES) or {}
+    return _succes([_compte_depuis_donnees(cle, d) for cle, d in tous.items() if d.get("role") == "admin"])
+
+
+@v1.post("/admin/users", summary="= POST /admin/comptes -- toujours role admin, pas d'OPERATEUR")
+def v1_admin_creer_user(donnees: DonneesCreationAdmin, authorization: str | None = Header(None)):
+    try:
+        compte = admin_creer_compte(donnees, authorization)
+    except HTTPException as exc:
+        raise ErreurAPIv1(exc.status_code, "CREATE_ADMIN_FAILED", exc.detail)
+    return _succes(compte)
+
+
+app.include_router(v1)
