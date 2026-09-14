@@ -62,12 +62,14 @@ def _ecrire(donnees: dict) -> None:
 
 
 def _verifier_en_ligne(code: str) -> dict:
-    """Appelle previa-SV (GET /amorcage/verifier, public, voir
-    webBackend/main.py) — lève CodeInvalide si injoignable."""
+    """Appelle previa-SV (GET /api/v1/amorcage/verifier, public, voir
+    webBackend/main.py) — lève CodeInvalide si injoignable. Réponse dans
+    l'enveloppe {"success": true, "data": {...}} standard de cette API
+    -- seul `data` nous intéresse ici."""
     try:
-        reponse = requests.get(f"{URL_BASE}/amorcage/verifier", params={"code": code}, timeout=DELAI_S)
+        reponse = requests.get(f"{URL_BASE}/api/v1/amorcage/verifier", params={"code": code}, timeout=DELAI_S)
         reponse.raise_for_status()
-        return reponse.json()
+        return reponse.json()["data"]
     except requests.RequestException as e:
         raise CodeInvalide(f"Impossible de vérifier ce code auprès de Previa : {e}") from e
 
