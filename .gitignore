@@ -42,6 +42,10 @@ migration/db/
 docker/wheels/
 **/wheels-cache/
 
+# Python portable Windows (~25 Mo, avec zeroconf déjà dedans) pour
+# previastart.bat — reconstruit via docker/build_python_windows.sh.
+docker/python-windows/
+
 # Images Docker exportées (voir previastart, ~1-4 Go) + archives de partage
 docker/*.tar
 *.zip

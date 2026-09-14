@@ -2,33 +2,37 @@
 
 ## Ce qu'on t'a envoyé
 
-7 fichiers :
+8 fichiers/dossiers :
 - `previa.tar` — les images toutes prêtes (~1,3 Go)
 - `models.zip` — les modèles IA (~2,9 Go), pour ne pas avoir à les
   retélécharger depuis Google Drive au premier démarrage
 - `docker-compose.yml`
 - `previastart` (Linux/Mac)
 - `previastart.bat` (Windows)
+- `python-windows/` — Python portable (~25 Mo, avec `zeroconf` déjà dedans)
+  utilisé UNIQUEMENT par `previastart.bat` si Windows n'a pas déjà Python
+  (voir plus bas) ; ignoré sur Linux/Mac, rien à faire avec
 - `mdns_previa.py` — annonce `previa.local` sur le réseau (voir plus bas),
   et détecte automatiquement les boîtiers alarme ESP32 du réseau
 - `esp_decouverts.json` — fichier vide, sert au démarrage à afficher les
   ESP32 alarme détectés dans le panneau admin ; rien à faire avec, laisse-le
   tel quel
 
-Mets-les tous les 7 dans le même dossier (n'importe lequel, le nom du
-dossier n'a pas d'importance).
+Mets-les tous dans le même dossier (n'importe lequel, le nom du dossier
+n'a pas d'importance) — `python-windows/` compris, avec sa structure
+telle quelle.
 
 ## Prérequis
 
 [Docker Desktop](https://docs.docker.com/get-docker/) installé (Windows,
 Mac ou Linux).
 
-Optionnel mais recommandé : **Python 3** installé, avec le paquet
-`zeroconf` (`pip install zeroconf`) — sert uniquement à annoncer
-`previa.local` sur le réseau (voir "Une fois lancé" plus bas), pour ne
-plus jamais avoir à chercher une adresse IP. Sans ça, `previastart`
-fonctionne quand même normalement, juste sans cette commodité (utilise
-l'adresse IP affichée à la place).
+Rien d'autre à installer pour l'annonce `previa.local` (mDNS) : sur
+Windows, `previastart.bat` utilise automatiquement le Python portable
+fourni (`python-windows/`) si le système n'a pas déjà Python avec
+`zeroconf` — sur Mac/Linux, Python 3 est presque toujours déjà présent.
+Sans aucun des deux, `previastart` fonctionne quand même normalement,
+juste sans cette commodité (utilise l'adresse IP affichée à la place).
 
 ## Lancement
 

@@ -111,19 +111,29 @@ REM Annonce previa.local sur le reseau local (mDNS, voir mdns_previa.py)
 REM -- pour que le telephone (et les futures cameras physiques) trouvent
 REM le serveur tout seuls, sans chercher une IP a chaque reseau. Tourne
 REM SUR CETTE MACHINE, pas dans Docker Desktop (meme raison que
-REM l'abandon de network_mode: host cote Docker). Optionnel : si Python
-REM ou le paquet zeroconf manquent (frequent sur un PC Windows tout
-REM neuf), previastart.bat continue quand meme SANS mDNS -- juste un
-REM message, jamais une erreur bloquante, l'adresse IP ci-dessus reste
+REM l'abandon de network_mode: host cote Docker -- multicast n'en sort
+REM jamais vers le vrai reseau, l'y mettre marcherait encore moins bien).
+REM
+REM Prefere le Python DEJA installe sur la machine s'il a zeroconf ;
+REM sinon, utilise le Python portable embarque dans ce paquet
+REM (python-windows\, ~25 Mo, zeroconf deja dedans -- voir LISEZMOI_PARTAGE.md)
+REM plutot que de demander a la personne d'installer quoi que ce soit :
+REM un PC Windows tout neuf n'a JAMAIS Python par defaut. Si ni l'un ni
+REM l'autre n'est disponible (dossier python-windows\ absent, ex. paquet
+REM plus ancien), previastart.bat continue quand meme SANS mDNS -- juste
+REM un message, jamais une erreur bloquante, l'adresse IP ci-dessus reste
 REM toujours utilisable.
-set MDNS_OK=
+set "MDNS_PYTHON="
 where python >nul 2>nul
 if not errorlevel 1 (
     python -c "import zeroconf" >nul 2>nul
-    if not errorlevel 1 set MDNS_OK=1
+    if not errorlevel 1 set "MDNS_PYTHON=python"
 )
-if defined MDNS_OK (
-    start "PREVIA mDNS" /min python mdns_previa.py
+if not defined MDNS_PYTHON if exist "python-windows\python.exe" (
+    set "MDNS_PYTHON=python-windows\python.exe"
+)
+if defined MDNS_PYTHON (
+    start "PREVIA mDNS" /min "%MDNS_PYTHON%" mdns_previa.py
     echo previastart : previa.local annonce sur le reseau local ^(mDNS^)
 ) else (
     echo previastart : mDNS non disponible ^(Python/paquet zeroconf manquant^) -- utilise l'adresse IP ci-dessus
@@ -144,7 +154,7 @@ REM ("PREVIA mDNS", voir le `start` ci-dessus), fermee explicitement
 REM par son titre plutot qu'en tuant tous les process python.exe de la
 REM machine (ca tuerait n'importe quel AUTRE script Python de
 REM l'utilisateur qui tournerait en meme temps).
-if defined MDNS_OK taskkill /FI "WINDOWTITLE eq PREVIA mDNS*" /T /F >nul 2>nul
+if defined MDNS_PYTHON taskkill /FI "WINDOWTITLE eq PREVIA mDNS*" /T /F >nul 2>nul
 
 REM Garde la fenetre ouverte apres l'arret (Ctrl+C ou erreur) -- sans
 REM ca, un double-clic depuis l'explorateur ferme la fenetre aussitot,
