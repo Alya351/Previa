@@ -450,6 +450,56 @@ class ActifDemande(BaseModel):
     active: bool
 
 
+class DonneesCreationAdmin(BaseModel):
+    """Comme DonneesInscription (voir /inscription), sans `entreprise` --
+    pas pertinent pour un compte créé directement par un autre admin."""
+    prenom: str
+    nom: str
+    email: EmailStr
+    mot_de_passe: str
+
+
+@app.post(
+    "/admin/comptes",
+    response_model=CompteAdmin,
+    summary="Crée directement un compte admin (admin)",
+    description=(
+        "Comme /inscription, mais réservée à un admin déjà connecté et crée "
+        "directement le compte avec `role: \"admin\"` -- évite le détour "
+        "inscription (role \"user\") + POST /admin/comptes/{cle}/role pour "
+        "ajouter un admin de plus à l'équipe."
+    ),
+    responses={409: {"description": "Un compte existe déjà avec cette adresse e-mail"}},
+)
+def admin_creer_compte(donnees: DonneesCreationAdmin, authorization: str | None = Header(None)):
+    _exiger_admin(authorization)
+
+    email = donnees.email.strip().lower()
+    cle = _email_vers_cle(email)
+
+    if len(donnees.mot_de_passe) < 8:
+        raise HTTPException(400, "Le mot de passe doit faire au moins 8 caractères.")
+    if _lire_compte(cle) is not None:
+        raise HTTPException(409, "Un compte existe déjà avec cette adresse e-mail.")
+
+    hash_ = bcrypt.hashpw(donnees.mot_de_passe.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
+    maintenant = time.time()
+    _ecrire_compte(cle, {
+        "prenom": donnees.prenom.strip(),
+        "nom": donnees.nom.strip(),
+        "entreprise": "",
+        "email": email,
+        "mot_de_passe_hash": hash_,
+        "role": "admin",
+        "cree_le": maintenant,
+    })
+
+    return CompteAdmin(
+        id=cle, prenom=donnees.prenom.strip(), nom=donnees.nom.strip(),
+        entreprise="", email=email, role="admin", cree_le=maintenant,
+    )
+
+
 @app.get("/admin/comptes", response_model=list[CompteAdmin], summary="Liste tous les comptes (admin)")
 def admin_lister_comptes(authorization: str | None = Header(None)):
     _exiger_admin(authorization)
