@@ -3,6 +3,7 @@ import Login from './pages/login.jsx'
 import Admin from './pages/admin.jsx'
 import Camera from './pages/camera.jsx'
 import Resume from './pages/resume.tsx'
+import Reboot from './pages/reboot.jsx'
 
 // Login (pages/login.jsx) attend un simple callback `onLoginSuccess` —
 // ce petit wrapper le connecte à la navigation react-router réelle
@@ -60,6 +61,10 @@ function App() {
       {/* Pas de garde non plus : point d'entrée de navigation générale,
           utile aussi pour rejoindre /login sans le connaître par cœur. */}
       <Route path="/resume" element={<Resume />} />
+      {/* Pas de garde -- VOLONTAIRE : voir la docstring de pages/reboot.jsx,
+          pensée pour le cas où justement plus personne ne peut se
+          connecter. */}
+      <Route path="/reboot" element={<Reboot />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )

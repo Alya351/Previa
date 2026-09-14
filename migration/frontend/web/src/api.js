@@ -103,3 +103,11 @@ export function activerLicence(code) {
     body: JSON.stringify({ code }),
   }).then(jsonOuErreur);
 }
+
+// Réinitialisation complète (voir Infrastructure/reboot.py) — efface
+// TOUTES les données locales. Volontairement accessible sans connexion
+// (page /reboot, voir App.jsx) : pensée pour le cas où justement plus
+// personne ne peut se connecter.
+export function reinitialiserSysteme() {
+  return fetch(`${API_BASE}/systeme/reboot`, { method: 'POST' }).then(jsonOuErreur);
+}

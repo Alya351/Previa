@@ -41,7 +41,7 @@ from fonctionnalites.cam.batiment import batiment
 from fonctionnalites.cam.camera import camera
 from fonctionnalites.cam.pieces import piece
 from fonctionnalites.ComportementsSupects import profil_suspect
-from fonctionnalites.Infrastructure import alarme_physique, derniere_image, esp_decouverte, licence, rapport_cam, signalisation_webrtc
+from fonctionnalites.Infrastructure import alarme_physique, derniere_image, esp_decouverte, licence, rapport_cam, reboot, signalisation_webrtc
 from fonctionnalites.zoneCam import enregitre as zone_module
 from fonctionnalites.Infrastructure.local_store import db
 from fonctionnalites.users import admin, compte, defaultAdmin, user
@@ -1188,6 +1188,23 @@ class DemandeCodeLicence(BaseModel):
 )
 def etat_licence():
     return licence.etat()
+
+
+@app.post(
+    "/systeme/reboot",
+    tags=["Système"],
+    summary="Réinitialise complètement l'installation (efface TOUTES les données)",
+    description=(
+        "Supprime comptes, bâtiments/pièces/caméras, alertes, profils, état "
+        "comportemental ET licence -- repart d'une installation vierge, comme "
+        "au tout premier lancement (un nouveau code d'amorçage sera exigé "
+        "pour recréer le premier admin). IRRÉVERSIBLE. Accessible sans "
+        "connexion, volontairement -- voir Infrastructure/reboot.py."
+    ),
+)
+def rebooter_systeme():
+    reboot.reinitialiser()
+    return {"reinitialise": True}
 
 
 @app.post(

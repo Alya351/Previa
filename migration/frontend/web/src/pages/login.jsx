@@ -215,15 +215,12 @@ export default function Login({ onLoginSuccess }) {
                   <input
                     type="text"
                     required
-                    placeholder="Code à 8 caractères obtenu sur previa-sv"
+                    placeholder="Code à 8 caractères"
                     value={codeSecret}
                     onChange={(e) => setCodeSecret(e.target.value)}
                     style={{ width: '100%', padding: '12px 14px 12px 42px', borderRadius: '10px', border: '1px solid var(--border-light)', background: '#f8fafc', color: 'var(--ink-primary)', colorScheme: 'light', fontSize: '0.9rem', outline: 'none' }}
                   />
                 </div>
-                <p style={{ fontSize: '0.76rem', color: 'var(--ink-muted)', marginTop: '4px' }}>
-                  Réservé à la création du tout premier compte administrateur — active aussi la licence de cette installation pour 1 an (voir Infrastructure/licence.py).
-                </p>
               </div>
             )}
 
