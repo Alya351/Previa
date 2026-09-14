@@ -459,12 +459,18 @@ def verifier_code_amorcage(code: str):
 
 # ========================================================================
 # Admin — voir components/admin/ côté frontend (page /previaAdmin, pas
-# liée depuis la navigation publique). Toutes les routes ci-dessous
-# exigent le rôle "admin" (voir _exiger_admin plus haut) ; le tout
-# premier admin (khaliskone1@gmail.com) a été promu directement en base,
-# à la main -- pas de route pour ça, volontairement (un self-service de
-# "devenir admin" n'a pas de sens). Un seul rôle admin (pas de
-# SUPERADMIN/OPERATEUR : cette distinction n'existe pas ici).
+# liée depuis la navigation publique). MÊME système que les comptes
+# normaux (même nœud Realtime Database, même modèle Compte -- juste un
+# `role` différent), mais avec des routes d'inscription/connexion
+# DÉDIÉES plutôt que de réutiliser /auth/register et /auth/login : un
+# admin ne "devient" pas admin en cochant une case sur le formulaire
+# public, il passe par ce chemin séparé.
+#
+# Inscription (POST /admin/auth/register) OUVERTE uniquement s'il
+# n'existe encore AUCUN admin (bootstrap du tout premier admin, sans
+# étape manuelle dans Firebase) -- sinon exige qu'un admin déjà
+# connecté la fasse. Toutes les autres routes /admin/* exigent le rôle
+# "admin" (voir _exiger_admin plus haut).
 # ========================================================================
 def _generer_code_amorcage() -> str:
     alphabet = string.ascii_uppercase + string.digits
@@ -500,11 +506,75 @@ class ActifDemande(BaseModel):
     active: bool
 
 
-class DonneesCreationAdmin(BaseModel):
-    prenom: str
+class DonneesInscriptionAdmin(BaseModel):
     nom: str
+    prenom: str
     email: EmailStr
     mot_de_passe: str
+    role: str = "admin"  # réservé à "admin" pour l'instant (voir validation ci-dessous)
+
+
+def _aucun_admin_existant() -> bool:
+    tous = _lire_noeud(NOEUD_COMPTES) or {}
+    return not any(d.get("role") == "admin" for d in tous.values())
+
+
+@app.post(
+    "/api/v1/admin/auth/register",
+    summary="Inscrit un nouveau compte admin",
+    description=(
+        "Ouverte SANS jeton uniquement si aucun admin n'existe encore "
+        "(amorçage du tout premier admin) -- sinon un admin déjà connecté "
+        "doit la faire (même règle que la création d'un admin par un autre)."
+    ),
+    responses={409: {"description": "E-mail déjà utilisé"}, 403: {"description": "Déjà un admin -- connecte-toi en tant qu'admin pour en créer un autre"}},
+)
+def admin_inscription(donnees: DonneesInscriptionAdmin, authorization: str | None = Header(None)):
+    if donnees.role not in ("admin",):
+        raise ErreurAPI(400, "INVALID_ROLE", "Rôle invalide.")
+    if not _aucun_admin_existant():
+        _exiger_admin(authorization)  # 401/403 si pas déjà connecté en tant qu'admin
+
+    email = donnees.email.strip().lower()
+    cle = _email_vers_cle(email)
+
+    if len(donnees.mot_de_passe) < 8:
+        raise ErreurAPI(400, "PASSWORD_TOO_SHORT", "Le mot de passe doit faire au moins 8 caractères.")
+    if _lire_compte(cle) is not None:
+        raise ErreurAPI(409, "EMAIL_TAKEN", "Un compte existe déjà avec cette adresse e-mail.")
+
+    hash_ = bcrypt.hashpw(donnees.mot_de_passe.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
+    maintenant = time.time()
+    _ecrire_compte(cle, {
+        "prenom": donnees.prenom.strip(), "nom": donnees.nom.strip(), "entreprise": "",
+        "email": email, "mot_de_passe_hash": hash_, "role": donnees.role, "cree_le": maintenant,
+    })
+    compte = CompteAdmin(id=cle, prenom=donnees.prenom.strip(), nom=donnees.nom.strip(), entreprise="", email=email, role=donnees.role, cree_le=maintenant)
+    return _succes({"admin": compte, "accessToken": _creer_token(email)})
+
+
+@app.post(
+    "/api/v1/admin/auth/login",
+    summary="Connexion admin -- comme /auth/login, mais exige le rôle admin",
+)
+def admin_connexion(donnees: DonneesConnexion):
+    email = donnees.email.strip().lower()
+    cle = _email_vers_cle(email)
+    compte = _lire_compte(cle)
+    if compte is None or not bcrypt.checkpw(donnees.mot_de_passe.encode("utf-8"), compte["mot_de_passe_hash"].encode("utf-8")):
+        raise ErreurAPI(401, "INVALID_CREDENTIALS", "E-mail ou mot de passe incorrect.")
+    if compte.get("role") != "admin":
+        raise ErreurAPI(403, "NOT_ADMIN", "Ce compte n'est pas un compte administrateur.")
+    return _succes({
+        "admin": CompteAdmin(id=cle, prenom=compte["prenom"], nom=compte["nom"], entreprise=compte.get("entreprise", ""), email=compte["email"], role=compte["role"], cree_le=compte.get("cree_le")),
+        "accessToken": _creer_token(email),
+    })
+
+
+@app.get("/api/v1/admin/auth/me", summary="Compte admin du jeton de session fourni")
+def admin_profil(authorization: str | None = Header(None)):
+    cle, compte = _exiger_admin(authorization)
+    return _succes(CompteAdmin(id=cle, prenom=compte["prenom"], nom=compte["nom"], entreprise=compte.get("entreprise", ""), email=compte["email"], role=compte["role"], cree_le=compte.get("cree_le")))
 
 
 @app.get("/api/v1/admin/comptes", summary="Liste tous les comptes (admin)")
@@ -518,26 +588,6 @@ def admin_lister_comptes(authorization: str | None = Header(None)):
         )
         for cle, data in tous.items()
     ])
-
-
-@app.post("/api/v1/admin/comptes", summary="Crée directement un compte admin (admin)")
-def admin_creer_compte(donnees: DonneesCreationAdmin, authorization: str | None = Header(None)):
-    _exiger_admin(authorization)
-    email = donnees.email.strip().lower()
-    cle = _email_vers_cle(email)
-
-    if len(donnees.mot_de_passe) < 8:
-        raise ErreurAPI(400, "PASSWORD_TOO_SHORT", "Le mot de passe doit faire au moins 8 caractères.")
-    if _lire_compte(cle) is not None:
-        raise ErreurAPI(409, "EMAIL_TAKEN", "Un compte existe déjà avec cette adresse e-mail.")
-
-    hash_ = bcrypt.hashpw(donnees.mot_de_passe.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
-    maintenant = time.time()
-    _ecrire_compte(cle, {
-        "prenom": donnees.prenom.strip(), "nom": donnees.nom.strip(), "entreprise": "",
-        "email": email, "mot_de_passe_hash": hash_, "role": "admin", "cree_le": maintenant,
-    })
-    return _succes(CompteAdmin(id=cle, prenom=donnees.prenom.strip(), nom=donnees.nom.strip(), entreprise="", email=email, role="admin", cree_le=maintenant))
 
 
 @app.post("/api/v1/admin/comptes/{cle}/role", summary="Change le rôle d'un compte (admin)")
