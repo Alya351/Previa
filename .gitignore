@@ -46,6 +46,11 @@ docker/wheels/
 docker/*.tar
 *.zip
 
+# Marqueur local écrit par previastart/previastart.bat (empreinte SHA-256
+# du dernier previa.tar chargé, voir ce script) — propre à chaque poste,
+# jamais du code à versionner.
+docker/.previa_tar_sha256
+
 # Dossier assemblé pour le partage (voir previa-a-envoyer.zip) — juste une
 # copie de fichiers déjà présents ailleurs dans le dépôt (docker/) plus des
 # gros binaires (previa.tar, models.zip), jamais du code source en soi.

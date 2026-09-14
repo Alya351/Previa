@@ -66,8 +66,12 @@ Deux façons d'y accéder, au choix :
 Accepte l'avertissement de certificat auto-signé, normal — c'est un
 certificat généré localement, pas un vrai certificat public. Le
 système est complètement vierge (aucun compte) — inscris-toi via
-"S'inscrire" sur la page de connexion (un code secret d'amorçage est
-demandé pour le tout premier compte, à te procurer séparément).
+"S'inscrire" sur la page de connexion. Un **code d'amorçage** (8
+caractères) est demandé pour le tout premier compte : demande-le à la
+personne qui t'a envoyé ce dossier — c'est elle qui l'obtient (previa-SV)
+et qui l'active pour ton installation. Ce code, en plus de créer ton
+premier compte admin, active ta licence pour 1 an (visible ensuite dans
+la barre latérale de l'admin).
 
 ## Arrêter
 

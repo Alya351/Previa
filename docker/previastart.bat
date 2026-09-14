@@ -34,15 +34,37 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Charge previa.tar automatiquement s'il est la et que les images n'y
-REM sont pas encore (cas d'une cle USB/dossier copie tel quel : double-
-REM clic direct, pas besoin de taper `docker load` a la main). Ne fait
-REM rien si les images sont deja chargees, ni si previa.tar est absent.
+REM Charge previa.tar automatiquement s'il est la et QUE C'EST UNE VERSION
+REM DIFFERENTE de celle deja chargee (cas d'une cle USB/dossier copie tel
+REM quel : double-clic direct, pas besoin de taper `docker load` a la
+REM main) -- compare par empreinte SHA-256 du fichier (certutil, present
+REM nativement sur Windows), marqueur local .previa_tar_sha256, PAS par
+REM simple presence de l'image : quelqu'un qui a deja PREVIA installe et
+REM recoit une mise a jour (nouveau previa.tar par-dessus une install
+REM existante) aurait sinon gardé l'ancienne image pour toujours, sans
+REM jamais charger la nouvelle -- voir previastart (Linux/Mac) pour le
+REM meme raisonnement.
 if exist "previa.tar" (
-    docker image inspect previa-backend:latest >nul 2>nul
-    if errorlevel 1 (
-        echo previastart : chargement de previa.tar ^(une seule fois^)...
+    set "EMPREINTE="
+    for /f "usebackq skip=1 tokens=*" %%h in (`certutil -hashfile previa.tar SHA256 2^>nul`) do (
+        echo %%h | findstr /i "CertUtil" >nul || if not defined EMPREINTE set "EMPREINTE=%%h"
+    )
+    set "EMPREINTE=!EMPREINTE: =!"
+
+    set "DEJA_CHARGE="
+    if exist ".previa_tar_sha256" set /p DEJA_CHARGE=<.previa_tar_sha256
+
+    set "IMAGE_PRESENTE=0"
+    docker image inspect previa-backend:latest >nul 2>nul && set "IMAGE_PRESENTE=1"
+
+    set "A_CHARGER="
+    if not "!EMPREINTE!"=="!DEJA_CHARGE!" set "A_CHARGER=1"
+    if "!IMAGE_PRESENTE!"=="0" set "A_CHARGER=1"
+
+    if defined A_CHARGER (
+        echo previastart : chargement de previa.tar...
         docker load -i previa.tar
+        (echo !EMPREINTE!)>.previa_tar_sha256
         echo.
     )
 )

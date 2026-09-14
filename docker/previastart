@@ -19,15 +19,28 @@ if ! command -v docker >/dev/null 2>&1; then
     exit 1
 fi
 
-# Charge previa.tar automatiquement s'il est là et que les images n'y
-# sont pas encore (cas d'une clé USB/dossier copié tel quel : la
-# personne n'a qu'à double-cliquer, pas besoin de taper `docker load`
-# elle-même). Ne fait rien si les images sont déjà chargées, ni si
-# previa.tar est absent (cas où on construit depuis les sources).
+# Charge previa.tar automatiquement s'il est là et QUE C'EST UNE VERSION
+# DIFFÉRENTE de celle déjà chargée (cas d'une clé USB/dossier copié tel
+# quel : la personne n'a qu'à double-cliquer, pas besoin de taper
+# `docker load` elle-même) — comparé par empreinte SHA-256 du fichier
+# (marqueur local .previa_tar_sha256, à côté de ce script), PAS par
+# simple présence de l'image : `docker image inspect previa-backend:latest`
+# réussirait déjà pour quelqu'un qui a PREVIA installé et reçoit une
+# mise à jour (nouveau previa.tar par-dessus une install existante) —
+# avec l'ancienne vérification, previastart aurait silencieusement
+# gardé l'ancienne image pour toujours, sans jamais charger la nouvelle.
 if [ -f "previa.tar" ]; then
-    if ! docker image inspect previa-backend:latest >/dev/null 2>&1; then
-        echo "previastart : chargement de previa.tar (une seule fois)..."
+    if command -v sha256sum >/dev/null 2>&1; then
+        EMPREINTE=$(sha256sum previa.tar | cut -d' ' -f1)
+    else
+        EMPREINTE=$(shasum -a 256 previa.tar | cut -d' ' -f1)  # macOS, pas de sha256sum par défaut
+    fi
+    DEJA_CHARGE=""
+    [ -f ".previa_tar_sha256" ] && DEJA_CHARGE=$(cat .previa_tar_sha256)
+    if [ "$EMPREINTE" != "$DEJA_CHARGE" ] || ! docker image inspect previa-backend:latest >/dev/null 2>&1; then
+        echo "previastart : chargement de previa.tar..."
         docker load -i previa.tar
+        echo "$EMPREINTE" > .previa_tar_sha256
         echo
     fi
 fi
