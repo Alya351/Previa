@@ -6,7 +6,7 @@
 [![React Native](https://img.shields.io/badge/Mobile-React%20Native%20%2F%20Expo-000000.svg)](https://expo.dev/)
 [![Hardware](https://img.shields.io/badge/Hardware-Raspberry%20Pi%204%20%2F%205-red.svg)](https://www.raspberrypi.com/)
 
-**PREVIA** est une plateforme unifiée de cybersécurité physique et de vidéo-surveillance intelligente conçue pour la détection en temps réel, l'analyse comportementale autonome par IA et la réponse automatique aux incidents (sirène physique, notifications mobiles et clips de preuve).
+**PREVIA** est une plateforme autonome de vidéosurveillance intelligente et d'analyse comportementale par IA. Elle transforme les caméras IP existantes en un dispositif de prévention active : détection en temps réel d'intrusions, de rôdages, d'objets abandonnés, de départs de feu et reconnaissance faciale biométrique (Face ID) avec notifications mobiles et sirène physique d'urgence.
 
 ---
 
