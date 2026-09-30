@@ -81,13 +81,77 @@ def marquer_vu_a_une_entree(pid: str, id_camera: str, now: float) -> None:
             }, f, ensure_ascii=False, indent=2)
 
 
+from fonctionnalites.Infrastructure.local_store import db
+
+
+def _resoudre_id(pid: str) -> str:
+    if not pid:
+        return pid
+    try:
+        vus = set()
+        while pid and pid not in vus:
+            vus.add(pid)
+            rec = db.reference(f"corps/registry/{pid}").get()
+            if not rec or "lie_a" not in rec:
+                break
+            pid = rec["lie_a"]
+    except Exception:
+        pass
+    return pid
+
+
+def est_collaborateur_autorise(pid: str) -> bool:
+    if not pid:
+        return False
+    resolved = _resoudre_id(pid)
+    try:
+        personnel_db = db.reference("personnel").get() or {}
+        personnel_liste = list(personnel_db.values()) if isinstance(personnel_db, dict) else (personnel_db if isinstance(personnel_db, list) else [])
+        for emp in personnel_liste:
+            if not emp:
+                continue
+            e_id = emp.get("id")
+            f_id = emp.get("face_id")
+            if (
+                e_id == pid
+                or f_id == pid
+                or e_id == resolved
+                or f_id == resolved
+                or (e_id and str(e_id) in str(pid))
+                or (e_id and str(e_id) in str(resolved))
+            ):
+                if emp.get("statut") != "revoque":
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def _existe_camera_entree() -> bool:
+    try:
+        from fonctionnalites.cam.camera import camera
+        cams = camera.lister_cameras()
+        if len(cams) <= 1:
+            return False
+        return any(bool(c.get("est_entree")) for c in cams)
+    except Exception:
+        return False
+
+
 def evaluer(id_camera: str, pid: str, est_camera_entree: bool, now: float) -> dict:
     """Cœur du module — appelé pour CHAQUE personne identifiée sur
     CHAQUE caméra (voir on_voit_qui.py). Renvoie {"infiltre": bool,
-    "statut": str}. Sans effet pour une zone anonyme (voir
-    profil_suspect.est_identite_reelle)."""
+    "statut": str}. Sans effet pour une zone anonyme ou un collaborateur autorisé."""
+    if est_collaborateur_autorise(pid):
+        return {"infiltre": False, "statut": "collaborateur_autorise"}
+
     if not profil_suspect.est_identite_reelle(pid):
         return {"infiltre": False, "statut": "identite_non_reelle"}
+
+    # Si aucune caméra d'entrée n'est définie sur le site ou s'il n'y a qu'une seule caméra,
+    # on ne peut pas suspecter d'infiltration (pas de sas d'entrée supervisé).
+    if not _existe_camera_entree() and not est_camera_entree:
+        return {"infiltre": False, "statut": "pas_de_sas_entree"}
 
     if est_camera_entree:
         marquer_vu_a_une_entree(pid, id_camera, now)
@@ -125,3 +189,4 @@ def evaluer(id_camera: str, pid: str, est_camera_entree: bool, now: float) -> di
     statuts_camera[pid] = infiltre
 
     return {"infiltre": infiltre, "statut": statut, "avis_ia": avis_ia}
+

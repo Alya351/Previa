@@ -42,8 +42,8 @@ const LIENS: Lien[] = [
   },
   {
     groupe: 'Terrain',
-    titre: 'Flux Caméra & Analyse IA',
-    description: "Capture vidéo en direct depuis l'appareil (téléphone, poste fixe) et envoi à l'IA.",
+    titre: 'Flux Caméra & Surveillance',
+    description: "Capture vidéo en direct depuis l'appareil (téléphone, poste fixe).",
     href: '/camera',
   },
   {

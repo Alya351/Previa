@@ -10,11 +10,14 @@ ce module ne fait pas exception, il garde juste LE DERNIER instantané
 camera.jsx), jamais plus.
 """
 
+from fonctionnalites.Infrastructure import clips_service
+
 _DERNIERES_IMAGES: dict[str, bytes] = {}
 
 
 def enregistrer(id_camera: str, contenu_jpeg: bytes) -> None:
     _DERNIERES_IMAGES[id_camera] = contenu_jpeg
+    clips_service.ajouter_trame(id_camera, contenu_jpeg)
 
 
 def lire(id_camera: str) -> bytes | None:

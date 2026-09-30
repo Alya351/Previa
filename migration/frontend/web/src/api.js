@@ -16,16 +16,139 @@
 // accepté que la page elle-même.
 export const API_BASE = '';
 
-// Construit une URL WebSocket vers le backend, en passant par le MÊME
-// proxy que le reste (voir la docstring ci-dessus) — même origine, même
-// certificat déjà accepté, juste `https:`/`wss:` au lieu de
-// `http:`/`ws:` selon la page. Utilisé pour le flux caméra en direct
-// (voir Infrastructure/flux_direct.py côté backend, camera.jsx et
-// components/LiveCameraGrid.jsx/CameraViewModal.jsx côté frontend).
+// Construit une URL WebSocket vers le backend
 export function urlFluxWebSocket(chemin) {
   const protocole = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocole}//${window.location.host}${chemin}`;
 }
+
+// ============================================================================
+// APIS CAMÉRAS — Gestion, Flux Vidéo, IA et Zones
+// ============================================================================
+
+// 1. Lister toutes les caméras
+export function listerCameras() {
+  return fetch(`${API_BASE}/cameras`).then(jsonOuErreur);
+}
+
+// 2. Créer / Enregistrer une nouvelle caméra
+export function creerCamera({ idAdmin, num, pieceId, estEntree = false, urlFlux = null }) {
+  return fetch(`${API_BASE}/cameras`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id_admin: idAdmin,
+      num,
+      piece_id: pieceId,
+      est_entree: estEntree,
+      url_flux: urlFlux,
+    }),
+  }).then(jsonOuErreur);
+}
+
+// 3. Charger les informations d'une caméra
+export function chargerCamera(idCamera) {
+  return fetch(`${API_BASE}/cameras/${idCamera}`).then(jsonOuErreur);
+}
+
+// 4. Modifier une caméra existante
+export function mettreAJourCamera(idCamera, { idAdmin, num, pieceId, estEntree, urlFlux }) {
+  return fetch(`${API_BASE}/cameras/${idCamera}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id_admin: idAdmin,
+      num,
+      piece_id: pieceId,
+      est_entree: estEntree,
+      url_flux: urlFlux,
+    }),
+  }).then(jsonOuErreur);
+}
+
+// 5. Supprimer une caméra
+export function supprimerCamera(idCamera) {
+  return fetch(`${API_BASE}/cameras/${idCamera}`, { method: 'DELETE' }).then(jsonOuErreur);
+}
+
+// 6. Obtenir le dernier état d'analyse IA de la caméra (personnes & objets)
+export function chargerEtatCamera(idCamera) {
+  return fetch(`${API_BASE}/cameras/${idCamera}/etat`).then(jsonOuErreur);
+}
+
+// 7. URL de la dernière image capturée en direct
+export function urlImageCamera(idCamera) {
+  return `${API_BASE}/cameras/${idCamera}/image`;
+}
+
+// 7b. URL du flux vidéo continu MJPEG en direct pour caméra RTSP
+export function urlFluxCamera(idCamera) {
+  return `${API_BASE}/cameras/${idCamera}/flux`;
+}
+
+// 7c. Tester un flux RTSP
+export function testerFluxRtsp(urlFlux) {
+  return fetch(`${API_BASE}/cameras/tester_flux`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url_flux: urlFlux }),
+  }).then(jsonOuErreur);
+}
+
+// 8. Envoyer une frame d'analyse d'objets & feu/fumée (/voir)
+export async function envoyerFrameVoir(idCamera, imageBlob) {
+  const form = new FormData();
+  form.append('file', imageBlob, 'frame.jpg');
+  const res = await fetch(`${API_BASE}/cameras/${idCamera}/voir`, {
+    method: 'POST',
+    body: form,
+  });
+  return jsonOuErreur(res);
+}
+
+// 9. Envoyer une frame d'analyse de personnes & posture (/qui)
+export async function envoyerFrameQui(idCamera, imageBlob) {
+  const form = new FormData();
+  form.append('file', imageBlob, 'frame.jpg');
+  const res = await fetch(`${API_BASE}/cameras/${idCamera}/qui`, {
+    method: 'POST',
+    body: form,
+  });
+  return jsonOuErreur(res);
+}
+
+// 10. Charger la zone interdite configurée pour une caméra
+export function chargerZoneCamera(idCamera) {
+  return fetch(`${API_BASE}/cameras/${idCamera}/zone`).then(jsonOuErreur);
+}
+
+// 11. Enregistrer / Mettre à jour une zone interdite
+export function enregistrerZoneCamera(idCamera, idAdmin, points, nomZone = '', plageHoraire = null) {
+  return fetch(`${API_BASE}/cameras/${idCamera}/zone`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id_admin: idAdmin,
+      points,
+      nom_zone: nomZone,
+      plage_horaire: plageHoraire,
+    }),
+  }).then(jsonOuErreur);
+}
+
+// 12. Supprimer la zone interdite d'une caméra
+export function supprimerZoneCamera(idCamera) {
+  return fetch(`${API_BASE}/cameras/${idCamera}/zone`, { method: 'DELETE' }).then(jsonOuErreur);
+}
+
+// 13. URLs WebSocket de streaming direct WebRTC
+export function urlDirectEmettre(idCamera) {
+  return urlFluxWebSocket(`/cameras/${idCamera}/direct/emettre`);
+}
+export function urlDirectRegarder(idCamera) {
+  return urlFluxWebSocket(`/cameras/${idCamera}/direct/regarder`);
+}
+
 
 // État réel de l'alarme physique (lampe + sirène pilotées par l'ESP32,
 // voir Infrastructure/alarme_physique.py côté backend). Déclenchée
@@ -40,6 +163,14 @@ export function arreterAlarme() {
 }
 export function reactiverAlarme() {
   return fetch(`${API_BASE}/alarme/reactiver`, { method: 'POST' }).then((r) => r.json());
+}
+
+export function urlImageAlerte(idAlerte) {
+  return `${API_BASE}/alertes/${idAlerte}/image`;
+}
+
+export function urlClipAlerte(idAlerte) {
+  return `${API_BASE}/alertes/${idAlerte}/clip`;
 }
 
 // Config des ESP32 alarme (page admin "configAlerte") — voir
@@ -111,3 +242,55 @@ export function activerLicence(code) {
 export function reinitialiserSysteme() {
   return fetch(`${API_BASE}/systeme/reboot`, { method: 'POST' }).then(jsonOuErreur);
 }
+
+// ============================================================================
+// PERSONNEL & RECONNAISSANCE FACIALE FACE ID (Persistance Backend)
+// ============================================================================
+
+export function listerPersonnel() {
+  return fetch(`${API_BASE}/personnel`).then(jsonOuErreur);
+}
+
+export function enregistrerPersonnel(donnees) {
+  return fetch(`${API_BASE}/personnel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(donnees),
+  }).then(jsonOuErreur);
+}
+
+export function mettreAJourPersonnel(idPersonne, modifs) {
+  return fetch(`${API_BASE}/personnel/${idPersonne}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(modifs),
+  }).then(jsonOuErreur);
+}
+
+export function supprimerPersonnel(idPersonne) {
+  return fetch(`${API_BASE}/personnel/${idPersonne}`, {
+    method: 'DELETE',
+  }).then(jsonOuErreur);
+}
+
+export function verifierVisage(imageBase64) {
+  return fetch(`${API_BASE}/personnel/verifier-visage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: imageBase64 }),
+  }).then(jsonOuErreur);
+}
+
+// ============================================================================
+// ALERTES & NOTIFICATIONS (Suppression & Acquittement)
+// ============================================================================
+
+export function supprimerAlerte(idAlerte) {
+  return fetch(`${API_BASE}/alertes/${idAlerte}`, { method: 'DELETE' }).then(jsonOuErreur);
+}
+
+export function supprimerToutesAlertes() {
+  return fetch(`${API_BASE}/alertes`, { method: 'DELETE' }).then(jsonOuErreur);
+}
+
+

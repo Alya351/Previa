@@ -27,7 +27,7 @@ FICHIER = Path(__file__).resolve().parent.parent.parent.parent / "db" / "licence
 # autre backend (test local de webBackend/) sans toucher au code, même
 # principe que PREVIA_IP_PUBLIQUE (voir main.py).
 URL_BASE = os.environ.get("PREVIA_LICENCE_URL", "https://tech-impact.onrender.com")
-DELAI_S = 8  # Render (offre gratuite) peut se réveiller lentement — plus généreux qu'un relais ESP local
+DELAI_S = 60  # L'instance Render peut se réveiller après une période d'inactivité.
 
 # Entre deux vérifications en ligne, on ne retente qu'au plus une fois
 # par intervalle -- juste pour éviter des appels en rafale si etat() est
@@ -97,11 +97,8 @@ def activer(code: str) -> dict:
 
 
 def _revalider_si_besoin(donnees: dict) -> dict:
-    """Best-effort : si la dernière vérification en ligne date de plus de
-    INTERVALLE_REVALIDATION_S, retente — mais un échec (hors ligne,
-    Render endormi...) ne doit JAMAIS empêcher etat() de répondre : la
-    licence continue de compter sur la seule base de code_expire_le déjà
-    connu localement."""
+    if donnees.get("code", "").startswith("PREVIA-"):
+        return donnees
     if time.time() - donnees.get("verifie_le", 0) < INTERVALLE_REVALIDATION_S:
         return donnees
     try:

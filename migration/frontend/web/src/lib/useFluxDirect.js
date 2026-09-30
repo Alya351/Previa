@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { urlFluxWebSocket } from '../api.js';
+import { urlDirectRegarder } from '../api.js';
 
 // Même serveur STUN que côté émetteur (voir camera.jsx, CONFIG_ICE) —
 // aide à établir la connexion WebRTC, ne voit jamais la vidéo
@@ -23,7 +23,7 @@ export function useFluxDirect(idCamera) {
 
     let ws;
     try {
-      ws = new WebSocket(urlFluxWebSocket(`/cameras/${idCamera}/direct/regarder`));
+      ws = new WebSocket(urlDirectRegarder(idCamera));
     } catch (e) {
       return; // pas grave, le composant appelant retombe sur l'image statique
     }

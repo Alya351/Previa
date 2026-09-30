@@ -39,11 +39,18 @@ def trouver_par_id(id_batiment: str) -> dict | None:
         return json.load(f)
 
 
-def creer_batiment(nom: str, lieu: str) -> dict:
+def creer_batiment(nom: str, lieu: str, responsable_id: str | None = None) -> dict:
+    nom_nettoye = nom.strip()
+    # Empêcher les doublons de nom de bâtiment
+    for existant in lister_batiments():
+        if existant.get("nom", "").strip().lower() == nom_nettoye.lower():
+            raise ValueError(f"Un bâtiment nommé '{nom_nettoye}' existe déjà.")
+
     batiment = {
         "id": uuid.uuid4().hex,
-        "nom": nom.strip(),
+        "nom": nom_nettoye,
         "lieu": lieu.strip(),
+        "responsable_id": responsable_id.strip() if responsable_id else None,
         "cree_le": time.time(),
     }
     BATIMENTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -52,7 +59,7 @@ def creer_batiment(nom: str, lieu: str) -> dict:
     return batiment
 
 
-def modifier_batiment(id_batiment: str, nom: str | None = None, lieu: str | None = None) -> dict | None:
+def modifier_batiment(id_batiment: str, nom: str | None = None, lieu: str | None = None, responsable_id: str | None = None) -> dict | None:
     b = trouver_par_id(id_batiment)
     if b is None:
         return None
@@ -60,6 +67,8 @@ def modifier_batiment(id_batiment: str, nom: str | None = None, lieu: str | None
         b["nom"] = nom.strip()
     if lieu is not None:
         b["lieu"] = lieu.strip()
+    if responsable_id is not None:
+        b["responsable_id"] = responsable_id.strip() if responsable_id else None
     with open(_chemin(id_batiment), "w", encoding="utf-8") as f:
         json.dump(b, f, ensure_ascii=False, indent=2)
     return b

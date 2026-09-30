@@ -39,6 +39,16 @@ def _dossier_camera(id_camera: str) -> Path:
     return d
 
 
+def _json_default(obj):
+    if hasattr(obj, "item"):
+        return obj.item()
+    if hasattr(obj, "tolist"):
+        return obj.tolist()
+    if hasattr(obj, "dtype"):
+        return float(obj)
+    return str(obj)
+
+
 def enregistrer_etat(id_camera: str, cle: str, valeur) -> None:
     """Met à jour UNE clé de l'état courant de cette caméra (ex.
     "vueActuelle" pour on_voit_quoi.py, "personnesVues" pour
@@ -51,23 +61,57 @@ def enregistrer_etat(id_camera: str, cle: str, valeur) -> None:
         chemin = _dossier_camera(id_camera) / "etat.json"
         etat = {}
         if chemin.exists():
-            with open(chemin, encoding="utf-8") as f:
-                etat = json.load(f)
+            try:
+                with open(chemin, encoding="utf-8") as f:
+                    etat = json.load(f)
+            except Exception:
+                etat = {}
         etat[cle] = valeur
         with open(chemin, "w", encoding="utf-8") as f:
-            json.dump(etat, f, ensure_ascii=False, indent=2)
+            json.dump(etat, f, ensure_ascii=False, indent=2, default=_json_default)
 
 
-def lire_etat(id_camera: str, cle: str | None = None):
+def lire_etat(id_camera: str, cle: str | None = None, peremption_s: float = 10.0):
     """État courant de CETTE caméra — juste la valeur de `cle` si fournie
     (ex. "vueActuelle"), sinon tout l'état (toutes les clés). {} si rien
-    n'a encore été rapporté / si `cle` n'existe pas encore."""
+    n'a encore été rapporté / si `cle` n'existe pas encore.
+    Si la caméra n'a pas produit de nouvelle analyse depuis > peremption_s (10s),
+    les détections fantômes sont réinitialisées à vide."""
     chemin = _dossier_camera(id_camera) / "etat.json"
     if not chemin.exists():
         return {}
-    with open(chemin, encoding="utf-8") as f:
-        etat = json.load(f)
+    with _verrous[id_camera]:
+        try:
+            with open(chemin, encoding="utf-8") as f:
+                etat = json.load(f)
+        except Exception:
+            etat = {}
+
+    now = time.time()
+    if peremption_s is not None and etat:
+        pv = etat.get("personnesVues", {})
+        if pv and (now - pv.get("updated_at", 0) > peremption_s):
+            etat["personnesVues"] = {
+                "id_camera": id_camera,
+                "personnes": [],
+                "objets": {},
+                "nombre_personnes": 0,
+                "zones_suspectes": [],
+                "updated_at": pv.get("updated_at", 0),
+            }
+        va = etat.get("vueActuelle", {})
+        if va and (now - va.get("updated_at", 0) > peremption_s):
+            etat["vueActuelle"] = {
+                "id_camera": id_camera,
+                "objets": {},
+                "nombre_personnes": 0,
+                "alertes_feu_fumee": [],
+                "updated_at": va.get("updated_at", 0),
+            }
+
     return etat if cle is None else etat.get(cle, {})
+
+
 
 
 def ajouter_historique(id_camera: str, evenement: dict) -> None:
@@ -86,7 +130,7 @@ def ajouter_historique(id_camera: str, evenement: dict) -> None:
         if len(historique) > MAX_HISTORIQUE:
             historique = historique[-MAX_HISTORIQUE:]
         with open(chemin, "w", encoding="utf-8") as f:
-            json.dump(historique, f, ensure_ascii=False, indent=2)
+            json.dump(historique, f, ensure_ascii=False, indent=2, default=_json_default)
 
 
 def lire_historique(id_camera: str) -> list[dict]:

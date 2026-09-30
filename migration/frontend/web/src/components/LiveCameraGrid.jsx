@@ -1,39 +1,46 @@
 import React from 'react';
+import { VideoOff, Cctv } from 'lucide-react';
 import { useFluxDirect } from '../lib/useFluxDirect.js';
 import { FluxCamera } from './FluxCamera.jsx';
 
 // `cameras` : branché sur les vraies caméras enregistrées (voir
 // GET /vue-ensemble côté pages/admin.jsx) — remplace les 6 caméras
 // fictives d'origine.
-//
-// Chaque carte se connecte à son propre flux direct (voir
-// lib/useFluxDirect.js, Infrastructure/flux_direct.py côté backend) —
-// beaucoup plus fluide que l'ancien rafraîchissement de <img src>
-// toutes les 2s. Tant qu'aucune image n'est encore arrivée par ce flux
-// (caméra pas encore en train d'émettre), retombe sur `cam.image`
-// (GET .../image, l'aperçu "quasi temps réel" existant) — jamais
-// d'icône cassée, juste un peu moins fluide en attendant.
 function CartePreviewCamera({ cam, onSelectCamera }) {
-  const streamDirect = useFluxDirect(cam.id);
+  const streamDirect = useFluxDirect(cam.urlFlux ? null : cam.id);
+
+  const handleClick = () => {
+    if (onSelectCamera) onSelectCamera(cam);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleClick();
+    }
+  };
 
   return (
     <div
       className="camera-preview-card"
-      onClick={() => onSelectCamera && onSelectCamera(cam)}
-      title={`Cliquer pour inspecter ${cam.name}`}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      title={`Cliquer pour inspecter ${cam.name} (${cam.location || 'Zone'})`}
+      aria-label={`Inspecter le flux de la caméra ${cam.name}`}
     >
       {/* LIVE BLUE PILL BADGE */}
-      <div className="camera-live-badge">
+      <div className="camera-live-badge" aria-label="Statut en direct">
+        <span className="live-indicator-dot" aria-hidden="true" />
         <span>LIVE</span>
       </div>
 
       <FluxCamera
         stream={streamDirect}
-        imageRepli={cam.image}
+        imageRepli={cam.urlFlux ? `/cameras/${cam.id}/flux` : cam.image}
         alt={cam.name}
         className="camera-feed-img"
-        onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
-        onLoad={(e) => { e.currentTarget.style.visibility = 'visible'; }}
       />
 
       {/* BOTTOM NAME OVERLAY BAR */}
@@ -44,14 +51,55 @@ function CartePreviewCamera({ cam, onSelectCamera }) {
   );
 }
 
-export function LiveCameraGrid({ cameras = [], onSelectCamera }) {
+export function LiveCameraGrid({ cameras = [], isLoading = false, onSelectCamera }) {
+  if (isLoading) {
+    return (
+      <div className="live-camera-section">
+        <div className="section-heading">
+          <span>Flux en direct</span>
+        </div>
+        <div className="live-cameras-grid">
+          {[1, 2, 3, 4].map((n) => (
+            <div key={n} className="camera-preview-card skeleton-card" aria-hidden="true">
+              <div className="skeleton-shimmer" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   if (cameras.length === 0) {
     return (
       <div className="live-camera-section">
-        <div className="section-heading"><span>Flux en direct</span></div>
-        <p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem' }}>
-          Aucune caméra enregistrée pour l'instant — voir Organisation / Configuration pour en créer une.
-        </p>
+        <div className="section-heading">
+          <span>Flux en direct</span>
+        </div>
+        <div 
+          style={{ 
+            background: '#ffffff', 
+            border: '1px dashed #cbd5e1', 
+            borderRadius: '16px', 
+            padding: '36px 20px', 
+            textAlign: 'center', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            gap: '12px' 
+          }}
+        >
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+            <VideoOff size={24} />
+          </div>
+          <div>
+            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--ink-primary)' }}>
+              Aucune caméra connectée
+            </h4>
+            <p style={{ margin: '4px 0 0 0', color: 'var(--ink-muted)', fontSize: '0.86rem' }}>
+              Ajoutez ou configurez une caméra dans l'onglet <strong>Organisation</strong> pour visualiser les flux en temps réel.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }

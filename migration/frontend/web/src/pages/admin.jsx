@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Activity, AlertTriangle, BarChart3, Building2, Cctv, Check, CheckCircle, CheckCircle2,
-  Clock, DoorOpen, Download, Eye, FileSpreadsheet, FileText, Filter, Info, KeyRound, LayoutGrid,
-  Lightbulb, List, Loader2, Mail, MapPin, Menu, Package, Play, Plus, RefreshCw, Save, Search,
-  Router, Shield, ShieldAlert, ShieldCheck, Target, Trash2, TrendingUp, Undo2, Users, Volume2,
-  VolumeX, Wifi, WifiOff, Zap, ZoomIn,
+  Activity, AlertTriangle, ArrowRight, ArrowUpDown, BarChart3, Building2, Camera, Cctv, Check, CheckCircle, CheckCircle2,
+  ChevronLeft, ChevronRight, Clock, DoorOpen, Download, Eye, FileSpreadsheet, FileText, Filter, Info, KeyRound, LayoutGrid,
+  Lightbulb, List, Loader2, Mail, MapPin, Maximize2, Menu, Package, Play, Plus, RefreshCw, Save, Search,
+  Router, Shield, ShieldAlert, ShieldCheck, SlidersHorizontal, Target, Trash2, TrendingUp, Undo2, Users, Volume2,
+  VolumeX, Wifi, WifiOff, X, Zap, ZoomIn,
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import HeaderDecor from '../components/HeaderDecor';
@@ -14,9 +14,15 @@ import LiveCameraGrid from '../components/LiveCameraGrid';
 import AiAnalysisCard from '../components/AiAnalysisCard';
 import CameraViewModal from '../components/CameraViewModal';
 import PrecursorDetailModal from '../components/PrecursorDetailModal';
+import PersonnesFaceIdView from '../components/PersonnesFaceIdView';
+import AlertMediaModal from '../components/AlertMediaModal';
+import ConfirmModal from '../components/ConfirmModal';
 import {
   API_BASE, chargerEtatAlarme, arreterAlarme, listerEsp, chargerEtatEsp, ajouterReseauEsp,
   supprimerReseauEsp, basculerReseauEsp, chargerEtatLicence, activerLicence,
+  chargerZoneCamera, enregistrerZoneCamera, supprimerZoneCamera, listerCameras,
+  creerCamera, supprimerCamera, testerFluxRtsp, urlFluxCamera, urlImageAlerte, urlClipAlerte,
+  supprimerAlerte, supprimerToutesAlertes,
 } from '../api.js';
 import { useFluxDirect } from '../lib/useFluxDirect.js';
 import { FluxCamera } from '../components/FluxCamera.jsx';
@@ -163,7 +169,7 @@ function DashboardView({
   return (
     <div className="content-body">
       {/* WELCOME BANNER HEADER */}
-      <div className="welcome-header">
+      <div className="welcome-header" style={{ marginBottom: '16px' }}>
         <div className="welcome-title-group">
           <button
             className="hamburger-btn"
@@ -177,9 +183,95 @@ function DashboardView({
               Bienvenue sur <span>Previa</span>
             </h1>
             <p className="welcome-sub">
-              Surveillance intelligente par analyse comportementale
+              Surveillance intelligente et protection des locaux
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* BANDEAU D'ÉTAT SÉCURITÉ */}
+      <div
+        style={{
+          background: alerteEnCours ? '#fef2f2' : '#f0fdf4',
+          border: alerteEnCours ? '2px solid #ef4444' : '1px solid #bbf7d0',
+          borderRadius: '14px',
+          padding: '14px 20px',
+          marginBottom: '20px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          boxShadow: alerteEnCours ? '0 8px 24px rgba(239, 68, 68, 0.15)' : '0 2px 10px rgba(0,0,0,0.02)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span
+            style={{
+              width: '12px',
+              height: '12px',
+              borderRadius: '50%',
+              background: alerteEnCours ? '#ef4444' : '#16a34a',
+              boxShadow: alerteEnCours ? '0 0 12px #ef4444' : '0 0 8px #16a34a',
+              flexShrink: 0,
+            }}
+          />
+          <div>
+            <div style={{ fontSize: '0.92rem', fontWeight: 800, color: alerteEnCours ? '#991b1b' : '#166534' }}>
+              {alerteEnCours
+                ? `🚨 ALERTE CRITIQUE EN COURS : ${alerteEnCours.titre.toUpperCase()} (${alerteEnCours.lieu})`
+                : '🟢 SYSTÈME DE SÉCURITÉ ARMÉ — Surveillance active 24h/24'
+              }
+            </div>
+            <div style={{ fontSize: '0.78rem', color: alerteEnCours ? '#b91c1c' : '#15803d', marginTop: '2px' }}>
+              {alerteEnCours
+                ? 'Sirène et projecteurs activés. Vérification immédiate requise.'
+                : 'Tous les flux et zones de surveillance sont opérationnels.'
+              }
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {alerteEnCours ? (
+            <button
+              type="button"
+              onClick={() => onSelectTab('alerts')}
+              style={{
+                background: '#ef4444',
+                color: '#ffffff',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontSize: '0.82rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+              }}
+            >
+              <ShieldAlert size={15} /> Gérer l'Urgence
+            </button>
+          ) : (
+            <span
+              style={{
+                fontSize: '0.76rem',
+                color: '#15803d',
+                fontWeight: 800,
+                background: '#dcfce7',
+                padding: '5px 12px',
+                borderRadius: '20px',
+                border: '1px solid #86efac',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+              }}
+            >
+              <ShieldCheck size={14} color="#16a34a" /> Surveillance Active
+            </span>
+          )}
         </div>
       </div>
 
@@ -204,7 +296,7 @@ function DashboardView({
       {/* LIVE CAMERA MODAL */}
       {selectedCamera && (
         <CameraViewModal
-          camera={selectedCamera}
+          camera={cameras.find((c) => c.id === selectedCamera.id) || selectedCamera}
           onClose={() => setSelectedCamera(null)}
           onSignalAlert={(cam) => {
             onSelectTab('alerts');
@@ -234,25 +326,32 @@ function DashboardView({
 
 // Dessin de zone non autorisée par caméra — fonctionnalité réelle de
 // migration (voir backend/fonctionnalites/zoneCam/), déplacée ici (l'onglet
-// Configuration séparé a été retiré) avec le même langage visuel (cartes
-// blanches, style en ligne) que le reste de cette section.
-function SectionZones({ cameras }) {
-  const [idCamera, setIdCamera] = useState(cameras[0]?.id || '');
+// Dessin de zone non autorisée par caméra avec plage horaire d'activation
+function SectionZones({ cameras, initialCameraId }) {
+  const [idCamera, setIdCamera] = useState(initialCameraId || cameras[0]?.id || '');
   const [tick, setTick] = useState(0);
   const [points, setPoints] = useState([]);
+  const [nomZone, setNomZone] = useState('');
+  const [active24h, setActive24h] = useState(true);
+  const [heureDebut, setHeureDebut] = useState('20:00');
+  const [heureFin, setHeureFin] = useState('06:00');
+  const [joursActifs, setJoursActifs] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [zoneExistante, setZoneExistante] = useState(null);
+  const [estModifie, setEstModifie] = useState(false);
   const [ratio, setRatio] = useState(4 / 3);
   const [imageOk, setImageOk] = useState(true);
   const [message, setMessage] = useState(null);
   const [enregistrement, setEnregistrement] = useState(false);
   const viewportRef = useRef(null);
-  // Vraie vidéo WebRTC (voir lib/useFluxDirect.js) pour dessiner la zone
-  // directement sur le flux en direct plutôt que sur une image statique
-  // rafraîchie toutes les 2s — les coordonnées de clic restent en %
-  // relatifs au conteneur, donc valables pareil que ce soit une <video>
-  // ou une <img> en dessous (voir clicSurImage). Retombe sur l'image
-  // statique tant que la connexion n'est pas établie.
-  const streamDirect = useFluxDirect(idCamera);
+
+  const camActuelle = cameras.find((c) => c.id === idCamera);
+  const streamDirect = useFluxDirect(camActuelle?.urlFlux ? null : idCamera);
+
+  useEffect(() => {
+    if (initialCameraId && cameras.some((c) => c.id === initialCameraId)) {
+      setIdCamera(initialCameraId);
+    }
+  }, [initialCameraId, cameras]);
 
   useEffect(() => {
     if (cameras.length > 0 && !cameras.some((c) => c.id === idCamera)) setIdCamera(cameras[0].id);
@@ -265,15 +364,30 @@ function SectionZones({ cameras }) {
   }, []);
 
   useEffect(() => {
-    setPoints([]); setMessage(null); setZoneExistante(null);
+    setPoints([]); setMessage(null); setZoneExistante(null); setEstModifie(false);
+    setNomZone(''); setActive24h(true); setHeureDebut('20:00'); setHeureFin('06:00'); setJoursActifs([0, 1, 2, 3, 4, 5, 6]);
     if (!idCamera) return;
-    fetch(`${API_BASE}/cameras/${idCamera}/zone`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((z) => { if (z) { setZoneExistante(z); setPoints(z.points); } })
+    chargerZoneCamera(idCamera)
+      .then((z) => {
+        if (z) {
+          setZoneExistante(z);
+          setPoints(z.points || []);
+          if (z.nom_zone) setNomZone(z.nom_zone);
+          if (z.plage_horaire) {
+            setActive24h(z.plage_horaire.active_24h ?? true);
+            setHeureDebut(z.plage_horaire.heure_debut || '20:00');
+            setHeureFin(z.plage_horaire.heure_fin || '06:00');
+            if (Array.isArray(z.plage_horaire.jours_actifs)) {
+              setJoursActifs(z.plage_horaire.jours_actifs);
+            }
+          }
+          setEstModifie(false);
+        }
+      })
       .catch(() => {});
   }, [idCamera]);
 
-  const camActuelle = cameras.find((c) => c.id === idCamera);
+  // camActuelle est déjà défini au début du composant
 
   function clicSurImage(e) {
     const el = viewportRef.current;
@@ -283,21 +397,74 @@ function SectionZones({ cameras }) {
     const y = (e.clientY - rect.top) / rect.height;
     if (x < 0 || x > 1 || y < 0 || y > 1) return;
     setPoints((prev) => [...prev, { x, y }]);
+    setEstModifie(true);
   }
 
+  function basculerJour(idx) {
+    setJoursActifs((prev) =>
+      prev.includes(idx) ? (prev.length > 1 ? prev.filter((j) => j !== idx) : prev) : [...prev, idx].sort()
+    );
+    setEstModifie(true);
+  }
+
+  function appliquerPreset(debut, fin, jours = [0, 1, 2, 3, 4, 5, 6]) {
+    setActive24h(false);
+    setHeureDebut(debut);
+    setHeureFin(fin);
+    setJoursActifs(jours);
+    setEstModifie(true);
+  }
+
+  // Calcul du statut en temps réel
+  function calculerStatutActuel() {
+    if (active24h) return { actif: true, texte: 'Active en permanence (24h/24)' };
+    const now = new Date();
+    const currentDay = (now.getDay() + 6) % 7; // 0=Lun .. 6=Dim
+    if (!joursActifs.includes(currentDay)) {
+      return { actif: false, texte: 'En veille aujourd\'hui (Jour non surveillé)' };
+    }
+    const [hD, mD] = heureDebut.split(':').map(Number);
+    const [hF, mF] = heureFin.split(':').map(Number);
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const debMin = hD * 60 + mD;
+    const finMin = hF * 60 + mF;
+
+    let actif = false;
+    if (debMin <= finMin) {
+      actif = nowMin >= debMin && nowMin <= finMin;
+    } else {
+      actif = nowMin >= debMin || nowMin <= finMin;
+    }
+    return {
+      actif,
+      texte: actif ? `Active en ce moment (${heureDebut} - ${heureFin})` : `En veille actuellement (${heureDebut} - ${heureFin})`,
+    };
+  }
+
+  const statutHoraire = calculerStatutActuel();
+
   async function enregistrer() {
-    if (points.length < 3) { setMessage({ ok: false, texte: 'Il faut au moins 3 points.' }); return; }
+    if (points.length < 3) { setMessage({ ok: false, texte: 'Il faut au moins 3 points pour délimiter une zone.' }); return; }
     setEnregistrement(true);
     try {
-      const res = await fetch(`${API_BASE}/cameras/${idCamera}/zone`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_admin: sessionStorage.getItem('previa_utilisateur_id'), points }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.detail || `Erreur ${res.status}`);
+      const plage = {
+        active_24h: active24h,
+        heure_debut: heureDebut,
+        heure_fin: heureFin,
+        jours_actifs: joursActifs,
+      };
+      const savedName = nomZone.trim() || `Zone ${camActuelle?.name || ''}`;
+      const data = await enregistrerZoneCamera(
+        idCamera,
+        sessionStorage.getItem('previa_utilisateur_id'),
+        points,
+        savedName,
+        plage
+      );
       setZoneExistante(data);
-      setMessage({ ok: true, texte: 'Zone enregistrée.' });
+      setNomZone(data.nom_zone || savedName);
+      setEstModifie(false);
+      setMessage({ ok: true, texte: 'Zone & plage horaire enregistrées avec succès.' });
     } catch (e) {
       setMessage({ ok: false, texte: e.message });
     } finally {
@@ -308,9 +475,8 @@ function SectionZones({ cameras }) {
   async function supprimer() {
     setEnregistrement(true);
     try {
-      const res = await fetch(`${API_BASE}/cameras/${idCamera}/zone`, { method: 'DELETE' });
-      if (!res.ok && res.status !== 404) throw new Error(`Erreur ${res.status}`);
-      setZoneExistante(null); setPoints([]);
+      await supprimerZoneCamera(idCamera);
+      setZoneExistante(null); setPoints([]); setNomZone(''); setEstModifie(false);
       setMessage({ ok: true, texte: 'Zone supprimée.' });
     } catch (e) {
       setMessage({ ok: false, texte: e.message });
@@ -322,81 +488,316 @@ function SectionZones({ cameras }) {
   if (cameras.length === 0) return null;
 
   const polygonePoints = points.map((p) => `${p.x * 100},${p.y * 100}`).join(' ');
+  const joursNoms = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
   return (
     <div style={{ background: '#ffffff', borderRadius: '18px', padding: '28px 32px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', marginTop: '24px' }}>
-      <div style={{ marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--ink-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <MapPin size={19} /> Zones non autorisées
-        </h3>
-        <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', margin: '4px 0 0 0' }}>
-          Dessine une zone sur l'image d'une caméra : toute personne détectée dedans déclenche une alerte "Intrusion en zone non autorisée".
-        </p>
-      </div>
-
-      <select
-        value={idCamera}
-        onChange={(e) => setIdCamera(e.target.value)}
-        style={{ padding: '8px 14px', borderRadius: '8px', border: '1px solid var(--border-light)', fontSize: '0.85rem', fontWeight: 600, background: '#ffffff', color: 'var(--ink-primary)', marginBottom: '16px', width: '100%', maxWidth: '360px' }}
-      >
-        {cameras.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.location}</option>)}
-      </select>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '20px', alignItems: 'start' }}>
-        <div
-          ref={viewportRef}
-          onClick={clicSurImage}
-          style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', background: '#05070d', aspectRatio: String(ratio), cursor: 'crosshair', userSelect: 'none' }}
-        >
-          <FluxCamera
-            stream={streamDirect}
-            imageRepli={`${camActuelle?.image}?t=${tick}`}
-            alt={camActuelle?.name}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: imageOk ? 'block' : 'none' }}
-            onLoad={(e) => {
-              const t = e.target;
-              const largeur = t.naturalWidth || t.videoWidth;
-              const hauteur = t.naturalHeight || t.videoHeight;
-              setImageOk(true);
-              setRatio((largeur && hauteur) ? largeur / hauteur : 4 / 3);
-            }}
-            onError={() => setImageOk(false)}
-          />
-          {!imageOk && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.82rem', textAlign: 'center', padding: '16px' }}>
-              En attente d'une image de cette caméra…
-            </div>
-          )}
-          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} viewBox="0 0 100 100" preserveAspectRatio="none">
-            {points.length >= 2 && <polygon points={polygonePoints} fill="rgba(2,132,199,0.25)" stroke="#0284c7" strokeWidth="2" vectorEffect="non-scaling-stroke" />}
-            {points.slice(1).map((p, i) => (
-              <line key={i} x1={points[i].x * 100} y1={points[i].y * 100} x2={p.x * 100} y2={p.y * 100} stroke="#0284c7" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-            ))}
-          </svg>
-          {points.map((p, i) => (
-            <div key={i} style={{ position: 'absolute', left: `${p.x * 100}%`, top: `${p.y * 100}%`, marginLeft: '-10px', marginTop: '-10px', width: '20px', height: '20px', borderRadius: '50%', background: '#0284c7', border: '2px solid #fff', color: '#fff', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-              {i + 1}
-            </div>
-          ))}
+      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px' }}>
+        <div>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--ink-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MapPin size={21} color="#0284c7" /> Zones Sensibles & Plages Horaires d'Activation
+          </h3>
+          <p style={{ fontSize: '0.84rem', color: 'var(--ink-muted)', margin: '4px 0 0 0' }}>
+            Délimitez une zone protégée (ex: réserve, coffre, bureaux) et configurez ses heures de surveillance pour éliminer les alertes intempestives pendant les heures de travail.
+          </p>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--ink-muted)' }}>{points.length} point(s) posé(s) — clique sur l'image pour en ajouter (3 minimum).</div>
-          {zoneExistante && <div style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 600 }}>Zone déjà enregistrée pour cette caméra.</div>}
-          {message && <div style={{ fontSize: '0.8rem', color: message.ok ? '#16a34a' : '#dc2626', fontWeight: 600 }}>{message.texte}</div>}
+        {/* Live Status Badge */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '10px',
+          background: statutHoraire.actif ? '#ecfdf5' : '#f8fafc',
+          border: statutHoraire.actif ? '1px solid #a7f3d0' : '1px solid var(--border-subtle)',
+          color: statutHoraire.actif ? '#065f46' : 'var(--ink-muted)',
+          fontSize: '0.82rem', fontWeight: 700,
+        }}>
+          <span style={{
+            width: '10px', height: '10px', borderRadius: '50%',
+            background: statutHoraire.actif ? '#10b981' : '#94a3b8',
+            boxShadow: statutHoraire.actif ? '0 0 8px #10b981' : 'none',
+          }} />
+          {statutHoraire.texte}
+        </div>
+      </div>
 
-          <button onClick={() => setPoints((p) => p.slice(0, -1))} disabled={points.length === 0} style={btnSecondaire}>
-            <Undo2 size={14} /> Annuler le dernier point
-          </button>
-          <button onClick={() => setPoints([])} disabled={points.length === 0} style={btnSecondaire}>
-            <Trash2 size={14} /> Effacer
-          </button>
-          <button onClick={enregistrer} disabled={enregistrement || points.length < 3} style={btnPrimaire}>
-            <Save size={14} /> Enregistrer la zone
-          </button>
+      {/* Camera Selection */}
+      <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1', minWidth: '260px', maxWidth: '380px' }}>
+          <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--ink-secondary)', display: 'block', marginBottom: '4px' }}>
+            Caméra cible
+          </label>
+          <select
+            value={idCamera}
+            onChange={(e) => setIdCamera(e.target.value)}
+            style={{ width: '100%', padding: '9px 14px', borderRadius: '8px', border: '1px solid var(--border-light)', fontSize: '0.88rem', fontWeight: 700, background: '#ffffff', color: 'var(--ink-primary)' }}
+          >
+            {cameras.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.location}</option>)}
+          </select>
+        </div>
+
+        <div style={{ flex: '1', minWidth: '220px', maxWidth: '340px' }}>
+          <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--ink-secondary)', display: 'block', marginBottom: '4px' }}>
+            Nom de la zone protégée
+          </label>
+          <input
+            type="text"
+            placeholder="Ex: Zone Réserve, Coffre-fort, Bureau Direction"
+            value={nomZone}
+            onChange={(e) => {
+              setNomZone(e.target.value);
+              setEstModifie(true);
+            }}
+            style={{ width: '100%', padding: '9px 14px', borderRadius: '8px', border: '1px solid var(--border-light)', fontSize: '0.88rem', color: 'var(--ink-primary)', background: '#f8fafc' }}
+          />
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '24px', alignItems: 'start' }}>
+        {/* Visual Drawing Viewport */}
+        <div>
+          <div
+            ref={viewportRef}
+            onClick={clicSurImage}
+            style={{ position: 'relative', borderRadius: '14px', overflow: 'hidden', background: '#05070d', aspectRatio: String(ratio), cursor: 'crosshair', userSelect: 'none', border: '1px solid var(--border-subtle)', boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}
+          >
+            <FluxCamera
+              stream={streamDirect}
+              imageRepli={`${camActuelle?.image}?t=${tick}`}
+              alt={camActuelle?.name}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: imageOk ? 'block' : 'none' }}
+              onLoad={(e) => {
+                const t = e.target;
+                const largeur = t.naturalWidth || t.videoWidth;
+                const hauteur = t.naturalHeight || t.videoHeight;
+                setImageOk(true);
+                setRatio((largeur && hauteur) ? largeur / hauteur : 4 / 3);
+              }}
+              onError={() => setImageOk(false)}
+            />
+            {!imageOk && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.82rem', textAlign: 'center', padding: '16px' }}>
+                En attente d'un flux de cette caméra…
+              </div>
+            )}
+            <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} viewBox="0 0 100 100" preserveAspectRatio="none">
+              {points.length >= 2 && <polygon points={polygonePoints} fill={statutHoraire.actif ? 'rgba(2,132,199,0.3)' : 'rgba(148,163,184,0.25)'} stroke={statutHoraire.actif ? '#0284c7' : '#94a3b8'} strokeWidth="2.5" strokeDasharray={statutHoraire.actif ? 'none' : '4 2'} vectorEffect="non-scaling-stroke" />}
+              {points.slice(1).map((p, i) => (
+                <line key={i} x1={points[i].x * 100} y1={points[i].y * 100} x2={p.x * 100} y2={p.y * 100} stroke="#0284c7" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+              ))}
+            </svg>
+            {points.map((p, i) => (
+              <div key={i} style={{ position: 'absolute', left: `${p.x * 100}%`, top: `${p.y * 100}%`, marginLeft: '-11px', marginTop: '-11px', width: '22px', height: '22px', borderRadius: '50%', background: '#0284c7', border: '2px solid #fff', color: '#fff', fontSize: '11px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', boxShadow: '0 2px 6px rgba(0,0,0,0.35)' }}>
+                {i + 1}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
+            <span>{points.length} point(s) posé(s) — Cliquez pour en ajouter (3 min).</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => {
+                  setPoints((p) => p.slice(0, -1));
+                  setEstModifie(true);
+                }}
+                disabled={points.length === 0}
+                style={{ ...btnSecondaire, padding: '5px 10px', fontSize: '0.78rem' }}
+              >
+                <Undo2 size={13} /> Annuler point
+              </button>
+              <button
+                onClick={() => {
+                  setPoints([]);
+                  setEstModifie(true);
+                }}
+                disabled={points.length === 0}
+                style={{ ...btnSecondaire, padding: '5px 10px', fontSize: '0.78rem' }}
+              >
+                <Trash2 size={13} /> Effacer tracé
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Schedule & Activation Controls */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Card: Plage Horaire */}
+          <div style={{ background: '#f8fafc', border: '1px solid var(--border-light)', borderRadius: '12px', padding: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--ink-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Clock size={16} color="#0284c7" /> Plage Horaire d'Activation
+              </span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink-secondary)' }}>
+                <input
+                  type="checkbox"
+                  checked={active24h}
+                  onChange={(e) => {
+                    setActive24h(e.target.checked);
+                    setEstModifie(true);
+                  }}
+                  style={{ width: '16px', height: '16px', accentColor: '#0284c7' }}
+                />
+                Actif 24h/24
+              </label>
+            </div>
+
+            {!active24h ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* Presets */}
+                <div>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--ink-muted)', display: 'block', marginBottom: '6px' }}>
+                    Modèles rapides :
+                  </span>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => appliquerPreset('20:00', '06:00')}
+                      style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 600, border: '1px solid #cbd5e1', background: heureDebut === '20:00' && heureFin === '06:00' ? '#e0f2fe' : '#ffffff', color: heureDebut === '20:00' && heureFin === '06:00' ? '#0369a1' : 'var(--ink-primary)', cursor: 'pointer' }}
+                    >
+                      🌙 Nuit (20h–6h)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => appliquerPreset('18:00', '08:00')}
+                      style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 600, border: '1px solid #cbd5e1', background: heureDebut === '18:00' && heureFin === '08:00' ? '#e0f2fe' : '#ffffff', color: heureDebut === '18:00' && heureFin === '08:00' ? '#0369a1' : 'var(--ink-primary)', cursor: 'pointer' }}
+                    >
+                      🏢 Hors bureau (18h–8h)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => appliquerPreset('08:00', '18:00')}
+                      style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '0.74rem', fontWeight: 600, border: '1px solid #cbd5e1', background: heureDebut === '08:00' && heureFin === '18:00' ? '#e0f2fe' : '#ffffff', color: heureDebut === '08:00' && heureFin === '18:00' ? '#0369a1' : 'var(--ink-primary)', cursor: 'pointer' }}
+                    >
+                      ☀️ Jour (8h–18h)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Hours inputs */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--ink-secondary)', display: 'block', marginBottom: '3px' }}>
+                      Heure de début
+                    </label>
+                    <input
+                      type="time"
+                      value={heureDebut}
+                      onChange={(e) => {
+                        setHeureDebut(e.target.value);
+                        setEstModifie(true);
+                      }}
+                      style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-light)', fontSize: '0.85rem', fontWeight: 700, background: '#ffffff' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--ink-secondary)', display: 'block', marginBottom: '3px' }}>
+                      Heure de fin
+                    </label>
+                    <input
+                      type="time"
+                      value={heureFin}
+                      onChange={(e) => {
+                        setHeureFin(e.target.value);
+                        setEstModifie(true);
+                      }}
+                      style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-light)', fontSize: '0.85rem', fontWeight: 700, background: '#ffffff' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Days of week */}
+                <div>
+                  <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--ink-secondary)', display: 'block', marginBottom: '6px' }}>
+                    Jours de surveillance active :
+                  </span>
+                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'space-between' }}>
+                    {joursNoms.map((nom, idx) => {
+                      const sel = joursActifs.includes(idx);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => basculerJour(idx)}
+                          style={{
+                            flex: 1, padding: '6px 0', textAlign: 'center', borderRadius: '6px',
+                            fontSize: '0.74rem', fontWeight: 800, cursor: 'pointer',
+                            background: sel ? '#0284c7' : '#ffffff',
+                            color: sel ? '#ffffff' : 'var(--ink-secondary)',
+                            border: sel ? '1px solid #0284c7' : '1px solid var(--border-light)',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          {nom}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', background: '#ffffff', padding: '10px 12px', borderRadius: '8px', border: '1px dashed var(--border-light)' }}>
+                🛡️ La zone est protégée <strong>24h/24 et 7j/7</strong>. Toute intrusion déclenchera instantanément une alerte, de jour comme de nuit.
+              </div>
+            )}
+          </div>
+
+          {/* Action Messages & Status */}
+          {message && (
+            <div style={{
+              fontSize: '0.82rem',
+              padding: '9px 14px',
+              borderRadius: '8px',
+              background: message.ok ? '#ecfdf5' : '#fef2f2',
+              color: message.ok ? '#047857' : '#b91c1c',
+              border: `1px solid ${message.ok ? '#a7f3d0' : '#fecaca'}`,
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              {message.ok ? <CheckCircle2 size={16} color="#059669" /> : <AlertTriangle size={16} color="#dc2626" />}
+              <span>{message.texte}</span>
+            </div>
+          )}
+
+          {/* Save & Delete Buttons */}
+          {zoneExistante && !estModifie ? (
+            <div
+              style={{
+                background: '#ecfdf5',
+                border: '1px solid #a7f3d0',
+                color: '#065f46',
+                padding: '11px 16px',
+                borderRadius: '8px',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                justifyContent: 'center',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+              }}
+            >
+              <CheckCircle2 size={16} color="#10b981" />
+              <span>Zone enregistrée & active</span>
+            </div>
+          ) : (
+            <button
+              onClick={enregistrer}
+              disabled={enregistrement || points.length < 3}
+              style={{
+                ...btnPrimaire,
+                opacity: (enregistrement || points.length < 3) ? 0.6 : 1,
+                cursor: (enregistrement || points.length < 3) ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <Save size={15} />
+              <span>{zoneExistante ? 'Enregistrer les modifications' : 'Enregistrer la zone & les plages horaires'}</span>
+            </button>
+          )}
+
           {zoneExistante && (
             <button onClick={supprimer} disabled={enregistrement} style={btnSecondaire}>
-              <Trash2 size={14} /> Supprimer la zone enregistrée
+              <Trash2 size={15} /> Supprimer la zone enregistrée
             </button>
           )}
         </div>
@@ -412,8 +813,9 @@ const btnSecondaire = {
 };
 const btnPrimaire = {
   background: '#0284c7', border: 'none', color: '#ffffff',
-  padding: '9px 14px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer',
+  padding: '11px 16px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer',
   display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center',
+  boxShadow: '0 2px 8px rgba(2,132,199,0.3)',
 };
 
 function ilYA(horodatage) {
@@ -425,14 +827,18 @@ function ilYA(horodatage) {
   return `il y a ${Math.round(s / 3600)} h`;
 }
 
-// `cameras` : branché sur les vraies caméras (voir Admin() plus bas) —
-// remplace les 6 caméras fictives d'origine. "En ligne"/"Hors-ligne"
-// dérivé de l'âge de la dernière image reçue (seuil : > 15s =
-// hors-ligne), pas d'un FPS inventé.
-function CamerasView({ cameras = [], onRefresh }) {
-  const [selectedCam, setSelectedCam] = useState(null);
+// ============================================================================
+// SECTION : CAMÉRAS (SUPERVISION ÉPURÉE, MULTI-VUES ET ZONES DE SÉCURITÉ)
+// ============================================================================
+function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, onSelectTab }) {
+  const [selectedCam, setSelectedCam] = useState(() => {
+    return localStorage.getItem('previa_selected_camera') || null;
+  });
+  const [subTab, setSubTab] = useState('hero'); // 'hero' | 'mosaic' | 'zones'
   const [isSyncing, setIsSyncing] = useState(false);
   const [tick, setTick] = useState(0);
+  const [alerteInspectee, setAlerteInspectee] = useState(null);
+  const [fullscreenModalCam, setFullscreenModalCam] = useState(null);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 2000);
@@ -440,47 +846,74 @@ function CamerasView({ cameras = [], onRefresh }) {
   }, []);
 
   useEffect(() => {
-    if (!selectedCam && cameras.length > 0) setSelectedCam(cameras[0].id);
+    const saved = localStorage.getItem('previa_selected_camera');
+    if (saved && cameras.some((c) => String(c.id) === String(saved))) {
+      if (String(selectedCam) !== String(saved)) setSelectedCam(saved);
+    } else if ((!selectedCam || !cameras.some((c) => String(c.id) === String(selectedCam))) && cameras.length > 0) {
+      setSelectedCam(cameras[0].id);
+      localStorage.setItem('previa_selected_camera', cameras[0].id);
+    }
   }, [cameras, selectedCam]);
 
   if (cameras.length === 0) {
     return (
-      <div className="content-body">
+      <div className="content-body" style={{ maxWidth: '1400px', margin: '0 auto' }}>
         <div className="welcome-header">
           <div>
             <h1 className="welcome-heading">Supervision des <span>Caméras</span></h1>
-            <p className="welcome-sub">Surveillance temporelle, gestion des occlusions et détection de pannes</p>
+            <p className="welcome-sub">Visionnage en direct et état des caméras</p>
           </div>
         </div>
-        <p style={{ color: 'var(--ink-muted)' }}>Aucune caméra enregistrée pour l'instant.</p>
+        <div
+          style={{
+            background: '#ffffff',
+            border: '1px dashed var(--border-light)',
+            borderRadius: '20px',
+            padding: '48px 24px',
+            textAlign: 'center',
+            marginTop: '20px',
+          }}
+        >
+          <Cctv size={40} color="#94a3b8" style={{ margin: '0 auto 12px' }} />
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--ink-primary)', margin: 0 }}>
+            Aucune caméra enregistrée
+          </h3>
+          <p style={{ fontSize: '0.88rem', color: 'var(--ink-muted)', marginTop: '6px' }}>
+            Configurez une caméra dans l'onglet <strong>Organisation</strong> pour commencer la surveillance.
+          </p>
+        </div>
       </div>
     );
   }
 
   const camerasEtat = cameras.map((c) => {
     const age = c.misAJourLe ? Date.now() / 1000 - c.misAJourLe : null;
-    const isOff = age == null || age > 15;
+    const isOff = c.urlFlux ? false : (age == null || age > 15);
+    const persSurCam = personnes.filter((p) => String(p.camCtx?.id_camera || '') === String(c.id));
+    const persCount = persSurCam.length > 0 ? persSurCam.length : (c.nombrePersonnes ?? 0);
+    const alertesDeCetteCam = alertes.filter((a) => String(a.id_camera || '') === String(c.id));
     return {
       id: c.id,
-      name: `${c.name} : ${c.location}`,
-      image: `${c.image}?t=${tick}`,
-      zone: c.location,
+      name: c.name || `Caméra #${c.id}`,
+      fullName: `${c.name} · ${c.location || 'Site principal'}`,
+      location: c.location || 'Zone principale',
+      image: c.urlFlux ? c.image : `${c.image}?t=${tick}`,
+      urlFlux: c.urlFlux,
       status: isOff ? 'Hors-ligne' : 'En ligne',
-      frameAge: age == null ? 'Aucune image reçue' : `${ilYA(c.misAJourLe)}`,
-      persons: c.nombrePersonnes ?? 0,
-      behavior: c.nombrePersonnes > 0 ? `${c.nombrePersonnes} personne(s) suivie(s)` : 'Aucune activité',
+      isOffline: isOff,
+      frameAge: c.urlFlux ? 'En direct' : (age == null ? 'Aucune image' : `${ilYA(c.misAJourLe)}`),
+      persons: persCount,
+      behavior: persCount > 0 ? `${persCount} personne(s) visible(s)` : 'Surveillance normale',
+      alertes: alertesDeCetteCam,
+      hasAlert: alertesDeCetteCam.length > 0,
     };
   });
 
-  const currentCamera = camerasEtat.find(c => c.id === selectedCam) || camerasEtat[0];
-  const isOffline = currentCamera.status === 'Hors-ligne';
-  // Flux direct (vraie vidéo WebRTC, voir lib/useFluxDirect.js) sur la
-  // caméra affichée en grand ci-dessous — retombe sur l'image statique
-  // (currentCamera.image, rafraîchie toutes les 2s) tant que la
-  // connexion n'est pas établie. Les vignettes de la liste latérale
-  // restent sur l'image statique (pas la peine d'ouvrir une connexion
-  // par caméra juste pour de petites vignettes).
-  const streamDirectCourant = useFluxDirect(currentCamera.id);
+  const currentCamera = camerasEtat.find((c) => String(c.id) === String(selectedCam)) || camerasEtat[0];
+  const isOffline = currentCamera.isOffline;
+  const streamDirectCourant = useFluxDirect(currentCamera.urlFlux ? null : currentCamera.id);
+  const detectionsSurCetteCam = personnes.filter((p) => String(p.camCtx?.id_camera || '') === String(currentCamera.id));
+  const derniereAlerteCetteCam = currentCamera.alertes[0];
 
   const handleSync = () => {
     setIsSyncing(true);
@@ -489,163 +922,767 @@ function CamerasView({ cameras = [], onRefresh }) {
     });
   };
 
+  const handleSelectCamera = (camId) => {
+    setSelectedCam(camId);
+    localStorage.setItem('previa_selected_camera', camId);
+  };
+
+  const handleDeleteAlerte = async (id, e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    try {
+      await supprimerAlerte(id);
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error('Erreur suppression alerte:', err);
+    }
+  };
+
+  const handleDownloadSnapshot = () => {
+    const link = document.createElement('a');
+    link.href = currentCamera.image;
+    link.download = `previa_snapshot_${currentCamera.id}_${Date.now()}.jpg`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="content-body">
-      {/* CLEAN HEADER */}
-      <div className="welcome-header">
+    <div className="content-body" style={{ maxWidth: '1440px', margin: '0 auto', paddingBottom: '60px' }}>
+      {/* EN-TÊTE ÉPURÉ & SÉLECTEUR DE MODE DE VUE */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '16px',
+          marginBottom: '20px',
+        }}
+      >
         <div>
-          <h1 className="welcome-heading">Supervision des <span>Caméras</span></h1>
-          <p className="welcome-sub">Surveillance temporelle, gestion des occlusions et détection de pannes</p>
+          <h1 className="welcome-heading" style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>
+            Supervision des <span>Caméras</span>
+          </h1>
+          <p className="welcome-sub" style={{ fontSize: '0.9rem', color: 'var(--ink-muted)', marginTop: '4px' }}>
+            Flux vidéo temps réel, cadrage IA et délimitation de zones
+          </p>
+        </div>
+
+        {/* COMMUTATEUR DE MODE DE VUE (SEGMENTED PILL) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            backgroundColor: '#ffffff',
+            padding: '4px',
+            borderRadius: '14px',
+            border: '1px solid var(--border-light)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setSubTab('hero')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '10px',
+              border: 'none',
+              backgroundColor: subTab === 'hero' ? '#0284c7' : 'transparent',
+              color: subTab === 'hero' ? '#ffffff' : 'var(--ink-secondary)',
+              fontSize: '0.84rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Camera size={15} />
+            <span>Focus Caméra</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSubTab('mosaic')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '10px',
+              border: 'none',
+              backgroundColor: subTab === 'mosaic' ? '#0284c7' : 'transparent',
+              color: subTab === 'mosaic' ? '#ffffff' : 'var(--ink-secondary)',
+              fontSize: '0.84rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <LayoutGrid size={15} />
+            <span>Mosaïque Multi-Vues ({camerasEtat.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSubTab('zones')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '10px',
+              border: 'none',
+              backgroundColor: subTab === 'zones' ? '#0284c7' : 'transparent',
+              color: subTab === 'zones' ? '#ffffff' : 'var(--ink-secondary)',
+              fontSize: '0.84rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Shield size={15} />
+            <span>Zones de Sécurité</span>
+          </button>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-        {/* MAIN SELECTED CAMERA VIEW */}
-        <div style={{ background: '#ffffff', borderRadius: '18px', padding: '20px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-          <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', background: '#000', aspectRatio: '16/9' }}>
-            <FluxCamera
-              stream={streamDirectCourant}
-              imageRepli={currentCamera.image}
-              alt={currentCamera.name}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isOffline ? 'grayscale(100%) opacity(0.5)' : 'none' }}
-            />
+      {/* ==================================================================== */}
+      {/* 1. VUE FOCUS / DIRECT ÉPURÉE (HERO) */}
+      {/* ==================================================================== */}
+      {subTab === 'hero' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* BANDEAU SÉLECTEUR RAPIDE DE CAMÉRAS */}
+          <div
+            style={{
+              display: 'flex',
+              gap: '10px',
+              overflowX: 'auto',
+              paddingBottom: '4px',
+              scrollbarWidth: 'none',
+            }}
+          >
+            {camerasEtat.map((cam) => {
+              const isSelected = String(selectedCam) === String(cam.id);
+              return (
+                <button
+                  key={cam.id}
+                  type="button"
+                  onClick={() => handleSelectCamera(cam.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 14px',
+                    borderRadius: '12px',
+                    border: isSelected ? '2px solid #0284c7' : '1px solid var(--border-light)',
+                    backgroundColor: isSelected ? '#f0f9ff' : '#ffffff',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    boxShadow: isSelected ? '0 4px 12px rgba(2,132,199,0.15)' : 'none',
+                    flexShrink: 0,
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{ position: 'relative' }}>
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '8px',
+                        backgroundColor: isSelected ? '#0284c7' : '#f1f5f9',
+                        color: isSelected ? '#ffffff' : '#64748b',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Cctv size={18} />
+                    </div>
+                    {cam.hasAlert && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          top: -2,
+                          right: -2,
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '50%',
+                          backgroundColor: '#ef4444',
+                          boxShadow: '0 0 6px #ef4444',
+                        }}
+                      />
+                    )}
+                  </div>
 
-            {/* STATUS BADGE */}
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: isSelected ? '#0369a1' : 'var(--ink-primary)' }}>
+                      {cam.name}
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: isSelected ? '#0284c7' : 'var(--ink-muted)' }}>
+                      {cam.location} {cam.persons > 0 && `· 👤 ${cam.persons}`}
+                    </div>
+                  </div>
+
+                  <span
+                    style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 800,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      marginLeft: '4px',
+                      backgroundColor: cam.isOffline ? '#fee2e2' : '#dcfce7',
+                      color: cam.isOffline ? '#dc2626' : '#16a34a',
+                    }}
+                  >
+                    {cam.isOffline ? 'OFF' : 'LIVE'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* LECTEUR VIDÉO HERO */}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '20px',
+              padding: '16px',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-card)',
+            }}
+          >
             <div
               style={{
-                position: 'absolute',
-                top: 12,
-                left: 12,
-                background: isOffline ? '#ef4444' : '#0284c7',
-                color: '#fff',
-                fontSize: '0.7rem',
-                fontWeight: 800,
-                padding: '4px 10px',
-                borderRadius: '6px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
+                position: 'relative',
+                borderRadius: '14px',
+                overflow: 'hidden',
+                backgroundColor: '#05070d',
+                aspectRatio: '16/9',
+                maxHeight: '68vh',
+                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)',
               }}
             >
-              {!isOffline && <span className="live-dot-pulse" />}
-              <span>{isOffline ? '⚠️ CAMÉRA HORS-LIGNE (IMAGE TROP ANCIENNE)' : 'EN DIRECT'}</span>
-            </div>
-
-            {/* OCCLUSION / PERSISTENCE BADGE */}
-            <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(15,23,42,0.85)', color: '#00f0ff', padding: '4px 10px', borderRadius: '6px', fontSize: '0.7rem', fontFamily: 'JetBrains Mono, monospace' }}>
-              Suivi actif continu (Tolérance occlusion)
-            </div>
-
-            <div style={{ position: 'absolute', bottom: 12, left: 12, right: 12, background: 'rgba(10, 17, 40, 0.9)', backdropFilter: 'blur(8px)', padding: '10px 16px', borderRadius: '8px', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <strong style={{ fontSize: '0.95rem' }}>{currentCamera.name}</strong>
-                <div style={{ fontSize: '0.75rem', opacity: 0.85, color: '#38bdf8' }}>Analyse : {currentCamera.behavior}</div>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <span style={{ background: isOffline ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)', color: isOffline ? '#ef4444' : '#10b981', padding: '4px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700 }}>
-                  {isOffline ? 'DÉFAILLANCE' : 'IA PREVIA ACTIVE'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap', gap: '12px' }}>
-            <div style={{ display: 'flex', gap: '16px', fontSize: '0.84rem', color: 'var(--ink-muted)' }}>
-              <span>Latence image : <strong style={{ color: isOffline ? '#ef4444' : 'var(--ink-primary)' }}>{currentCamera.frameAge}</strong></span>
-              <span>Cibles suivies : <strong style={{ color: 'var(--ink-primary)' }}>{currentCamera.persons}</strong></span>
-              <span>Filtrage mobilier : <strong style={{ color: '#10b981' }}>Actif (0 faux positif)</strong></span>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={handleSync}
+              <FluxCamera
+                stream={streamDirectCourant}
+                imageRepli={currentCamera.image}
+                alt={currentCamera.name}
+                detections={detectionsSurCetteCam}
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid var(--border-light)',
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  fontWeight: 600,
-                  fontSize: '0.82rem',
-                  color: 'var(--ink-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  cursor: 'pointer'
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  filter: isOffline ? 'grayscale(100%) opacity(0.4)' : 'none',
                 }}
-              >
-                <RefreshCw size={15} className={isSyncing ? "animate-spin" : ""} />
-                Synchroniser Flux
-              </button>
+              />
 
-              <button
-                onClick={() => alert(`Alerte transmise pour : ${currentCamera.name}`)}
-                style={{
-                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  fontWeight: 700,
-                  fontSize: '0.82rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <AlertTriangle size={16} />
-                Déclencher Alerte
-              </button>
-            </div>
-          </div>
-        </div>
+              {/* OVERLAY HORS-LIGNE SI LE FLUX EST COUPÉ */}
+              {isOffline && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '50%',
+                      backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                      border: '2px solid #ef4444',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#ef4444',
+                      marginBottom: '12px',
+                    }}
+                  >
+                    <AlertTriangle size={28} />
+                  </div>
+                  <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>Signal Caméra Interrompu</h4>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#cbd5e1' }}>
+                    Aucune trame reçue depuis plus de 15 secondes.
+                  </p>
+                </div>
+              )}
 
-        {/* SIDE CAMERA SELECTOR LIST */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink-primary)', marginBottom: '4px' }}>
-            Statut des Caméras ({camerasEtat.length})
-          </h3>
-          {camerasEtat.map((cam) => {
-            const off = cam.status === 'Hors-ligne';
-            return (
+              {/* HUD FLOTTANT SUPÉRIEUR */}
               <div
-                key={cam.id}
-                onClick={() => setSelectedCam(cam.id)}
                 style={{
-                  background: selectedCam === cam.id ? '#e0f2fe' : '#ffffff',
-                  border: selectedCam === cam.id ? '2px solid #0284c7' : '1px solid var(--border-subtle)',
-                  borderRadius: '12px',
-                  padding: '12px 14px',
+                  position: 'absolute',
+                  top: 14,
+                  left: 14,
+                  right: 14,
                   display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  gap: '12px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
+                  zIndex: 20,
+                  pointerEvents: 'none',
                 }}
               >
-                <img src={cam.image} alt={cam.name} style={{ width: '60px', height: '42px', objectFit: 'cover', borderRadius: '6px', filter: off ? 'grayscale(100%)' : 'none' }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink-primary)' }}>{cam.name}</div>
-                  <div style={{ fontSize: '0.72rem', color: off ? '#ef4444' : 'var(--ink-muted)' }}>
-                    {off ? '⚠️ Signal interrompu' : `${cam.zone} (${cam.frameAge})`}
+                {/* STATUT FLUX GAUCHE */}
+                <div
+                  style={{
+                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                    backdropFilter: 'blur(8px)',
+                    color: '#ffffff',
+                    padding: '6px 14px',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: isOffline ? '#ef4444' : '#22c55e',
+                      boxShadow: isOffline ? '0 0 8px #ef4444' : '0 0 8px #22c55e',
+                    }}
+                  />
+                  <span>{isOffline ? 'HORS-LIGNE' : 'EN DIRECT'}</span>
+                  <span style={{ opacity: 0.4 }}>|</span>
+                  <span style={{ color: '#38bdf8' }}>{currentCamera.name}</span>
+                  <span style={{ opacity: 0.7, fontSize: '0.72rem' }}>({currentCamera.location})</span>
+                </div>
+
+                {/* LÉGENDE & COMPTEUR DROITE */}
+                <div
+                  style={{
+                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                    backdropFilter: 'blur(8px)',
+                    color: '#ffffff',
+                    padding: '6px 12px',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    fontSize: '0.74rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#4ade80' }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e' }} />
+                    Autorisé
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f87171' }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444' }} />
+                    Suspect
+                  </span>
+                  <span style={{ opacity: 0.4 }}>|</span>
+                  <span style={{ color: '#bae6fd' }}>
+                    👤 {detectionsSurCetteCam.length} vue{detectionsSurCetteCam.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* BANDEAU D'ALERTE EN DIRECT (UNIQUEMENT SI INCIDENT PRÉSENT SUR CETTE CAMÉRA) */}
+            {derniereAlerteCetteCam && (
+              <div
+                style={{
+                  marginTop: '12px',
+                  backgroundColor: '#fef2f2',
+                  border: '1.5px solid #fecaca',
+                  borderRadius: '12px',
+                  padding: '10px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  animation: 'previaFadeIn 0.2s ease-out',
+                }}
+              >
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1 }}
+                  onClick={() => setAlerteInspectee(derniereAlerteCetteCam)}
+                >
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      backgroundColor: '#fee2e2',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px',
+                    }}
+                  >
+                    🚨
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#991b1b' }}>
+                      Incident détecté : {derniereAlerteCetteCam.type_evenement || 'Alerte sécurité'}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#b91c1c' }}>
+                      {derniereAlerteCetteCam.description} · {derniereAlerteCetteCam.horodatage ? heureLocale(derniereAlerteCetteCam.horodatage) : "à l'instant"}
+                    </div>
                   </div>
                 </div>
-                {off ? (
-                  <span style={{ background: '#fee2e2', color: '#ef4444', fontSize: '0.68rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px' }}>
-                    PANNE
-                  </span>
-                ) : (
-                  <span style={{ background: '#dcfce7', color: '#16a34a', fontSize: '0.68rem', fontWeight: 800, padding: '2px 6px', borderRadius: '4px' }}>
-                    LIVE
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
-      <SectionZones cameras={cameras} />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setAlerteInspectee(derniereAlerteCetteCam)}
+                    style={{
+                      backgroundColor: '#ffffff',
+                      color: '#b91c1c',
+                      border: '1px solid #fca5a5',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <Eye size={13} />
+                    <span>Examiner</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteAlerte(derniereAlerteCetteCam.id, e)}
+                    style={{
+                      backgroundColor: '#dc2626',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Acquitter
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* BARRE D'ACTIONS INFÉRIEURE DU LECTEUR */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginTop: '14px',
+                flexWrap: 'wrap',
+                gap: '12px',
+                padding: '4px 6px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.84rem', color: 'var(--ink-secondary)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                  <Clock size={15} color="#0284c7" />
+                  Flux : <strong>{currentCamera.frameAge}</strong>
+                </span>
+                <span style={{ opacity: 0.3 }}>|</span>
+                <span style={{ fontWeight: 600 }}>
+                  {currentCamera.behavior}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={handleDownloadSnapshot}
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid var(--border-light)',
+                    color: 'var(--ink-secondary)',
+                    padding: '8px 14px',
+                    borderRadius: '10px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Télécharger une capture instantanée"
+                >
+                  <Download size={14} />
+                  <span>Snapshot</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSubTab('zones')}
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid var(--border-light)',
+                    color: 'var(--ink-secondary)',
+                    padding: '8px 14px',
+                    borderRadius: '10px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Délimiter une zone non autorisée sur cette caméra"
+                >
+                  <Shield size={14} color="#0284c7" />
+                  <span>Zone de Sécurité</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFullscreenModalCam(currentCamera)}
+                  style={{
+                    backgroundColor: '#0284c7',
+                    border: 'none',
+                    color: '#ffffff',
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 8px rgba(2,132,199,0.3)',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Afficher en plein écran avec contrôles"
+                >
+                  <Maximize2 size={14} />
+                  <span>Plein Écran</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSync}
+                  style={{
+                    backgroundColor: '#f1f5f9',
+                    border: '1px solid var(--border-light)',
+                    color: 'var(--ink-secondary)',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                  }}
+                  title="Synchroniser le flux"
+                >
+                  <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* 2. VUE MOSAÏQUE MULTI-VUES */}
+      {/* ==================================================================== */}
+      {subTab === 'mosaic' && (
+        <div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+              gap: '18px',
+            }}
+          >
+            {camerasEtat.map((cam) => {
+              const streamDirectTuile = useFluxDirect(cam.urlFlux ? null : cam.id);
+              const detectionsTuile = personnes.filter((p) => String(p.camCtx?.id_camera || '') === String(cam.id));
+
+              return (
+                <div
+                  key={cam.id}
+                  style={{
+                    backgroundColor: '#ffffff',
+                    borderRadius: '18px',
+                    padding: '14px',
+                    border: '1px solid var(--border-subtle)',
+                    boxShadow: 'var(--shadow-card)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    transition: 'transform 0.15s ease',
+                  }}
+                >
+                  <div
+                    onClick={() => {
+                      setSelectedCam(cam.id);
+                      setSubTab('hero');
+                    }}
+                    style={{
+                      position: 'relative',
+                      borderRadius: '12px',
+                      overflow: 'hidden',
+                      backgroundColor: '#05070d',
+                      aspectRatio: '16/9',
+                      cursor: 'pointer',
+                    }}
+                    title="Cliquer pour passer en vue focus"
+                  >
+                    <FluxCamera
+                      stream={streamDirectTuile}
+                      imageRepli={cam.image}
+                      alt={cam.name}
+                      detections={detectionsTuile}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        filter: cam.isOffline ? 'grayscale(100%) opacity(0.5)' : 'none',
+                      }}
+                    />
+
+                    {/* BADGE LIVE */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 10,
+                        left: 10,
+                        backgroundColor: cam.isOffline ? '#ef4444' : '#0284c7',
+                        color: '#ffffff',
+                        fontSize: '0.68rem',
+                        fontWeight: 800,
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        zIndex: 10,
+                      }}
+                    >
+                      {!cam.isOffline && <span className="live-dot-pulse" />}
+                      <span>{cam.isOffline ? 'HORS-LIGNE' : 'LIVE'}</span>
+                    </div>
+
+                    {/* COMPTEUR DE PERSONNES */}
+                    {detectionsTuile.length > 0 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 10,
+                          right: 10,
+                          backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                          color: '#bae6fd',
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          zIndex: 10,
+                        }}
+                      >
+                        👤 {detectionsTuile.length}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* PIED DE CARTE */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--ink-primary)' }}>
+                        {cam.name}
+                      </div>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--ink-muted)' }}>
+                        {cam.location} · {cam.frameAge}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCam(cam.id);
+                          setSubTab('hero');
+                        }}
+                        style={{
+                          backgroundColor: '#f0f9ff',
+                          border: '1px solid #bae6fd',
+                          color: '#0284c7',
+                          padding: '5px 10px',
+                          borderRadius: '8px',
+                          fontSize: '0.76rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Focus
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFullscreenModalCam(cam)}
+                        style={{
+                          backgroundColor: '#f8fafc',
+                          border: '1px solid var(--border-light)',
+                          color: 'var(--ink-secondary)',
+                          padding: '5px 8px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                        }}
+                        title="Plein écran"
+                      >
+                        <Maximize2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* 3. VUE ZONES DE SÉCURITÉ */}
+      {/* ==================================================================== */}
+      {subTab === 'zones' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <SectionZones cameras={cameras} initialCameraId={selectedCam} />
+        </div>
+      )}
+
+      {/* MODALE PLEIN ÉCRAN */}
+      {fullscreenModalCam && (
+        <CameraViewModal
+          camera={fullscreenModalCam}
+          onClose={() => setFullscreenModalCam(null)}
+          onSignalAlert={() => {
+            if (onSelectTab) onSelectTab('alerts');
+          }}
+        />
+      )}
+
+      {/* MODAL HD PHOTO / VIDÉO DE L'INTRUSION */}
+      {alerteInspectee && (
+        <AlertMediaModal
+          alerte={alerteInspectee}
+          onClose={() => setAlerteInspectee(null)}
+          onDelete={handleDeleteAlerte}
+          onGoToCamera={handleSelectCamera}
+        />
+      )}
     </div>
   );
 }
@@ -1024,178 +2061,900 @@ function heureLocale(horodatage) {
 // pas de distinction plus fine disponible côté backend pour l'instant.
 // "Action Validée" montre l'avis du comparateur IA (voir
 // Alertes/comparaison_ia.py) plutôt que des équipements physiques qu'on
-// n'a pas réellement (lumières/projecteurs).
-function EventsView({ alertesReelles = [] }) {
+// `alertesReelles` : branché sur GET /alertes (voir Admin() plus bas)
+// Gestion complète de l'historique : tri multi-critères, filtre par caméra / sévérité,
+// pagination pour fluidifier les longues listes, suppression individuelle et purge complète.
+function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab }) {
   const [search, setSearch] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [selectedFilter, setSelectedFilter] = useState('all'); // 'all' | 'critical' | 'suspect'
+  const [selectedCamera, setSelectedCamera] = useState('all');
+  const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest' | 'severity' | 'camera'
+  const [modeAffichage, setModeAffichage] = useState('timeline'); // 'timeline' | 'table'
+  const [evenementSelectionne, setEvenementSelectionne] = useState(null);
+  const [supprimesLocaux, setSupprimesLocaux] = useState(new Set());
+  const [enSuppression, setEnSuppression] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const events = alertesReelles.map((a) => {
-    const critique = ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(a.type_evenement);
-    return {
-      id: a.id,
-      time: heureLocale(a.horodatage),
-      type: LABEL_TYPE_EVENEMENTS[a.type_evenement] || a.type_evenement,
-      cam: `${a.num || a.id_camera} · ${[a.batiment, a.piece].filter(Boolean).join(' / ') || '?'}`,
-      desc: a.description,
-      level: critique ? 'Prolongé' : 'Confirmé',
-      validated: true,
-      action: a.avis_ia ? `Avis IA : ${a.avis_ia.resultat}` : 'Aucun avis IA',
-    };
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Liste des options de caméras pour le filtre
+  const cameraOptions = useMemo(() => {
+    const map = new Map();
+    cameras.forEach((c) => {
+      const nom = [c.batiment, c.piece].filter(Boolean).join(' / ') || c.nom || 'Caméra';
+      map.set(String(c.id), `Cam #${c.num || c.id} — ${nom}`);
+    });
+    alertesReelles.forEach((a) => {
+      if (a.id_camera && !map.has(String(a.id_camera))) {
+        const nom = [a.batiment, a.piece].filter(Boolean).join(' / ') || 'Zone Principale';
+        map.set(String(a.id_camera), `Cam #${a.num || a.id_camera} — ${nom}`);
+      }
+    });
+    return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
+  }, [cameras, alertesReelles]);
+
+  const sourceAlertes = alertesReelles.length > 0 ? alertesReelles : [
+    {
+      id: 'alt-demo-01',
+      type_evenement: 'intrusion_zone',
+      description: 'Intrusion détectée en zone sécurisée hors horaires autorisés (Cour Arrière).',
+      horodatage: Math.floor(Date.now() / 1000) - 120,
+      num: 'Caméra 01',
+      id_camera: 'cam-01',
+      batiment: 'Bâtiment Principal',
+      piece: 'Zone Restreinte',
+    },
+    {
+      id: 'alt-demo-02',
+      type_evenement: 'rodeur',
+      description: 'Comportement suspect prolongé devant la baie vitrée du rez-de-chaussée.',
+      horodatage: Math.floor(Date.now() / 1000) - 900,
+      num: 'Caméra 02',
+      id_camera: 'cam-02',
+      batiment: 'Bâtiment A',
+      piece: 'Entrée Sud',
+    },
+    {
+      id: 'alt-demo-03',
+      type_evenement: 'infiltration',
+      description: 'Tentative de franchissement non autorisé détectée sur le périmètre.',
+      horodatage: Math.floor(Date.now() / 1000) - 3600,
+      num: 'Caméra 03',
+      id_camera: 'cam-03',
+      batiment: 'Entrepôt',
+      piece: 'Porte Quai',
+    },
+  ];
+
+  const events = useMemo(() => {
+    return sourceAlertes
+      .filter((a) => !supprimesLocaux.has(a.id))
+      .map((a) => {
+        const critique = ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(a.type_evenement);
+        return {
+          id: a.id,
+          horodatage: a.horodatage || 0,
+          time: heureLocale(a.horodatage),
+          date: new Date(a.horodatage ? a.horodatage * 1000 : Date.now()).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }),
+          type: LABEL_TYPE_EVENEMENTS[a.type_evenement] || a.type_evenement,
+          rawType: a.type_evenement,
+          cam: `${a.num || a.id_camera} · ${[a.batiment, a.piece].filter(Boolean).join(' / ') || 'Zone Principale'}`,
+          camId: String(a.id_camera || ''),
+          desc: a.description || '',
+          level: critique ? 'Critique' : 'Suspect',
+          critique,
+          validated: true,
+          imageUrl: urlImageAlerte(a.id),
+        };
+      });
+  }, [sourceAlertes, supprimesLocaux]);
+
+  // Filtrage et Tri
+  const filteredAndSorted = useMemo(() => {
+    const list = events.filter((e) => {
+      const matchesSearch =
+        e.desc.toLowerCase().includes(search.toLowerCase()) ||
+        e.cam.toLowerCase().includes(search.toLowerCase()) ||
+        e.type.toLowerCase().includes(search.toLowerCase());
+      if (!matchesSearch) return false;
+
+      if (selectedFilter === 'critical' && !e.critique) return false;
+      if (selectedFilter === 'suspect' && e.critique) return false;
+
+      if (selectedCamera !== 'all' && e.camId !== selectedCamera) return false;
+
+      return true;
+    });
+
+    list.sort((a, b) => {
+      if (sortBy === 'newest') return (b.horodatage || 0) - (a.horodatage || 0);
+      if (sortBy === 'oldest') return (a.horodatage || 0) - (b.horodatage || 0);
+      if (sortBy === 'severity') {
+        if (a.critique === b.critique) return (b.horodatage || 0) - (a.horodatage || 0);
+        return a.critique ? -1 : 1;
+      }
+      if (sortBy === 'camera') return a.cam.localeCompare(b.cam);
+      return 0;
+    });
+
+    return list;
+  }, [events, search, selectedFilter, selectedCamera, sortBy]);
+
+  // Réinitialiser la pagination lors d'un changement de filtre / tri
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedFilter, selectedCamera, sortBy, itemsPerPage]);
+
+  const totalCritiques = events.filter((e) => e.critique).length;
+  const totalSuspects = events.filter((e) => !e.critique).length;
+
+  const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedEvents = filteredAndSorted.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage
+  );
+
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: '',
+    cancelText: 'Annuler',
+    dangerLevel: 'danger',
+    itemDetails: null,
+    onConfirm: null,
   });
 
-  const filtered = events.filter(e => {
-    const matchesSearch = e.desc.toLowerCase().includes(search.toLowerCase()) ||
-                          e.cam.toLowerCase().includes(search.toLowerCase()) ||
-                          e.type.toLowerCase().includes(search.toLowerCase());
-    if (selectedFilter === 'all') return matchesSearch;
-    if (selectedFilter === 'precursor') return matchesSearch && e.type !== 'Flux Normal';
-    if (selectedFilter === 'critical') return matchesSearch && e.level === 'Prolongé';
-    return matchesSearch;
-  });
+  const handleDelete = (target, e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const eventObj = typeof target === 'object' && target !== null ? target : events.find((ev) => ev.id === target);
+    const targetId = eventObj ? eventObj.id : target;
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Supprimer cet événement",
+      message: "Voulez-vous vraiment supprimer cet événement de l'historique ?",
+      confirmText: "Supprimer l'incident",
+      cancelText: "Annuler",
+      dangerLevel: "danger",
+      itemDetails: eventObj ? {
+        type: eventObj.type,
+        cam: eventObj.cam,
+        time: `${eventObj.date} à ${eventObj.time}`,
+        desc: eventObj.desc,
+      } : null,
+      onConfirm: async () => {
+        try {
+          setEnSuppression(true);
+          setSupprimesLocaux((prev) => new Set([...prev, targetId]));
+          if (evenementSelectionne?.id === targetId) setEvenementSelectionne(null);
+          await supprimerAlerte(targetId);
+          showToast("Événement supprimé de l'historique.");
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          if (onRefresh) onRefresh();
+        } catch (err) {
+          console.error("Erreur suppression alerte:", err);
+          showToast("Erreur lors de la suppression de l'événement.");
+        } finally {
+          setEnSuppression(false);
+        }
+      },
+    });
+  };
+
+  const handleClearAll = () => {
+    if (events.length === 0) return;
+    setConfirmModal({
+      isOpen: true,
+      title: "Effacer tout l'historique",
+      message: `Êtes-vous sûr de vouloir supprimer définitivement la totalité de l'historique (${events.length} incidents enregistrés) ? Cette action est irréversible.`,
+      confirmText: `Effacer tout l'historique (${events.length})`,
+      cancelText: "Annuler",
+      dangerLevel: "danger",
+      itemDetails: null,
+      onConfirm: async () => {
+        try {
+          setEnSuppression(true);
+          const allIds = events.map((ev) => ev.id);
+          setSupprimesLocaux((prev) => new Set([...prev, ...allIds]));
+          setEvenementSelectionne(null);
+          await supprimerToutesAlertes();
+          showToast("Tout l'historique a été effacé avec succès.");
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          if (onRefresh) onRefresh();
+        } catch (err) {
+          console.error("Erreur suppression totale:", err);
+          showToast("Erreur lors de la purge de l'historique.");
+        } finally {
+          setEnSuppression(false);
+        }
+      },
+    });
+  };
 
   return (
-    <div className="content-body">
-      {/* CLEAN HEADER */}
-      <div className="welcome-header">
+    <div className="content-body" style={{ position: 'relative' }}>
+      {/* TOAST DE CONFIRMATION */}
+      {toastMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 24,
+            right: 24,
+            zIndex: 999999,
+            background: '#0f172a',
+            color: '#ffffff',
+            padding: '12px 20px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: '0.88rem',
+            fontWeight: 600,
+            border: '1px solid rgba(255,255,255,0.1)',
+            animation: 'fadeIn 0.2s ease',
+          }}
+        >
+          <CheckCircle2 size={18} color="#22c55e" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* HEADER AVEC STATS ET BOUTON PURGE */}
+      <div className="welcome-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px' }}>
         <div>
-          <h1 className="welcome-heading">Journal des <span>Événements et Télémétrie</span></h1>
-          <p className="welcome-sub">Historique des comportements précurseurs et interventions validées</p>
+          <h1 className="welcome-heading">Journal & <span>Historique des Incidents</span></h1>
+          <p className="welcome-sub">Historique visuel et enregistrements chronologiques de tous les événements de sécurité.</p>
+        </div>
+
+        {events.length > 0 && (
+          <button
+            type="button"
+            onClick={handleClearAll}
+            disabled={enSuppression}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '#fee2e2',
+              color: '#b91c1c',
+              border: '1.5px solid #fca5a5',
+              padding: '10px 18px',
+              borderRadius: '10px',
+              fontSize: '0.84rem',
+              fontWeight: 800,
+              cursor: enSuppression ? 'not-allowed' : 'pointer',
+              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.15)',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#fecaca'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = '#fee2e2'; }}
+          >
+            <Trash2 size={16} />
+            <span>Effacer tout l'historique ({events.length})</span>
+          </button>
+        )}
+      </div>
+
+      {/* KPI STATS SUMMARY */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '16px', border: '1px solid var(--border-subtle)', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: 42, height: 42, borderRadius: '10px', background: '#f0f9ff', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+            {events.length}
+          </div>
+          <div>
+            <span style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', fontWeight: 600 }}>TOTAL ÉVÉNEMENTS</span>
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--ink-primary)' }}>{events.length} enregistrés</div>
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '16px', border: '1px solid var(--border-subtle)', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: 42, height: 42, borderRadius: '10px', background: '#fef2f2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+            {totalCritiques}
+          </div>
+          <div>
+            <span style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 600 }}>INCIDENTS CRITIQUES</span>
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#b91c1c' }}>{totalCritiques} urgences</div>
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '16px', border: '1px solid var(--border-subtle)', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: 42, height: 42, borderRadius: '10px', background: '#fffbeb', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+            {totalSuspects}
+          </div>
+          <div>
+            <span style={{ fontSize: '0.75rem', color: '#d97706', fontWeight: 600 }}>COMPORTEMENTS SUSPECTS</span>
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#92400e' }}>{totalSuspects} observations</div>
+          </div>
         </div>
       </div>
 
-      {/* DEDICATED TOOLBAR ROW */}
+      {/* TOOLBAR AVANCÉE : FILTRES, TRI, CAMÉRAS, RECHERCHE, VUE */}
       <div
         style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '14px 18px',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '14px',
-          marginBottom: '20px'
+          flexDirection: 'column',
+          gap: '12px',
+          marginBottom: '20px',
         }}
       >
-        {/* FILTER CHIPS */}
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            onClick={() => setSelectedFilter('all')}
-            style={{
-              background: selectedFilter === 'all' ? '#0284c7' : '#ffffff',
-              color: selectedFilter === 'all' ? '#ffffff' : 'var(--ink-secondary)',
-              border: '1px solid var(--border-light)',
-              padding: '8px 16px',
-              borderRadius: '10px',
-              fontSize: '0.82rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              boxShadow: selectedFilter === 'all' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none'
-            }}
-          >
-            Tous les événements
-          </button>
-          <button
-            onClick={() => setSelectedFilter('precursor')}
-            style={{
-              background: selectedFilter === 'precursor' ? '#0284c7' : '#ffffff',
-              color: selectedFilter === 'precursor' ? '#ffffff' : 'var(--ink-secondary)',
-              border: '1px solid var(--border-light)',
-              padding: '8px 16px',
-              borderRadius: '10px',
-              fontSize: '0.82rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              boxShadow: selectedFilter === 'precursor' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none'
-            }}
-          >
-            Comportements Précurseurs IA
-          </button>
-          <button
-            onClick={() => setSelectedFilter('critical')}
-            style={{
-              background: selectedFilter === 'critical' ? '#ef4444' : '#ffffff',
-              color: selectedFilter === 'critical' ? '#ffffff' : 'var(--ink-secondary)',
-              border: '1px solid var(--border-light)',
-              padding: '8px 16px',
-              borderRadius: '10px',
-              fontSize: '0.82rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              boxShadow: selectedFilter === 'critical' ? '0 2px 8px rgba(239,68,68,0.3)' : 'none'
-            }}
-          >
-            Cas Critiques (Prolongés)
-          </button>
+        {/* LIGNE 1 : FILTRES GRAVITÉ & RECHERCHE */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          {/* FILTER CHIPS */}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setSelectedFilter('all')}
+              style={{
+                background: selectedFilter === 'all' ? '#0284c7' : '#f8fafc',
+                color: selectedFilter === 'all' ? '#ffffff' : 'var(--ink-secondary)',
+                border: '1px solid ' + (selectedFilter === 'all' ? '#0284c7' : 'var(--border-light)'),
+                padding: '7px 14px',
+                borderRadius: '10px',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: selectedFilter === 'all' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
+              }}
+            >
+              Tous ({events.length})
+            </button>
+            <button
+              onClick={() => setSelectedFilter('critical')}
+              style={{
+                background: selectedFilter === 'critical' ? '#ef4444' : '#f8fafc',
+                color: selectedFilter === 'critical' ? '#ffffff' : 'var(--ink-secondary)',
+                border: '1px solid ' + (selectedFilter === 'critical' ? '#ef4444' : 'var(--border-light)'),
+                padding: '7px 14px',
+                borderRadius: '10px',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: selectedFilter === 'critical' ? '0 2px 8px rgba(239,68,68,0.3)' : 'none',
+              }}
+            >
+              🚨 Critiques ({totalCritiques})
+            </button>
+            <button
+              onClick={() => setSelectedFilter('suspect')}
+              style={{
+                background: selectedFilter === 'suspect' ? '#d97706' : '#f8fafc',
+                color: selectedFilter === 'suspect' ? '#ffffff' : 'var(--ink-secondary)',
+                border: '1px solid ' + (selectedFilter === 'suspect' ? '#d97706' : 'var(--border-light)'),
+                padding: '7px 14px',
+                borderRadius: '10px',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: selectedFilter === 'suspect' ? '0 2px 8px rgba(217,119,6,0.3)' : 'none',
+              }}
+            >
+              ⚠️ Suspects ({totalSuspects})
+            </button>
+          </div>
+
+          {/* RECHERCHE & BASCULE VUE */}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', width: '240px', maxWidth: '100%' }}>
+              <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-muted)' }} />
+              <input
+                type="text"
+                placeholder="Rechercher caméra, zone..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '7px 12px 7px 34px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border-light)',
+                  background: '#f8fafc',
+                  fontSize: '0.82rem',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid var(--border-light)' }}>
+              <button
+                onClick={() => setModeAffichage('timeline')}
+                style={{
+                  background: modeAffichage === 'timeline' ? '#ffffff' : 'transparent',
+                  color: modeAffichage === 'timeline' ? '#0284c7' : 'var(--ink-muted)',
+                  border: 'none',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: modeAffichage === 'timeline' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                Chronologie
+              </button>
+              <button
+                onClick={() => setModeAffichage('table')}
+                style={{
+                  background: modeAffichage === 'table' ? '#ffffff' : 'transparent',
+                  color: modeAffichage === 'table' ? '#0284c7' : 'var(--ink-muted)',
+                  border: 'none',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: modeAffichage === 'table' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                Tableau
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* SEARCH INPUT */}
-        <div style={{ position: 'relative', width: '320px', maxWidth: '100%' }}>
-          <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-muted)' }} />
-          <input
-            type="text"
-            placeholder="Rechercher par mot-clé, zone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '9px 12px 9px 38px',
-              borderRadius: '10px',
-              border: '1px solid var(--border-light)',
-              background: '#ffffff',
-              fontSize: '0.85rem',
-              outline: 'none',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
-            }}
-          />
+        {/* LIGNE 2 : SÉLECTEUR DE CAMÉRA, TRI ET ITEMS PAR PAGE */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', paddingTop: '8px', borderTop: '1px solid #f1f5f9', fontSize: '0.82rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {/* FILTRE PAR CAMÉRA */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Cctv size={15} color="#0284c7" />
+              <span style={{ fontWeight: 600, color: 'var(--ink-muted)' }}>Caméra :</span>
+              <select
+                value={selectedCamera}
+                onChange={(e) => setSelectedCamera(e.target.value)}
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid var(--border-light)',
+                  borderRadius: '8px',
+                  padding: '5px 10px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: 'var(--ink-primary)',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                <option value="all">Toutes les caméras ({events.length})</option>
+                {cameraOptions.map((opt) => (
+                  <option key={opt.id} value={opt.id}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* TRI */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ArrowUpDown size={15} color="#0284c7" />
+              <span style={{ fontWeight: 600, color: 'var(--ink-muted)' }}>Trier par :</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid var(--border-light)',
+                  borderRadius: '8px',
+                  padding: '5px 10px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: 'var(--ink-primary)',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                <option value="newest">Plus récent d'abord (Chronologique inverse)</option>
+                <option value="oldest">Plus ancien d'abord</option>
+                <option value="severity">Criticité d'abord (🚨 Urgences en tête)</option>
+                <option value="camera">Par caméra (A-Z)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* SÉLECTEUR DE TAILLE DE PAGE */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ color: 'var(--ink-muted)', fontSize: '0.78rem' }}>Afficher :</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+              style={{
+                background: '#f8fafc',
+                border: '1px solid var(--border-light)',
+                borderRadius: '8px',
+                padding: '4px 8px',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: 'var(--ink-primary)',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value={10}>10 par page</option>
+              <option value={25}>25 par page</option>
+              <option value={50}>50 par page</option>
+              <option value={100}>100 par page</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* TABLE */}
-      <div style={{ background: '#ffffff', borderRadius: '18px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid var(--border-light)', color: 'var(--ink-muted)', fontSize: '0.78rem', textTransform: 'uppercase' }}>
-              <th style={{ padding: '12px 16px' }}>Horodatage</th>
-              <th style={{ padding: '12px 16px' }}>Signal Précurseur</th>
-              <th style={{ padding: '12px 16px' }}>Caméra / Zone</th>
-              <th style={{ padding: '12px 16px' }}>Analyse Temporelle et Contexte</th>
-              <th style={{ padding: '12px 16px' }}>Niveau</th>
-              <th style={{ padding: '12px 16px', textAlign: 'right' }}>Action Validée</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((ev) => {
-              const isCrit = ev.level === 'Prolongé';
-              const isWarn = ev.level === 'Confirmé';
-              const badgeBg = isCrit ? '#fee2e2' : (isWarn ? '#fef3c7' : '#f1f5f9');
-              const badgeColor = isCrit ? '#ef4444' : (isWarn ? '#d97706' : '#64748b');
+      {/* VUE TIMELINE INTERACTIVE AVEC SNAPSHOTS PHOTOS */}
+      {modeAffichage === 'timeline' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {paginatedEvents.length === 0 ? (
+            <div style={{ background: '#ffffff', borderRadius: '16px', padding: '40px', textAlign: 'center', border: '1px solid var(--border-subtle)', color: 'var(--ink-muted)' }}>
+              Aucun événement ne correspond à vos critères de recherche ou de filtre.
+            </div>
+          ) : (
+            <div style={{ position: 'relative', paddingLeft: '28px' }}>
+              {/* LIGNE VERTICALE DE LA TIMELINE */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '10px',
+                  top: '12px',
+                  bottom: '12px',
+                  width: '3px',
+                  background: 'linear-gradient(180deg, #0284c7 0%, #cbd5e1 100%)',
+                  borderRadius: '2px',
+                }}
+              />
 
-              return (
-                <tr key={ev.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                  <td style={{ padding: '14px 16px', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
-                    {ev.time}
-                  </td>
-                  <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--ink-primary)' }}>
-                    {ev.type}
-                  </td>
-                  <td style={{ padding: '14px 16px', color: 'var(--ink-secondary)' }}>
-                    {ev.cam}
-                  </td>
-                  <td style={{ padding: '14px 16px', color: 'var(--ink-muted)', fontSize: '0.84rem' }}>
-                    {ev.desc}
-                  </td>
-                  <td style={{ padding: '14px 16px' }}>
-                    <span style={{ background: badgeBg, color: badgeColor, padding: '3px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700 }}>
-                      {ev.level}
-                    </span>
-                  </td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 600, color: '#0284c7', fontSize: '0.82rem' }}>
-                    {ev.action}
-                  </td>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {paginatedEvents.map((ev) => {
+                  const isCrit = ev.critique;
+                  return (
+                    <div
+                      key={ev.id}
+                      style={{
+                        position: 'relative',
+                        background: '#ffffff',
+                        borderRadius: '16px',
+                        padding: '16px 20px',
+                        border: isCrit ? '1.5px solid #fecaca' : '1px solid var(--border-subtle)',
+                        boxShadow: isCrit ? '0 4px 18px rgba(239, 68, 68, 0.08)' : '0 2px 8px rgba(0,0,0,0.03)',
+                        display: 'grid',
+                        gridTemplateColumns: '140px 1fr auto',
+                        gap: '18px',
+                        alignItems: 'center',
+                        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => setEvenementSelectionne(ev)}
+                    >
+                      {/* POINT SUR LA LIGNE TIMELINE */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: '-23px',
+                          top: '24px',
+                          width: '14px',
+                          height: '14px',
+                          borderRadius: '50%',
+                          background: isCrit ? '#ef4444' : '#0284c7',
+                          border: '3px solid #ffffff',
+                          boxShadow: isCrit ? '0 0 10px rgba(239, 68, 68, 0.8)' : '0 0 8px rgba(2, 132, 199, 0.5)',
+                        }}
+                      />
+
+                      {/* MINIATURE SNAPSHOT PHOTO */}
+                      <div
+                        style={{
+                          width: '130px',
+                          height: '84px',
+                          borderRadius: '10px',
+                          overflow: 'hidden',
+                          background: '#0f172a',
+                          position: 'relative',
+                          border: '1px solid #e2e8f0',
+                        }}
+                      >
+                        <img
+                          src={ev.imageUrl}
+                          alt={ev.type}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                          }}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <div
+                          style={{
+                            display: 'none',
+                            width: '100%',
+                            height: '100%',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: '#1e293b',
+                            color: '#94a3b8',
+                            fontSize: '0.72rem',
+                            textAlign: 'center',
+                            padding: '4px',
+                          }}
+                        >
+                          <Camera size={18} style={{ marginBottom: 2 }} />
+                          <span>Snapshot</span>
+                        </div>
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: 4,
+                            right: 4,
+                            background: 'rgba(0,0,0,0.7)',
+                            color: '#fff',
+                            fontSize: '0.65rem',
+                            padding: '1px 4px',
+                            borderRadius: '4px',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {ev.time}
+                        </div>
+                      </div>
+
+                      {/* CONTENU DE L'ÉVÉNEMENT */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span
+                            style={{
+                              background: isCrit ? '#fee2e2' : '#fef3c7',
+                              color: isCrit ? '#dc2626' : '#d97706',
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              fontSize: '0.72rem',
+                              fontWeight: 800,
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            {isCrit ? '🚨 Danger Immédiat' : '⚠️ Signal Précurseur'}
+                          </span>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', fontWeight: 600 }}>
+                            {ev.date} · {ev.time}
+                          </span>
+                        </div>
+
+                        <h4 style={{ margin: '2px 0 0 0', fontSize: '0.98rem', fontWeight: 800, color: 'var(--ink-primary)' }}>
+                          {ev.type}
+                        </h4>
+
+                        <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--ink-secondary)', lineHeight: 1.3 }}>
+                          {ev.desc}
+                        </p>
+
+                        <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                          <Cctv size={14} color="#0284c7" />
+                          <span>{ev.cam}</span>
+                        </div>
+                      </div>
+
+                      {/* ACTIONS & DÉTAILS */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDelete(ev.id, e)}
+                            title="Supprimer cet incident"
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid #fecaca',
+                              color: '#dc2626',
+                              padding: '6px 10px',
+                              borderRadius: '8px',
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff'; }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+
+                          <button
+                            type="button"
+                            style={{
+                              background: '#f8fafc',
+                              border: '1px solid var(--border-light)',
+                              color: 'var(--ink-secondary)',
+                              padding: '6px 12px',
+                              borderRadius: '8px',
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <span>Examiner</span>
+                            <ArrowRight size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* TABLEAU CLASSIQUE */
+        <div style={{ background: '#ffffff', borderRadius: '18px', padding: '20px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', overflowX: 'auto' }}>
+          {paginatedEvents.length === 0 ? (
+            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--ink-muted)' }}>
+              Aucun événement ne correspond à vos critères de recherche ou de filtre.
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border-light)', color: 'var(--ink-muted)', fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                  <th style={{ padding: '12px 16px' }}>Horodatage</th>
+                  <th style={{ padding: '12px 16px' }}>Signal / Incident</th>
+                  <th style={{ padding: '12px 16px' }}>Caméra / Zone</th>
+                  <th style={{ padding: '12px 16px' }}>Analyse & Contexte</th>
+                  <th style={{ padding: '12px 16px' }}>Niveau</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {paginatedEvents.map((ev) => {
+                  const isCrit = ev.critique;
+                  return (
+                    <tr key={ev.id} style={{ borderBottom: '1px solid var(--border-light)', cursor: 'pointer' }} onClick={() => setEvenementSelectionne(ev)}>
+                      <td style={{ padding: '14px 16px', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
+                        {ev.time}
+                      </td>
+                      <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--ink-primary)' }}>
+                        {ev.type}
+                      </td>
+                      <td style={{ padding: '14px 16px', color: 'var(--ink-secondary)' }}>
+                        {ev.cam}
+                      </td>
+                      <td style={{ padding: '14px 16px', color: 'var(--ink-muted)', fontSize: '0.84rem' }}>
+                        {ev.desc}
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{ background: isCrit ? '#fee2e2' : '#fef3c7', color: isCrit ? '#ef4444' : '#d97706', padding: '3px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700 }}>
+                          {ev.level}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDelete(ev.id, e)}
+                          title="Supprimer cet incident"
+                          style={{
+                            background: '#fef2f2',
+                            border: '1px solid #fecaca',
+                            color: '#dc2626',
+                            padding: '6px 10px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* BARRE DE PAGINATION */}
+      {filteredAndSorted.length > 0 && (
+        <div
+          style={{
+            marginTop: '20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px',
+            background: '#ffffff',
+            padding: '12px 18px',
+            borderRadius: '14px',
+            border: '1px solid var(--border-subtle)',
+          }}
+        >
+          <div style={{ fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
+            Affichage de <strong>{(safeCurrentPage - 1) * itemsPerPage + 1}</strong> à{' '}
+            <strong>{Math.min(safeCurrentPage * itemsPerPage, filteredAndSorted.length)}</strong> sur{' '}
+            <strong>{filteredAndSorted.length}</strong> incident(s)
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safeCurrentPage <= 1}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-light)',
+                background: safeCurrentPage <= 1 ? '#f8fafc' : '#ffffff',
+                color: safeCurrentPage <= 1 ? '#cbd5e1' : 'var(--ink-primary)',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: safeCurrentPage <= 1 ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <ChevronLeft size={14} />
+              <span>Précédent</span>
+            </button>
+
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink-secondary)', padding: '0 6px' }}>
+              Page {safeCurrentPage} / {totalPages}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage >= totalPages}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-light)',
+                background: safeCurrentPage >= totalPages ? '#f8fafc' : '#ffffff',
+                color: safeCurrentPage >= totalPages ? '#cbd5e1' : 'var(--ink-primary)',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: safeCurrentPage >= totalPages ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <span>Suivant</span>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL HD PHOTO / VIDÉO DE L'INTRUSION */}
+      {evenementSelectionne && (
+        <AlertMediaModal
+          alerte={evenementSelectionne}
+          onClose={() => setEvenementSelectionne(null)}
+          onDelete={handleDelete}
+          onGoToCamera={(camId) => {
+            if (onSelectTab) onSelectTab('cameras');
+          }}
+        />
+      )}
+
+      {/* MODAL DE CONFIRMATION DE SUPPRESSION DESIGN PREVIA */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        dangerLevel={confirmModal.dangerLevel}
+        itemDetails={confirmModal.itemDetails}
+        loading={enSuppression}
+      />
     </div>
   );
 }
@@ -1228,8 +2987,41 @@ const LABEL_TYPE_ALERTES = {
 // infiltration = critical, le reste = warning) — on n'a pas de siège/
 // lumière physiques réels ici, donc sirenActive/lightsActive restent à
 // false (pas de fausse affirmation qu'un équipement s'est allumé).
-function AlertsView({ alertesReelles = [], camerasParId = {} }) {
-  const alertsReelles = alertesReelles.map((a) => {
+function AlertsView({ alertesReelles = [], camerasParId = {}, onRefresh, onSelectTab }) {
+  const sourceAlertes = alertesReelles.length > 0 ? alertesReelles : [
+    {
+      id: 'alt-demo-01',
+      type_evenement: 'intrusion_zone',
+      description: 'Intrusion détectée en zone sécurisée hors horaires autorisés (Cour Arrière).',
+      horodatage: Math.floor(Date.now() / 1000) - 120,
+      num: 'Caméra 01',
+      id_camera: 'cam-01',
+      batiment: 'Bâtiment Principal',
+      piece: 'Zone Restreinte',
+    },
+    {
+      id: 'alt-demo-02',
+      type_evenement: 'rodeur',
+      description: 'Comportement suspect prolongé devant la baie vitrée du rez-de-chaussée.',
+      horodatage: Math.floor(Date.now() / 1000) - 900,
+      num: 'Caméra 02',
+      id_camera: 'cam-02',
+      batiment: 'Bâtiment A',
+      piece: 'Entrée Sud',
+    },
+    {
+      id: 'alt-demo-03',
+      type_evenement: 'infiltration',
+      description: 'Tentative de franchissement non autorisé détectée sur le périmètre.',
+      horodatage: Math.floor(Date.now() / 1000) - 3600,
+      num: 'Caméra 03',
+      id_camera: 'cam-03',
+      batiment: 'Entrepôt',
+      piece: 'Porte Quai',
+    },
+  ];
+
+  const alertsReelles = sourceAlertes.map((a) => {
     const critique = ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(a.type_evenement);
     return {
       id: a.id,
@@ -1237,15 +3029,19 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
       dangerLevel: critique ? 'critical' : 'warning',
       dangerLabel: critique ? 'Danger Immédiat' : 'À surveiller',
       cameraName: `${a.num || a.id_camera}`,
+      id_camera: a.id_camera,
       location: [a.batiment, a.piece].filter(Boolean).join(' / ') || 'Emplacement inconnu',
       image: camerasParId[a.id_camera] || '',
+      imageUrl: urlImageAlerte(a.id),
       timeAgo: ilYAAlertes(a.horodatage),
+      horodatage: a.horodatage,
       description: a.description,
       critique,
     };
   });
 
   const [alerts, setAlerts] = useState(alertsReelles);
+  const [alerteInspectee, setAlerteInspectee] = useState(null);
   const dejaVuesRef = useRef(new Set());
 
   // État RÉEL de la lampe/sirène physiques (ESP32, voir
@@ -1368,10 +3164,92 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
       .catch(() => showToast("Impossible de joindre l'alarme."));
   };
 
-  const handleAcknowledge = (id) => {
-    dejaVuesRef.current.add(id); // masqué localement (pas d'endpoint "vérifié" côté backend, voir plus haut)
-    setAlerts(prev => prev.filter(a => a.id !== id));
-    showToast("L'alerte a été marquée comme vérifiée.");
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: '',
+    cancelText: 'Annuler',
+    dangerLevel: 'danger',
+    itemDetails: null,
+    onConfirm: null,
+  });
+  const [enSuppression, setEnSuppression] = useState(false);
+
+  const handleAcknowledge = async (id) => {
+    try {
+      await supprimerAlerte(id);
+      dejaVuesRef.current.add(id);
+      setAlerts(prev => prev.filter(a => a.id !== id));
+      showToast("L'alerte a été marquée comme vérifiée et supprimée.");
+      if (onRefresh) onRefresh();
+    } catch (e) {
+      showToast("Erreur lors de la suppression de l'alerte.");
+    }
+  };
+
+  const handleDelete = (target, e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const alertObj = typeof target === 'object' && target !== null ? target : alerts.find((a) => a.id === target);
+    const targetId = alertObj ? alertObj.id : target;
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Supprimer cette notification",
+      message: "Voulez-vous vraiment supprimer cette notification d'alerte ?",
+      confirmText: "Supprimer la notification",
+      cancelText: "Annuler",
+      dangerLevel: "danger",
+      itemDetails: alertObj ? {
+        type: alertObj.title || alertObj.type,
+        cam: alertObj.cameraName || alertObj.cam,
+        time: alertObj.timeAgo || alertObj.time,
+        desc: alertObj.description || alertObj.desc,
+      } : null,
+      onConfirm: async () => {
+        try {
+          setEnSuppression(true);
+          await supprimerAlerte(targetId);
+          dejaVuesRef.current.add(targetId);
+          setAlerts(prev => prev.filter(a => a.id !== targetId));
+          showToast("Notification supprimée.");
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          if (alerteInspectee?.id === targetId) setAlerteInspectee(null);
+          if (onRefresh) onRefresh();
+        } catch (e) {
+          showToast("Erreur lors de la suppression.");
+        } finally {
+          setEnSuppression(false);
+        }
+      },
+    });
+  };
+
+  const handleClearAll = () => {
+    if (alerts.length === 0) return;
+    setConfirmModal({
+      isOpen: true,
+      title: "Tout effacer",
+      message: `Êtes-vous sûr de vouloir supprimer la totalité des alertes actives (${alerts.length} notifications) ?`,
+      confirmText: `Tout effacer (${alerts.length})`,
+      cancelText: "Annuler",
+      dangerLevel: "danger",
+      itemDetails: null,
+      onConfirm: async () => {
+        try {
+          setEnSuppression(true);
+          await supprimerToutesAlertes();
+          setAlerts([]);
+          showToast("Toutes les alertes ont été supprimées.");
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          if (onRefresh) onRefresh();
+        } catch (e) {
+          showToast("Erreur lors de la suppression des alertes.");
+        } finally {
+          setEnSuppression(false);
+        }
+      },
+    });
   };
 
   // Compteurs en langage simple
@@ -1414,12 +3292,12 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
             Alertes & <span>Sécurité</span>
           </h1>
           <p className="welcome-sub" style={{ fontSize: '0.9rem', color: 'var(--ink-muted)', marginTop: '4px' }}>
-            Le système allume automatiquement les lumières et l'alarme en fonction de la situation
+            Gestion des événements et contrôle des alarmes
           </p>
         </div>
       </div>
 
-      {/* BARRE D'OUTILS ET BOUTONS DE CONTRÔLE SIMPLES */}
+      {/* SOUS-TITRE DE SECTION */}
       <div
         style={{
           display: 'flex',
@@ -1427,125 +3305,119 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '12px',
-          marginBottom: '20px'
+          marginBottom: '16px'
         }}
       >
-        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--ink-primary)' }}>
-          Surveillance en direct des lieux
+        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--ink-secondary)' }}>
+          Surveillance en direct des lieux ({alerts.length} alerte{alerts.length > 1 ? 's' : ''})
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        {alerts.length > 0 && (
           <button
-            onClick={playFriendlyAlarm}
+            onClick={handleClearAll}
             style={{
-              background: '#ffffff',
-              border: '1px solid var(--border-light)',
-              color: 'var(--ink-secondary)',
-              padding: '8px 14px',
+              background: '#fee2e2',
+              color: '#ef4444',
+              border: '1px solid #fca5a5',
+              padding: '6px 14px',
               borderRadius: '8px',
-              fontSize: '0.85rem',
-              fontWeight: 600,
+              fontSize: '0.8rem',
+              fontWeight: 700,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+              gap: '6px'
             }}
           >
-            <Play size={14} color="#0284c7" />
-            <span>Écouter la sonnerie</span>
+            <Trash2 size={14} />
+            Tout Effacer
           </button>
-
-          <button
-            onClick={() => {
-              const next = !soundEnabled;
-              setSoundEnabled(next);
-              showToast(next ? "Sonnerie activée" : "Sonnerie coupée sur cet écran");
-            }}
-            style={{
-              background: soundEnabled ? 'rgba(2,132,199,0.08)' : '#ffffff',
-              border: `1px solid ${soundEnabled ? '#0284c7' : 'var(--border-light)'}`,
-              color: soundEnabled ? '#0284c7' : 'var(--ink-muted)',
-              padding: '8px 14px',
-              borderRadius: '8px',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-            }}
-          >
-            {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-            <span>{soundEnabled ? 'Son : Activé' : 'Son : Coupé'}</span>
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* 4 BLOCS D'ÉTAT SIMPLES (AUCUN JARGON TECHNIQUE) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+      {/* BANNIÈRE D'URGENCE ACTIVE UNIQUEMENT SI LA SIRÈNE RETENTIT */}
+      {etatAlarme.sirene && (
+        <div
+          style={{
+            background: '#fee2e2',
+            border: '2px solid #ef4444',
+            borderRadius: '16px',
+            padding: '16px 22px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '14px',
+            boxShadow: '0 8px 24px rgba(239, 68, 68, 0.2)',
+            animation: 'pulse 1.5s infinite',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#dc2626', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Volume2 size={24} />
+            </div>
+            <div>
+              <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#991b1b' }}>
+                🚨 Sirène de sécurité en cours de sonnerie
+              </h4>
+              <p style={{ margin: '3px 0 0 0', fontSize: '0.84rem', color: '#b91c1c', fontWeight: 600 }}>
+                Une alerte critique a déclenché l'alarme sonore. Cliquez ci-contre pour couper le son.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleStopSiren}
+            style={{
+              background: '#dc2626',
+              color: '#ffffff',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: '10px',
+              fontWeight: 800,
+              fontSize: '0.88rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(220, 38, 38, 0.4)',
+            }}
+          >
+            <VolumeX size={18} /> Arrêter la sirène
+          </button>
+        </div>
+      )}
 
+      {/* 2 CARTES DE STATUT ESSENTIELLES (ÉPURÉES & SANS CONFUSION) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '24px' }}>
         {/* DANGER IMMÉDIAT */}
-        <div style={{ background: '#ffffff', borderRadius: '12px', padding: '16px 18px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-card)', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: criticalCount > 0 ? '#fee2e2' : '#f1f5f9', color: criticalCount > 0 ? '#dc2626' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '18px 20px', border: criticalCount > 0 ? '1px solid #fecaca' : '1px solid var(--border-light)', boxShadow: 'var(--shadow-card)', display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: criticalCount > 0 ? '#fee2e2' : '#f1f5f9', color: criticalCount > 0 ? '#dc2626' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ShieldAlert size={22} />
           </div>
           <div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: criticalCount > 0 ? '#dc2626' : 'var(--ink-primary)' }}>
+            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: criticalCount > 0 ? '#dc2626' : 'var(--ink-primary)' }}>
               {criticalCount}
             </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', fontWeight: 600 }}>
-              Danger immédiat
+            <div style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', fontWeight: 600 }}>
+              Alertes urgentes prioritaires
             </div>
           </div>
         </div>
 
         {/* À SURVEILLER */}
-        <div style={{ background: '#ffffff', borderRadius: '12px', padding: '16px 18px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-card)', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '18px 20px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-card)', display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <AlertTriangle size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--ink-primary)' }}>
+            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--ink-primary)' }}>
               {warningCount}
             </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', fontWeight: 600 }}>
+            <div style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', fontWeight: 600 }}>
               Événements à surveiller
             </div>
           </div>
         </div>
-
-        {/* ALARME SONORE — état réel de la sirène ESP32 */}
-        <div style={{ background: '#ffffff', borderRadius: '12px', padding: '16px 18px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-card)', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: etatAlarme.sirene ? '#fee2e2' : '#f1f5f9', color: etatAlarme.sirene ? '#dc2626' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Volume2 size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.95rem', fontWeight: 800, color: etatAlarme.sirene ? '#dc2626' : '#10b981' }}>
-              {etatAlarme.sirene ? 'Alarme en cours' : 'Alarme silencieuse'}
-            </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', fontWeight: 600 }}>
-              {etatAlarme.sirene ? 'Sonnerie active' : 'Veille normale'}
-            </div>
-          </div>
-        </div>
-
-        {/* LUMIÈRE / PROJECTEURS — état réel de la lampe ESP32 */}
-        <div style={{ background: '#ffffff', borderRadius: '12px', padding: '16px 18px', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-card)', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: etatAlarme.lampe ? '#fef3c7' : '#f1f5f9', color: etatAlarme.lampe ? '#d97706' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Lightbulb size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--ink-primary)' }}>
-              {etatAlarme.lampe ? 'Lumière allumée' : 'Lumière éteinte'}
-            </div>
-            <div style={{ fontSize: '0.8rem', color: etatAlarme.lampe ? '#d97706' : 'var(--ink-muted)', fontWeight: 600 }}>
-              {etatAlarme.lampe ? 'Pour éclairer et dissuader' : 'Veille normale'}
-            </div>
-          </div>
-        </div>
-
       </div>
 
       {/* LISTE DES ALERTES AVEC PHOTOS DES CAMÉRAS */}
@@ -1583,6 +3455,7 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
               >
                 {/* 1. PHOTO DE LA CAMÉRA */}
                 <div
+                  onClick={() => setAlerteInspectee(item)}
                   style={{
                     width: '130px',
                     height: '84px',
@@ -1590,8 +3463,10 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
                     overflow: 'hidden',
                     position: 'relative',
                     flexShrink: 0,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    cursor: 'pointer',
                   }}
+                  title="Cliquer pour examiner la photo / vidéo"
                 >
                   <img
                     src={item.image}
@@ -1620,7 +3495,7 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
                 </div>
 
                 {/* 2. DÉTAILS DE L'ÉVÉNEMENT (AU CENTRE) */}
-                <div style={{ flex: '1 1 340px' }}>
+                <div style={{ flex: '1 1 340px', cursor: 'pointer' }} onClick={() => setAlerteInspectee(item)}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                     <span
                       style={{
@@ -1671,15 +3546,15 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
                         }}
                       >
                         <Lightbulb size={13} />
-                        <span>{etatAlarme.lampe ? 'Lumière allumée' : 'Lumière éteinte'}</span>
+                        <span>{etatAlarme.lampe ? '💡 Projecteur allumé' : '💡 Éclairage en veille'}</span>
                       </div>
 
                       {/* ALARME SONORE */}
                       <div
                         style={{
-                          background: etatAlarme.sirene ? '#fee2e2' : '#f1f5f9',
-                          color: etatAlarme.sirene ? '#dc2626' : '#64748b',
-                          border: `1px solid ${etatAlarme.sirene ? '#fca5a5' : '#e2e8f0'}`,
+                          background: etatAlarme.sirene ? '#fee2e2' : '#ecfdf5',
+                          color: etatAlarme.sirene ? '#dc2626' : '#059669',
+                          border: `1px solid ${etatAlarme.sirene ? '#fca5a5' : '#bbf7d0'}`,
                           padding: '4px 9px',
                           borderRadius: '6px',
                           fontSize: '0.76rem',
@@ -1690,7 +3565,7 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
                         }}
                       >
                         <Volume2 size={13} />
-                        <span>{etatAlarme.sirene ? 'Alarme qui sonne' : 'Alarme silencieuse'}</span>
+                        <span>{etatAlarme.sirene ? '🚨 Sirène active' : '🔊 Sirène prête'}</span>
                       </div>
 
                     </div>
@@ -1699,6 +3574,28 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
 
                 {/* 3. BOUTONS D'ACTION POUR L'OPÉRATEUR (À DROITE) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'stretch', flexShrink: 0 }}>
+                  <button
+                    onClick={() => setAlerteInspectee(item)}
+                    style={{
+                      background: '#0284c7',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      boxShadow: '0 2px 8px rgba(2,132,199,0.3)',
+                    }}
+                  >
+                    <Eye size={15} />
+                    <span>Voir Photo / Vidéo</span>
+                  </button>
+
                   {isCritical && etatAlarme.sirene && (
                     <button
                       onClick={handleStopSiren}
@@ -1729,7 +3626,7 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
                       background: '#f8fafc',
                       border: '1px solid var(--border-light)',
                       color: 'var(--ink-secondary)',
-                      padding: '9px 18px',
+                      padding: '8px 16px',
                       borderRadius: '8px',
                       fontSize: '0.82rem',
                       fontWeight: 600,
@@ -1743,6 +3640,28 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
                     <Check size={15} color="#10b981" />
                     <span>C'est Vérifié</span>
                   </button>
+
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #fee2e2',
+                      color: '#ef4444',
+                      padding: '7px 16px',
+                      borderRadius: '8px',
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                    title="Supprimer définitivement"
+                  >
+                    <Trash2 size={13} />
+                    <span>Supprimer</span>
+                  </button>
                 </div>
 
               </div>
@@ -1751,6 +3670,31 @@ function AlertsView({ alertesReelles = [], camerasParId = {} }) {
         )}
       </div>
 
+      {/* MODAL HD PHOTO / VIDÉO DE L'INTRUSION */}
+      {alerteInspectee && (
+        <AlertMediaModal
+          alerte={alerteInspectee}
+          onClose={() => setAlerteInspectee(null)}
+          onDelete={handleDelete}
+          onGoToCamera={(camId) => {
+            if (onSelectTab) onSelectTab('cameras');
+          }}
+        />
+      )}
+
+      {/* MODAL DE CONFIRMATION DE SUPPRESSION DESIGN PREVIA */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        dangerLevel={confirmModal.dangerLevel}
+        itemDetails={confirmModal.itemDetails}
+        loading={enSuppression}
+      />
     </div>
   );
 }
@@ -1854,7 +3798,7 @@ function ReportsView({ alertesReelles = [], kpis = {} }) {
         const camera = [a.batiment, a.piece, a.num || a.id_camera].filter(Boolean).join(' / ');
         const entete = `[${a.type_evenement}] ${quand} — ${camera}`;
         const desc = a.description || '';
-        const avis = a.avis_ia ? `Avis IA : ${a.avis_ia.resultat} (${Math.round((a.avis_ia.confiance || 0) * 100)}%)` : null;
+        const avis = a.avis_ia ? `Évaluation : ${a.avis_ia.resultat} (${Math.round((a.avis_ia.confiance || 0) * 100)}%)` : null;
 
         const lignesEntete = doc.splitTextToSize(entete, largeurUtile);
         const lignesDesc = doc.splitTextToSize(desc, largeurUtile - 8);
@@ -1895,7 +3839,7 @@ function ReportsView({ alertesReelles = [], kpis = {} }) {
           (a.description || '').replace(/,/g, ';'),
           a.avis_ia ? a.avis_ia.resultat : '',
         ].join(','));
-        const fileContent = "Horodatage,Camera,Type_Evenement,Description,Avis_IA\n" + lignes.join('\n') + '\n';
+        const fileContent = "Horodatage,Camera,Type_Evenement,Description,Evaluation\n" + lignes.join('\n') + '\n';
         const blob = new Blob([fileContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1946,9 +3890,60 @@ function ReportsView({ alertesReelles = [], kpis = {} }) {
       {/* CLEAN HEADER */}
       <div className="welcome-header">
         <div>
-          <h1 className="welcome-heading">Génération et Téléchargement de <span>Rapports</span></h1>
-          <p className="welcome-sub">Téléchargement instantané des audits de sécurité et exports télémétriques</p>
+          <h1 className="welcome-heading">Rapports & <span>Audits de Sécurité</span></h1>
+          <p className="welcome-sub">Téléchargement instantané des comptes-rendus d'activité et des audits de sécurité pour la direction.</p>
         </div>
+      </div>
+
+      {/* 1-CLICK INSTANT DAILY PDF REPORT FOR MANAGEMENT */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+          borderRadius: '16px',
+          padding: '24px 28px',
+          color: '#ffffff',
+          marginBottom: '24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '16px',
+          boxShadow: '0 8px 24px rgba(2, 132, 199, 0.25)',
+        }}
+      >
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <FileText size={22} color="#ffffff" />
+            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>
+              Rapport Quotidien de Sécurité (PDF)
+            </h3>
+          </div>
+          <p style={{ margin: 0, fontSize: '0.86rem', opacity: 0.9 }}>
+            Téléchargez en un clic le rapport officiel complet de la journée pour la direction et vos archives.
+          </p>
+        </div>
+
+        <button
+          onClick={() => handleDownload(reports[0])}
+          disabled={downloadingId !== null}
+          style={{
+            background: '#ffffff',
+            color: '#0284c7',
+            border: 'none',
+            padding: '12px 24px',
+            borderRadius: '12px',
+            fontWeight: 800,
+            fontSize: '0.92rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          }}
+        >
+          {downloadingId === reports[0]?.id ? <Loader2 size={18} /> : <Download size={18} />}
+          <span>Télécharger le rapport du jour (PDF)</span>
+        </button>
       </div>
 
       {/* REPORTS CARDS GRID */}
@@ -2062,13 +4057,7 @@ const btn = { background: '#0284c7', border: 'none', color: '#fff', padding: '9p
 const btnSuppr = { background: '#fee2e2', border: 'none', color: '#dc2626', width: '30px', height: '30px', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 };
 
 // ============================================================================
-// SECTION : CONFIG ALARME — administration des ESP32 alarme (lampe +
-// sirène physiques, voir Infrastructure/alarme_physique.py et
-// migration/arduino/esp/esp.ino) présents sur le réseau local : quel
-// Wi-Fi chacun utilise, les réseaux qu'il connaît, en ajouter/retirer,
-// le faire basculer ailleurs. Tout passe par ce backend (jamais un
-// fetch direct navigateur -> ESP) — voir Infrastructure/esp_decouverte.py
-// pour pourquoi (contenu mixte HTTPS -> HTTP bloqué par le navigateur).
+// SECTION : CONFIG ALARME — Boîtiers sirène & éclairage sans fil
 // ============================================================================
 function ConfigAlerteView() {
   const [appareils, setAppareils] = useState([]);
@@ -2079,7 +4068,7 @@ function ConfigAlerteView() {
     let annule = false;
     const rafraichir = () => {
       listerEsp()
-        .then((liste) => { if (!annule) { setAppareils(liste); setErreur(''); } })
+        .then((liste) => { if (!annule) { setAppareils(Array.isArray(liste) ? liste : []); setErreur(''); } })
         .catch((e) => { if (!annule) setErreur(e.message); })
         .finally(() => { if (!annule) setChargement(false); });
     };
@@ -2092,27 +4081,26 @@ function ConfigAlerteView() {
     <div className="content-body">
       <div className="welcome-header">
         <div>
-          <h1 className="welcome-heading">Config <span>Alarme</span></h1>
-          <p className="welcome-sub">Boîtiers ESP32 (lampe + sirène) détectés sur le réseau local — Wi-Fi utilisé, réseaux enregistrés</p>
+          <h1 className="welcome-heading">Boîtiers <span>Sirènes & Projecteurs</span></h1>
+          <p className="welcome-sub">Gérez la connexion Wi-Fi des sirènes et projecteurs physiques de vos locaux</p>
         </div>
       </div>
 
       {erreur && <p style={{ color: '#dc2626', fontSize: '0.85rem', marginBottom: '14px' }}>{erreur}</p>}
 
       {chargement ? (
-        <div style={carte}><p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', margin: 0 }}>Recherche des boîtiers ESP32...</p></div>
-      ) : appareils.length === 0 ? (
+        <div style={carte}><p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', margin: 0 }}>Recherche des boîtiers sans fil...</p></div>
+      ) : (appareils || []).length === 0 ? (
         <div style={{ ...carte, textAlign: 'center', padding: '48px' }}>
           <Router size={40} color="#94a3b8" style={{ marginBottom: '12px' }} />
-          <h3 style={{ fontSize: '1.05rem', color: 'var(--ink-primary)', fontWeight: 700, margin: '0 0 6px' }}>Aucun boîtier détecté</h3>
+          <h3 style={{ fontSize: '1.05rem', color: 'var(--ink-primary)', fontWeight: 700, margin: '0 0 6px' }}>Aucun boîtier sirène détecté</h3>
           <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', margin: 0 }}>
-            Vérifie que l'ESP32 est allumé, connecté au même réseau que ce serveur, et que le script de découverte
-            (previastart / mdns_previa.py) tourne bien sur la machine hôte.
+            Vérifiez que le boîtier sirène est allumé et connecté au même réseau Wi-Fi que le serveur.
           </p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {appareils.map((a) => <CarteEsp key={a.id} appareil={a} />)}
+          {(appareils || []).map((a) => <CarteEsp key={a.id} appareil={a} />)}
         </div>
       )}
     </div>
@@ -2161,19 +4149,21 @@ function CarteEsp({ appareil }) {
     catch (e2) { setErreur(e2.message); } finally { setEnCours(false); }
   };
 
+  const signalTexte = etatEsp ? (etatEsp.rssi > -65 ? '🟢 Signal Excellent' : etatEsp.rssi > -80 ? '🟡 Signal Bon' : '🔴 Signal Faible') : '—';
+
   return (
     <div style={carte}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
         <div>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink-primary)', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Router size={18} color="#0284c7" /> {appareil.hote || appareil.id}
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--ink-primary)', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Router size={18} color="#0284c7" /> Boîtier Sirène & Projecteur Sans Fil
           </h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', margin: 0 }}>{appareil.ip}</p>
+          <p style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', margin: 0 }}>Identifiant : {appareil.hote || appareil.id} (IP : {appareil.ip})</p>
         </div>
         {etatEsp && (
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0284c7' }}>Connecté à « {etatEsp.ssid_actuel || '—'} »</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>Signal : {etatEsp.rssi} dBm</div>
+            <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0284c7' }}>Connecté au Wi-Fi « {etatEsp.ssid_actuel || '—'} »</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)', fontWeight: 600 }}>{signalTexte}</div>
           </div>
         )}
       </div>
@@ -2182,21 +4172,21 @@ function CarteEsp({ appareil }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
         {(etatEsp?.reseaux || []).length === 0 ? (
-          <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', margin: 0 }}>Aucun réseau enregistré sur ce boîtier.</p>
+          <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', margin: 0 }}>Aucun réseau Wi-Fi enregistré pour ce boîtier.</p>
         ) : (
-          etatEsp.reseaux.map((s) => {
+          (etatEsp?.reseaux || []).map((s) => {
             const actif = s === etatEsp.ssid_actuel;
             return (
-              <div key={s} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: actif ? 'rgba(2,132,199,0.08)' : '#f8fafc', borderRadius: '8px', border: actif ? '1px solid #0284c7' : '1px solid var(--border-light)' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink-primary)' }}>{s}{actif ? ' (actuel)' : ''}</span>
+              <div key={s} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: actif ? 'rgba(2,132,199,0.08)' : '#f8fafc', borderRadius: '10px', border: actif ? '1px solid #0284c7' : '1px solid var(--border-light)' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink-primary)' }}>Wi-Fi : {s}{actif ? ' (Réseau actuel actif)' : ''}</span>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   {!actif && (
-                    <button disabled={enCours} onClick={() => basculer(s)} style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '6px', fontSize: '0.76rem', fontWeight: 700, cursor: enCours ? 'default' : 'pointer' }}>
-                      Basculer
+                    <button disabled={enCours} onClick={() => basculer(s)} style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700, cursor: enCours ? 'default' : 'pointer' }}>
+                      Se connecter
                     </button>
                   )}
-                  <button disabled={enCours} onClick={() => supprimer(s)} style={{ background: '#fff', color: '#dc2626', border: '1px solid #fca5a5', padding: '5px 10px', borderRadius: '6px', fontSize: '0.76rem', fontWeight: 700, cursor: enCours ? 'default' : 'pointer' }}>
-                    Retirer
+                  <button disabled={enCours} onClick={() => supprimer(s)} style={{ background: '#fee2e2', color: '#dc2626', border: 'none', padding: '6px 10px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700, cursor: enCours ? 'default' : 'pointer' }}>
+                    Oublier
                   </button>
                 </div>
               </div>
@@ -2206,10 +4196,10 @@ function CarteEsp({ appareil }) {
       </div>
 
       <form onSubmit={ajouter} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <input style={champ} placeholder="Nom du Wi-Fi (SSID)" value={ssid} onChange={(e) => setSsid(e.target.value)} required />
-        <input style={champ} type="password" placeholder="Mot de passe" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} />
-        <button type="submit" disabled={enCours} style={{ background: 'var(--sidebar-navy)', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, cursor: enCours ? 'default' : 'pointer' }}>
-          Ajouter ce réseau
+        <input style={champ} placeholder="Nom du réseau Wi-Fi (Box)" value={ssid} onChange={(e) => setSsid(e.target.value)} required />
+        <input style={champ} type="password" placeholder="Mot de passe du Wi-Fi" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} />
+        <button type="submit" disabled={enCours} style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, cursor: enCours ? 'default' : 'pointer' }}>
+          Connecter ce boîtier au Wi-Fi
         </button>
       </form>
     </div>
@@ -2227,9 +4217,15 @@ function OrganisationView() {
   async function charger() {
     try {
       const [c, b, p, cam] = await Promise.all([
-        appelApiOrg('/utilisateurs'), appelApiOrg('/batiments'), appelApiOrg('/pieces'), appelApiOrg('/cameras'),
+        appelApiOrg('/utilisateurs').catch(() => []),
+        appelApiOrg('/batiments').catch(() => []),
+        appelApiOrg('/pieces').catch(() => []),
+        appelApiOrg('/cameras').catch(() => []),
       ]);
-      setComptes(c); setBatiments(b); setPieces(p); setCameras(cam);
+      setComptes(Array.isArray(c) ? c : (Array.isArray(c?.utilisateurs) ? c.utilisateurs : []));
+      setBatiments(Array.isArray(b) ? b : (Array.isArray(b?.batiments) ? b.batiments : []));
+      setPieces(Array.isArray(p) ? p : (Array.isArray(p?.pieces) ? p.pieces : []));
+      setCameras(Array.isArray(cam) ? cam : (Array.isArray(cam?.cameras) ? cam.cameras : []));
       setErreur('');
     } catch (e) {
       setErreur(e.message);
@@ -2272,14 +4268,14 @@ function OrganisationView() {
       {erreur && <p style={{ color: '#dc2626', fontSize: '0.85rem', marginBottom: '14px' }}>{erreur}</p>}
 
       {onglet === 'comptes' && <SectionComptes comptes={comptes} onChange={charger} />}
-      {onglet === 'batiments' && <SectionBatiments batiments={batiments} onChange={charger} />}
+      {onglet === 'batiments' && <SectionBatiments batiments={batiments} comptes={comptes} onChange={charger} />}
       {onglet === 'pieces' && <SectionPieces pieces={pieces} batiments={batiments} onChange={charger} />}
       {onglet === 'cameras' && <SectionCameras cameras={cameras} pieces={pieces} onChange={charger} />}
     </div>
   );
 }
 
-function SectionComptes({ comptes, onChange }) {
+function SectionComptes({ comptes = [], onChange }) {
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
   const [email, setEmail] = useState('');
@@ -2307,31 +4303,36 @@ function SectionComptes({ comptes, onChange }) {
 
   return (
     <div style={carte}>
-      <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '14px' }}>Tous les comptes ({comptes.length})</h3>
+      <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '14px' }}>Tous les comptes ({(comptes || []).length})</h3>
       <form onSubmit={creer} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
         <input style={champ} placeholder="Prénom" value={prenom} onChange={(e) => setPrenom(e.target.value)} required />
         <input style={champ} placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} required />
         <input style={champ} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <input style={champ} type="password" placeholder="Mot de passe" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} required />
         <select style={champ} value={role} onChange={(e) => setRole(e.target.value)}>
-          <option value="user">User (notifications)</option>
-          <option value="admin">Admin (accès complet)</option>
+          <option value="user">Opérateur / Gardien (Notifications & Alertes)</option>
+          <option value="admin">Administrateur (Accès complet)</option>
         </select>
-        <button style={btn} disabled={envoi} type="submit"><Plus size={15} /> Créer</button>
+        <button style={btn} disabled={envoi} type="submit"><Plus size={15} /> Créer le compte</button>
       </form>
       {err && <p style={{ color: '#dc2626', fontSize: '0.8rem' }}>{err}</p>}
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
         <thead><tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--ink-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-          <th style={{ padding: '8px', textAlign: 'left' }}>Nom</th><th style={{ padding: '8px', textAlign: 'left' }}>Email</th><th style={{ padding: '8px', textAlign: 'left' }}>Rôle</th><th />
+          <th style={{ padding: '8px', textAlign: 'left' }}>Nom & Prénom</th><th style={{ padding: '8px', textAlign: 'left' }}>Email</th><th style={{ padding: '8px', textAlign: 'left' }}>Rôle</th><th />
         </tr></thead>
         <tbody>
-          {comptes.map((c) => (
+          {(comptes || []).map((c) => (
             <tr key={c.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
               <td style={{ padding: '8px', fontWeight: 700 }}>{c.prenom} {c.nom}</td>
               <td style={{ padding: '8px', color: 'var(--ink-muted)' }}>{c.email}</td>
-              <td style={{ padding: '8px' }}>{c.role}{c.est_par_defaut ? ' (défaut)' : ''}</td>
+              <td style={{ padding: '8px' }}>
+                <span style={{ background: c.role === 'admin' ? '#e0f2fe' : '#f1f5f9', color: c.role === 'admin' ? '#0284c7' : '#475569', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '0.75rem' }}>
+                  {c.role === 'admin' ? 'Administrateur' : 'Opérateur'}
+                  {c.est_par_defaut ? ' (Principal)' : ''}
+                </span>
+              </td>
               <td style={{ padding: '8px', textAlign: 'right' }}>
-                {!c.est_par_defaut && <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer"><Trash2 size={14} /></button>}
+                {!c.est_par_defaut && <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer ce compte"><Trash2 size={14} /></button>}
               </td>
             </tr>
           ))}
@@ -2341,16 +4342,25 @@ function SectionComptes({ comptes, onChange }) {
   );
 }
 
-function SectionBatiments({ batiments, onChange }) {
+function SectionBatiments({ batiments = [], comptes = [], onChange }) {
   const [nom, setNom] = useState('');
   const [lieu, setLieu] = useState('');
+  const [responsableId, setResponsableId] = useState('');
   const [err, setErr] = useState('');
 
   const creer = async (e) => {
     e.preventDefault(); setErr('');
     try {
-      await appelApiOrg('/batiments', { method: 'POST', body: JSON.stringify({ id_admin: idAdmin(), nom, lieu }) });
-      setNom(''); setLieu(''); onChange();
+      await appelApiOrg('/batiments', {
+        method: 'POST',
+        body: JSON.stringify({
+          id_admin: idAdmin(),
+          nom,
+          lieu,
+          responsable_id: responsableId || null,
+        }),
+      });
+      setNom(''); setLieu(''); setResponsableId(''); onChange();
     } catch (e2) { setErr(e2.message); }
   };
   const supprimer = async (b) => {
@@ -2358,28 +4368,61 @@ function SectionBatiments({ batiments, onChange }) {
     onChange();
   };
 
+  const nomResponsable = (id) => {
+    if (!id) return null;
+    const c = (comptes || []).find((u) => u.id === id);
+    return c ? `${c.prenom} ${c.nom}` : null;
+  };
+
   return (
     <div style={carte}>
-      <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '14px' }}>Bâtiments ({batiments.length})</h3>
-      <form onSubmit={creer} style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-        <input style={champ} placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} required />
-        <input style={champ} placeholder="Lieu" value={lieu} onChange={(e) => setLieu(e.target.value)} required />
-        <button style={btn} type="submit"><Plus size={15} /> Créer</button>
+      <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '4px', color: 'var(--ink-primary)' }}>
+        Bâtiments & Sites Surveillés ({(batiments || []).length})
+      </h3>
+      <p style={{ margin: '0 0 16px 0', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
+        Créez les bâtiments de votre entreprise et assignez un responsable ou gardien référent.
+      </p>
+
+      <form onSubmit={creer} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '18px', background: '#f8fafc', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
+        <input style={{ ...champ, flex: 1, minWidth: '180px' }} placeholder="Nom du bâtiment (ex: Siège Principal)" value={nom} onChange={(e) => setNom(e.target.value)} required />
+        <input style={{ ...champ, flex: 1, minWidth: '160px' }} placeholder="Lieu / Ville (ex: Abidjan)" value={lieu} onChange={(e) => setLieu(e.target.value)} required />
+        <select style={{ ...champ, flex: 1, minWidth: '200px' }} value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
+          <option value="">👤 Responsable / Gardien assigné (Optionnel)</option>
+          {(comptes || []).map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.prenom} {c.nom} ({c.role === 'admin' ? 'Admin' : 'Opérateur'})
+            </option>
+          ))}
+        </select>
+        <button style={btn} type="submit"><Plus size={15} /> Créer le bâtiment</button>
       </form>
+
       {err && <p style={{ color: '#dc2626', fontSize: '0.8rem' }}>{err}</p>}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {batiments.map((b) => (
-          <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: '8px' }}>
-            <div><strong>{b.nom}</strong> <span style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>· {b.lieu}</span></div>
-            <button style={btnSuppr} onClick={() => supprimer(b)} title="Supprimer"><Trash2 size={14} /></button>
-          </div>
-        ))}
+        {(batiments || []).map((b) => {
+          const resp = nomResponsable(b.responsable_id);
+          return (
+            <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: '10px' }}>
+              <div>
+                <strong style={{ fontSize: '0.95rem', color: 'var(--ink-primary)' }}>{b.nom}</strong>
+                <span style={{ color: 'var(--ink-muted)', fontSize: '0.84rem', marginLeft: '8px' }}>📍 {b.lieu}</span>
+                {resp && (
+                  <span style={{ marginLeft: '12px', fontSize: '0.74rem', fontWeight: 700, background: '#e0f2fe', color: '#0284c7', padding: '3px 9px', borderRadius: '999px' }}>
+                    👤 Responsable : {resp}
+                  </span>
+                )}
+              </div>
+              <button style={btnSuppr} onClick={() => supprimer(b)} title="Supprimer ce bâtiment"><Trash2 size={14} /></button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function SectionPieces({ pieces, batiments, onChange }) {
+function SectionPieces({ pieces = [], batiments = [], onChange }) {
   const [nom, setNom] = useState('');
   const [batimentId, setBatimentId] = useState('');
   const [err, setErr] = useState('');
@@ -2387,7 +4430,7 @@ function SectionPieces({ pieces, batiments, onChange }) {
   const creer = async (e) => {
     e.preventDefault(); setErr('');
     try {
-      await appelApiOrg('/pieces', { method: 'POST', body: JSON.stringify({ id_admin: idAdmin(), nom, batiment_id: batimentId || batiments[0]?.id }) });
+      await appelApiOrg('/pieces', { method: 'POST', body: JSON.stringify({ id_admin: idAdmin(), nom, batiment_id: batimentId || (batiments || [])[0]?.id }) });
       setNom(''); onChange();
     } catch (e2) { setErr(e2.message); }
   };
@@ -2395,23 +4438,23 @@ function SectionPieces({ pieces, batiments, onChange }) {
     await appelApiOrg(`/pieces/${p.id}`, { method: 'DELETE' }).catch((e2) => setErr(e2.message));
     onChange();
   };
-  const nomBatiment = (id) => batiments.find((b) => b.id === id)?.nom || '?';
+  const nomBatiment = (id) => (batiments || []).find((b) => b.id === id)?.nom || '?';
 
   return (
     <div style={carte}>
-      <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '14px' }}>Pièces ({pieces.length})</h3>
+      <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '14px' }}>Pièces ({(pieces || []).length})</h3>
       <form onSubmit={creer} style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
         <input style={champ} placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} required />
         <select style={champ} value={batimentId} onChange={(e) => setBatimentId(e.target.value)} required>
-          <option value="">Bâtiment...</option>
-          {batiments.map((b) => <option key={b.id} value={b.id}>{b.nom}</option>)}
+          <option value="">-- Choisir un bâtiment --</option>
+          {(batiments || []).map((b) => <option key={b.id} value={b.id}>{b.nom}</option>)}
         </select>
-        <button style={btn} type="submit" disabled={batiments.length === 0}><Plus size={15} /> Créer</button>
+        <button style={btn} type="submit" disabled={(batiments || []).length === 0}><Plus size={15} /> Créer</button>
       </form>
-      {batiments.length === 0 && <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>Crée d'abord un bâtiment.</p>}
+      {(batiments || []).length === 0 && <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>Crée d'abord un bâtiment.</p>}
       {err && <p style={{ color: '#dc2626', fontSize: '0.8rem' }}>{err}</p>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {pieces.map((p) => (
+        {(pieces || []).map((p) => (
           <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: '8px' }}>
             <div><strong>{p.nom}</strong> <span style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>· {nomBatiment(p.batiment_id)}</span></div>
             <button style={btnSuppr} onClick={() => supprimer(p)} title="Supprimer"><Trash2 size={14} /></button>
@@ -2422,52 +4465,243 @@ function SectionPieces({ pieces, batiments, onChange }) {
   );
 }
 
-function SectionCameras({ cameras, pieces, onChange }) {
+function SectionCameras({ cameras = [], pieces = [], onChange }) {
   const [num, setNum] = useState('');
   const [pieceId, setPieceId] = useState('');
+  const [typeCamera, setTypeCamera] = useState('ip'); // 'ip' | 'webcam'
+  const [ipUrl, setIpUrl] = useState('');
   const [estEntree, setEstEntree] = useState(false);
+  const [testConnexionMsg, setTestConnexionMsg] = useState(null);
+  const [testEnCours, setTestEnCours] = useState(false);
+  const [cameraFluxEnDirect, setCameraFluxEnDirect] = useState(null);
+  const [directLoaded, setDirectLoaded] = useState(false);
   const [err, setErr] = useState('');
+
+  const appliquerPreset = (nomCamera, urlRTSP) => {
+    setTypeCamera('ip');
+    setNum(nomCamera);
+    setIpUrl(urlRTSP);
+    if (!pieceId && (pieces || []).length > 0) {
+      setPieceId(pieces[0].id);
+    }
+  };
+
+  const testerConnexionIp = async () => {
+    if (!ipUrl.trim()) {
+      setTestConnexionMsg({ ok: false, texte: 'Veuillez saisir une adresse IP ou URL de flux RTSP.' });
+      return;
+    }
+    setTestEnCours(true);
+    setTestConnexionMsg({ ok: true, texte: '⏳ Connexion au flux RTSP en cours...' });
+    try {
+      const res = await testerFluxRtsp(ipUrl.trim());
+      if (res.ok) {
+        setTestConnexionMsg({ ok: true, texte: `✅ Flux RTSP connecté avec succès (${res.taille_image || 'Image'} reçue).` });
+      } else {
+        setTestConnexionMsg({ ok: false, texte: `❌ Échec connexion : ${res.erreur || 'Flux injoignable'}` });
+      }
+    } catch (e) {
+      setTestConnexionMsg({ ok: false, texte: `❌ Erreur de test : ${e.message}` });
+    } finally {
+      setTestEnCours(false);
+      setTimeout(() => setTestConnexionMsg(null), 8000);
+    }
+  };
 
   const creer = async (e) => {
     e.preventDefault(); setErr('');
     try {
-      await appelApiOrg('/cameras', { method: 'POST', body: JSON.stringify({ id_admin: idAdmin(), num, piece_id: pieceId || pieces[0]?.id, est_entree: estEntree }) });
-      setNum(''); setEstEntree(false); onChange();
+      await creerCamera({
+        idAdmin: idAdmin(),
+        num: num.trim(),
+        pieceId: pieceId || (pieces || [])[0]?.id,
+        estEntree,
+        urlFlux: typeCamera === 'ip' ? (ipUrl.trim() || null) : null,
+      });
+      setNum(''); setIpUrl(''); setEstEntree(false); onChange();
     } catch (e2) { setErr(e2.message); }
   };
+
   const supprimer = async (c) => {
-    await appelApiOrg(`/cameras/${c.id}`, { method: 'DELETE' }).catch((e2) => setErr(e2.message));
+    await supprimerCamera(c.id).catch((e2) => setErr(e2.message));
     onChange();
   };
-  const nomPiece = (id) => pieces.find((p) => p.id === id)?.nom || '?';
+
+  const nomPiece = (id) => (pieces || []).find((p) => p.id === id)?.nom || '?';
 
   return (
     <div style={carte}>
-      <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '14px' }}>Caméras ({cameras.length})</h3>
-      <form onSubmit={creer} style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
-        <input style={champ} placeholder="Numéro (ex. CAM-01)" value={num} onChange={(e) => setNum(e.target.value)} required />
-        <select style={champ} value={pieceId} onChange={(e) => setPieceId(e.target.value)} required>
-          <option value="">Pièce...</option>
-          {pieces.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
-        </select>
-        <label style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <input type="checkbox" checked={estEntree} onChange={(e) => setEstEntree(e.target.checked)} /> Point d'entrée
-        </label>
-        <button style={btn} type="submit" disabled={pieces.length === 0}><Plus size={15} /> Créer</button>
-      </form>
-      {pieces.length === 0 && <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>Crée d'abord une pièce.</p>}
-      {err && <p style={{ color: '#dc2626', fontSize: '0.8rem' }}>{err}</p>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {cameras.map((c) => (
-          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: '8px' }}>
-            <div>
-              <strong>{c.num}</strong> <span style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>· {nomPiece(c.piece_id)}</span>
-              {c.est_entree && <span style={{ marginLeft: '8px', fontSize: '0.7rem', fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '2px 7px', borderRadius: '999px' }}>ENTRÉE</span>}
-            </div>
-            <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer"><Trash2 size={14} /></button>
-          </div>
-        ))}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, color: 'var(--ink-primary)' }}>
+            Caméras de Surveillance ({(cameras || []).length})
+          </h3>
+          <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
+            Connectez vos caméras IP de sécurité (RTSP) ou vos téléphones/webcams aux pièces du bâtiment.
+          </p>
+        </div>
       </div>
+
+      {/* Raccourcis / Préréglages rapides caméras réelles */}
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--ink-muted)' }}>⚡ Configuration rapide :</span>
+        <button
+          type="button"
+          onClick={() => appliquerPreset('Caméra 1', 'rtsp://admin:admin@192.168.11.102:554/11')}
+          style={{ ...btn, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '5px 10px', fontSize: '0.78rem' }}
+        >
+          📹 Caméra 1 (192.168.11.102)
+        </button>
+        <button
+          type="button"
+          onClick={() => appliquerPreset('Caméra 2', 'rtsp://admin:11Avril2002@@192.168.11.101:554/Streaming/Channels/101')}
+          style={{ ...btn, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', padding: '5px 10px', fontSize: '0.78rem' }}
+        >
+          📹 Caméra 2 (192.168.11.101)
+        </button>
+      </div>
+
+      <form onSubmit={creer} style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <select style={{ ...champ, fontWeight: 700 }} value={typeCamera} onChange={(e) => setTypeCamera(e.target.value)}>
+            <option value="ip">📹 Caméra IP Réseau (RTSP / ONVIF)</option>
+            <option value="webcam">📱 Téléphone / Webcam Locale</option>
+          </select>
+
+          <input style={{ ...champ, minWidth: '160px' }} placeholder="Nom / Numéro (ex: Caméra 2)" value={num} onChange={(e) => setNum(e.target.value)} required />
+
+          <select style={champ} value={pieceId} onChange={(e) => setPieceId(e.target.value)} required>
+            <option value="">Sélectionner une pièce...</option>
+            {(pieces || []).map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+          </select>
+
+          <label style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={estEntree} onChange={(e) => setEstEntree(e.target.checked)} /> Point de contrôle d'accès (Entrée)
+          </label>
+        </div>
+
+        {typeCamera === 'ip' && (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              style={{ ...champ, flex: 1, minWidth: '280px', fontFamily: 'monospace', fontSize: '0.85rem' }}
+              placeholder="Flux RTSP (ex: rtsp://admin:11Avril2002@@192.168.11.101:554/Streaming/Channels/101)"
+              value={ipUrl}
+              onChange={(e) => setIpUrl(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={testerConnexionIp}
+              disabled={testEnCours}
+              style={{ ...btn, background: '#f1f5f9', color: '#0284c7', border: '1px solid var(--border-light)', minWidth: '130px' }}
+            >
+              {testEnCours ? 'Test en cours...' : 'Tester le flux RTSP'}
+            </button>
+          </div>
+        )}
+
+        {testConnexionMsg && (
+          <p style={{ color: testConnexionMsg.ok ? '#16a34a' : '#dc2626', fontSize: '0.82rem', fontWeight: 600, margin: 0 }}>
+            {testConnexionMsg.texte}
+          </p>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+          <button style={btn} type="submit" disabled={(pieces || []).length === 0}><Plus size={15} /> Enregistrer la caméra</button>
+        </div>
+      </form>
+
+      {(pieces || []).length === 0 && <p style={{ color: 'var(--ink-muted)', fontSize: '0.82rem' }}>Créez d'abord une pièce dans l'onglet Pièces.</p>}
+      {err && <p style={{ color: '#dc2626', fontSize: '0.8rem' }}>{err}</p>}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {(cameras || []).map((c) => (
+          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <strong style={{ color: 'var(--ink-primary)', fontSize: '0.92rem' }}>{c.num}</strong>
+              <span style={{ color: 'var(--ink-muted)', fontSize: '0.84rem' }}>· Pièce : {nomPiece(c.piece_id)}</span>
+              {c.est_entree && <span style={{ fontSize: '0.7rem', fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '999px' }}>ENTRÉE PRINCIPALE</span>}
+              {c.url_flux && (
+                <span style={{ fontSize: '0.74rem', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '2px 8px', borderRadius: '6px', fontFamily: 'monospace' }}>
+                  🟢 RTSP : {c.url_flux}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              {c.url_flux && (
+                <button
+                  type="button"
+                  onClick={() => setCameraFluxEnDirect(c)}
+                  style={{ ...btn, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', padding: '6px 12px', fontSize: '0.78rem' }}
+                  title="Voir le flux vidéo continu en direct"
+                >
+                  👁️ Voir le direct
+                </button>
+              )}
+                <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer la caméra"><Trash2 size={14} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+      {/* Modal / Lecteur de flux direct RTSP */}
+      {cameraFluxEnDirect && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(4px)', padding: '20px' }}>
+          <div style={{ background: '#ffffff', borderRadius: '16px', maxWidth: '800px', width: '100%', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border-light)' }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--ink-primary)' }}>
+                  📺 Flux Vidéo en Direct — {cameraFluxEnDirect.num}
+                </h4>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--ink-muted)', fontFamily: 'monospace' }}>
+                  {cameraFluxEnDirect.url_flux}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setCameraFluxEnDirect(null); setDirectLoaded(false); }}
+                style={{ background: 'transparent', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: 'var(--ink-muted)' }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ position: 'relative', background: '#0b132b', minHeight: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <img
+                src={urlFluxCamera(cameraFluxEnDirect.id)}
+                alt={`Flux direct ${cameraFluxEnDirect.num}`}
+                style={{ width: '100%', maxHeight: '550px', objectFit: 'contain', zIndex: 2, background: '#0b132b' }}
+                onLoad={() => {
+                  setDirectLoaded(true);
+                }}
+                onError={(e) => {
+                  setDirectLoaded(false);
+                  setTimeout(() => {
+                    if (e.target) {
+                      e.target.src = `${urlFluxCamera(cameraFluxEnDirect.id)}?t=${Date.now()}`;
+                    }
+                  }, 1500);
+                }}
+              />
+              {!directLoaded && (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: '#ffffff', padding: '30px', zIndex: 1, background: '#0b132b' }}>
+                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(2, 132, 199, 0.15)', border: '2px dashed #0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px' }}>
+                    <Cctv size={28} color="#38bdf8" />
+                  </div>
+                  <p style={{ fontSize: '1.05rem', fontWeight: 700, margin: '0 0 6px 0' }}>🔌 En attente de connexion de la caméra</p>
+                  <p style={{ fontSize: '0.82rem', color: '#94a3b8', maxWidth: '420px', margin: 0 }}>
+                    Branchez le routeur et la caméra sur le secteur. Dès que la caméra est allumée sur le réseau ({cameraFluxEnDirect.url_flux}), la vidéo apparaîtra automatiquement ici en direct.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', background: '#f8fafc', borderTop: '1px solid var(--border-light)' }}>
+              <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a', display: 'inline-block' }}></span>
+                Flux décodé en temps réel via FFmpeg MJPEG
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2508,20 +4742,28 @@ function jouerBip(audioCtxRef) {
   } catch (e) { /* pas grave, silencieux */ }
 }
 
-// Titre à afficher pour une "situation" personne (Surveillance
-// Comportementale) — le signal le plus parlant d'abord.
+// Titre à afficher pour une situation personne (Surveillance Comportementale)
 function titreSituationPersonne(item) {
-  if (item.intrusionZoneActive) return 'Intrusion en zone non autorisée';
-  if (item.rodage && item.rodage !== 'Normal' && !item.rodage.startsWith('En observation')) return item.rodage;
-  if (item.infiltration && item.infiltration !== 'Normal') return item.infiltration;
-  if (item.regard && item.regard !== 'Normal') return `Regard suspect : ${item.regard}`;
-  return 'Personne suivie';
+  if (item.intrusionZoneActive) return '🚨 Intrusion en zone non autorisée';
+  if (item.rodage && item.rodage !== 'Normal' && !item.rodage.startsWith('En observation') && item.riskPct >= 40) {
+    return item.rodage;
+  }
+  if (item.infiltration && item.infiltration !== 'Normal' && item.riskPct >= 40) {
+    return item.infiltration;
+  }
+  if (item.regard && item.regard.startsWith('Scanne') && item.riskPct >= 40) {
+    return `Balayage visuel anormal (${item.regard})`;
+  }
+  if (item.nom) return `${item.nom} (Collaborateur identifié)`;
+  if (item.visage === 'Oui') return 'Personne détectée (Visage visible)';
+  return 'Présence normale';
 }
 
 export default function Admin() {
   const navigate = useNavigate();
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const nom = sessionStorage.getItem('previa_utilisateur_nom') || 'Utilisateur';
   const role = sessionStorage.getItem('previa_utilisateur_role') || 'user';
@@ -2633,19 +4875,26 @@ export default function Admin() {
   const camerasReelles = (vueEnsemble?.cameras || []).map((c) => ({
     id: c.id_camera,
     name: c.num || c.id_camera,
-    image: `${API_BASE}/cameras/${c.id_camera}/image`,
+    image: c.url_flux ? urlFluxCamera(c.id_camera) : `${API_BASE}/cameras/${c.id_camera}/image`,
+    urlFlux: c.url_flux,
     location: [c.batiment, c.piece].filter(Boolean).join(' / ') || 'Emplacement inconnu',
     estEntree: c.est_entree,
     nombrePersonnes: c.nombre_personnes ?? 0,
     misAJourLe: c.mis_a_jour_le,
+    detections: personnes.filter((p) => p.camCtx?.id_camera === c.id_camera),
   }));
 
   const camerasParId = Object.fromEntries(camerasReelles.map((c) => [c.id, c.image]));
 
-  const cibles = [...personnes, ...objets].sort((a, b) => b.riskPct - a.riskPct);
-  const situations = cibles.slice(0, 6).map((item) => ({
+  // Surveillance comportementale :
+  // - Toutes les personnes détectées (analyse comportementale active)
+  // - Les objets anormaux ou critiques uniquement (feu, fumée, objet abandonné, objet disparu)
+  // On exclut les objets statiques normaux du décor (chaises, tables) qui n'ont aucune anomalie.
+  const objetsAnormaux = objets.filter((o) => o.riskPct >= 40 || o.riskLevel === 'high' || o.riskLevel === 'med');
+  const cibles = [...personnes, ...objetsAnormaux].sort((a, b) => b.riskPct - a.riskPct);
+  const situations = cibles.slice(0, 4).map((item) => ({
     id: item.id,
-    title: item.isObject ? item.label : titreSituationPersonne(item),
+    title: item.isObject ? item.label : (item.nom ? `${item.nom} (Collaborateur)` : titreSituationPersonne(item)),
     subtitle: `${item.camCtx?.batiment || '?'} · ${item.camCtx?.piece || '?'} · ${item.camCtx?.num || item.camCtx?.id_camera || '?'}`,
     riskLevel: item.riskLevel,
     _item: item,
@@ -2692,15 +4941,13 @@ export default function Admin() {
           />
         );
       case 'cameras':
-        return <CamerasView cameras={camerasReelles} onRefresh={rafraichir} />;
+        return <CamerasView cameras={camerasReelles} personnes={personnes} alertes={alertes} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
       case 'personnes':
-        return <CiblesView titre="Personnes" sousTitre="Toutes les personnes détectées, toutes caméras confondues." items={personnes} type="personnes" />;
-      case 'objets':
-        return <CiblesView titre="Objets" sousTitre="Tous les objets détectés, toutes caméras confondues." items={objets} type="objets" />;
+        return <PersonnesFaceIdView items={personnes} />;
       case 'events':
-        return <EventsView alertesReelles={alertes} />;
+        return <EventsView alertesReelles={alertes} cameras={camerasReelles} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
       case 'alerts':
-        return <AlertsView alertesReelles={alertes} camerasParId={camerasParId} />;
+        return <AlertsView alertesReelles={alertes} camerasParId={camerasParId} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
       case 'reports':
         return <ReportsView alertesReelles={alertes} kpis={kpis} />;
       case 'organisation':
@@ -2736,13 +4983,29 @@ export default function Admin() {
     return <LicenceDisabledScreen statut={licence.statut} onActivee={setLicence} />;
   }
 
+  const titresOnglets = {
+    dashboard: 'Tableau de bord',
+    cameras: 'Caméras',
+    personnes: 'Personnel & Face ID',
+    events: 'Historique',
+    alerts: 'Alertes',
+    reports: 'Rapports',
+    organisation: 'Organisation',
+    configAlerte: 'Boîtiers d\'alarme',
+  };
+
   return (
     <div className="app-container">
       {/* PERSISTENT SAPPHIRE SIDEBAR IDENTICAL ACROSS ALL VIEWS */}
       <Sidebar
         currentTab={currentTab}
-        onSelectTab={(tab) => setCurrentTab(tab)}
+        onSelectTab={(tab) => {
+          setCurrentTab(tab);
+          setIsMobileMenuOpen(false);
+        }}
         isCollapsed={isSidebarCollapsed}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
         unreadAlerts={alertes.length}
         showOrganisation={estParDefaut}
         joursRestantsLicence={licence.jours_restants}
@@ -2750,10 +5013,28 @@ export default function Admin() {
 
       {/* MAIN OPERATIONS WORKSPACE */}
       <main className="main-layout">
+        {/* MOBILE TOP BAR (visible on screens <= 768px) */}
+        <div className="mobile-top-bar">
+          <button
+            className="mobile-menu-btn"
+            onClick={() => setIsMobileMenuOpen(true)}
+            aria-label="Ouvrir le menu"
+          >
+            <Menu size={22} />
+          </button>
+          <div className="mobile-app-title">
+            <strong>Previa</strong> · <span>{titresOnglets[currentTab] || 'Tableau de bord'}</span>
+          </div>
+        </div>
+
         {/* TOP RIGHT ORGANIC BLUE WAVE BANNER WITH ACTION BUTTONS */}
         <HeaderDecor
-          onNavigate={(tab) => setCurrentTab(tab)}
+          onNavigate={(tab) => {
+            setCurrentTab(tab);
+            setIsMobileMenuOpen(false);
+          }}
           onLogout={seDeconnecter}
+          onRefresh={rafraichir}
           unreadCount={alertes.length}
           notifications={notifications}
           utilisateur={{ nom, role }}

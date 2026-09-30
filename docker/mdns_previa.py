@@ -145,7 +145,10 @@ def main() -> None:
         server="previa.local.",
     )
 
-    zc.register_service(info)
+    try:
+        zc.register_service(info, allow_name_change=True)
+    except Exception as exc:
+        print(f"[mdns] Avertissement enregistrement service : {exc}", flush=True)
     print(f"[mdns] previa.local -> {ip} annoncé (HTTPS web:{port_https}, HTTP mobile:{port_http_mobile})", flush=True)
 
     # Recherche active des ESP32 alarme (voir EcouteurEsp ci-dessus) —
@@ -206,7 +209,10 @@ def main() -> None:
                     properties={"http_mobile": str(port_http_mobile)},
                     server="previa.local.",
                 )
-                zc.register_service(info)
+                try:
+                    zc.register_service(info, allow_name_change=True)
+                except Exception as exc:
+                    print(f"[mdns] Avertissement enregistrement service : {exc}", flush=True)
                 ServiceBrowser(zc, "_previaalarme._tcp.local.", ecouteur)
                 print(f"[mdns] previa.local -> {ip} annoncé (HTTPS web:{port_https}, HTTP mobile:{port_http_mobile})", flush=True)
     except KeyboardInterrupt:

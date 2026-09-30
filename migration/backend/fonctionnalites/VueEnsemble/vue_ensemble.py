@@ -28,6 +28,7 @@ circule en interne (rapportCam, profils) n'est qu'un id_camera brut
 en double dans rapportCam/profils : si une caméra est renommée ou
 déplacée de pièce, le nom affiché ici suit immédiatement, sans avoir à
 retoucher l'historique déjà écrit."""
+import time
 from fonctionnalites.cam.batiment import batiment
 from fonctionnalites.cam.camera import camera
 from fonctionnalites.cam.pieces import piece
@@ -52,6 +53,7 @@ def contexte_camera(id_camera: str) -> dict:
     return {
         "num": cam.get("num"),
         "est_entree": cam.get("est_entree", False),
+        "url_flux": cam.get("url_flux"),
         "piece": p.get("nom") if p else None,
         "batiment": b.get("nom") if b else None,
     }
@@ -60,16 +62,14 @@ def contexte_camera(id_camera: str) -> dict:
 def vue_ensemble() -> dict:
     """Un résumé par caméra active (avec son numéro, sa pièce, son
     bâtiment — voir contexte_camera), plus la liste des personnes
-    actuellement suspectes (rôdage en cours OU regard qui scanne OU objet
-    proche disparu OU infiltration suspectée OU intrusion dans une zone
-    surveillée) n'importe où dans le bâtiment, avec la caméra qui les
-    voit et — si connu — où elles ont déjà été suspectes ailleurs (voir
-    ComportementsSupects/profil_suspect.py, exposé dans le profil de
-    chaque personne par on_voit_qui.py)."""
+    actuellement suspectes n'importe où dans le bâtiment."""
     cameras = []
     personnes_suspectes = []
 
-    for id_camera in rapport_cam.lister_cameras_avec_rapport():
+    toutes_les_cameras = camera.lister_cameras()
+    ids_connus = [c["id"] for c in toutes_les_cameras]
+
+    for id_camera in ids_connus:
         contexte = contexte_camera(id_camera)
         etat = rapport_cam.lire_etat(id_camera)
         vue_actuelle = etat.get("vueActuelle", {})
@@ -82,7 +82,7 @@ def vue_ensemble() -> dict:
             "objets": vue_actuelle.get("objets", {}),
             "alertes_feu_fumee": vue_actuelle.get("alertes_feu_fumee", []),
             "zones_suspectes_anonymes": personnes_vues.get("zones_suspectes", []),
-            "mis_a_jour_le": vue_actuelle.get("updated_at") or personnes_vues.get("updated_at"),
+            "mis_a_jour_le": vue_actuelle.get("updated_at") or personnes_vues.get("updated_at") or (time.time() if contexte.get("url_flux") else None),
         })
 
         for profil in personnes_vues.get("personnes", []):

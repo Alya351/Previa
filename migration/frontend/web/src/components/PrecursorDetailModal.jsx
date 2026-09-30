@@ -1,17 +1,32 @@
 import React, { useState } from 'react';
-import { X, Package, Eye, ShieldAlert, CheckCircle, AlertTriangle, Download, ShieldCheck, Volume2, Lightbulb, Users, Check } from 'lucide-react';
+import { X, Package, Eye, ShieldAlert, CheckCircle, AlertTriangle, Download, ShieldCheck, Volume2, Lightbulb, Users, Check, Video, Film } from 'lucide-react';
+import { urlClipAlerte } from '../api.js';
 
 // `situation` : construit par le parent (DashboardView) à partir d'une
 // vraie cible (personne ou objet, voir mappageCibles.js) — remplace les
 // 4 fiches fictives d'origine (modulesData). Même forme attendue :
 // { title, subtitle, camera, location, duration, status, isUrgent,
-//   actionSummary, image, details: [{label, val}] }.
+//   actionSummary, image, idAlerte, details: [{label, val}] }.
 export function PrecursorDetailModal({ situation, onClose, onActionConfirmed }) {
   const [activeAction, setActiveAction] = useState(null);
   const [actionDone, setActionDone] = useState(null);
+  const [afficherVideo, setAfficherVideo] = useState(false);
+
+  // Fermeture accessible avec la touche Echap
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const current = situation;
   if (!current) return null;
+
+  const clipUrl = current.idAlerte ? urlClipAlerte(current.idAlerte) : null;
 
   const handleConfirmAction = (actionName) => {
     setActionDone(actionName);
@@ -25,6 +40,7 @@ export function PrecursorDetailModal({ situation, onClose, onActionConfirmed }) 
 
   return (
     <div 
+      className="modal-backdrop"
       style={{
         position: 'fixed',
         top: 0,
@@ -40,8 +56,12 @@ export function PrecursorDetailModal({ situation, onClose, onActionConfirmed }) 
         padding: '20px'
       }}
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="precursor-modal-title"
     >
       <div 
+        className="animate-modal-in"
         style={{
           background: '#ffffff',
           borderRadius: '20px',
@@ -70,7 +90,7 @@ export function PrecursorDetailModal({ situation, onClose, onActionConfirmed }) 
               >
                 {current.status}
               </span>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--ink-primary)', margin: 0 }}>
+              <h2 id="precursor-modal-title" style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--ink-primary)', margin: 0 }}>
                 {current.title}
               </h2>
             </div>
@@ -81,6 +101,8 @@ export function PrecursorDetailModal({ situation, onClose, onActionConfirmed }) 
 
           <button 
             onClick={onClose}
+            aria-label="Fermer les détails (Échap)"
+            title="Fermer (Échap)"
             style={{
               background: '#f1f5f9',
               border: 'none',
@@ -94,16 +116,53 @@ export function PrecursorDetailModal({ situation, onClose, onActionConfirmed }) 
               color: 'var(--ink-secondary)'
             }}
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
-        {/* IMAGE PREVIEW */}
-        <div style={{ borderRadius: '12px', overflow: 'hidden', height: '220px', position: 'relative', marginBottom: '18px' }}>
-          <img src={current.image} alt={current.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          <div style={{ position: 'absolute', bottom: '10px', left: '10px', background: 'rgba(9, 17, 36, 0.8)', color: '#fff', fontSize: '0.78rem', fontWeight: 700, padding: '4px 10px', borderRadius: '6px' }}>
-            {current.duration}
-          </div>
+        {/* IMAGE OU VIDEO PREVIEW */}
+        <div style={{ borderRadius: '12px', overflow: 'hidden', height: '240px', position: 'relative', marginBottom: '18px', background: '#0b1120' }}>
+          {afficherVideo && clipUrl ? (
+            <video 
+              src={clipUrl} 
+              controls 
+              autoPlay 
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+          ) : (
+            <>
+              <img src={current.image} alt={current.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div style={{ position: 'absolute', bottom: '10px', left: '10px', background: 'rgba(9, 17, 36, 0.8)', color: '#fff', fontSize: '0.78rem', fontWeight: 700, padding: '4px 10px', borderRadius: '6px' }}>
+                {current.duration}
+              </div>
+            </>
+          )}
+
+          {clipUrl && (
+            <button
+              onClick={() => setAfficherVideo(!afficherVideo)}
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                background: afficherVideo ? '#0284c7' : 'rgba(15, 23, 42, 0.85)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.2)',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                backdropFilter: 'blur(4px)'
+              }}
+            >
+              <Film size={14} />
+              <span>{afficherVideo ? "Voir Photo" : "🎥 Voir Clip Vidéo (10s)"}</span>
+            </button>
+          )}
         </div>
 
         {/* STATUS ACTIONS BANNER */}
@@ -127,7 +186,32 @@ export function PrecursorDetailModal({ situation, onClose, onActionConfirmed }) 
         </div>
 
         {/* ACTION BUTTONS */}
-        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', alignItems: 'center' }}>
+          {clipUrl && (
+            <a
+              href={clipUrl}
+              download={`preuve_alerte_${current.idAlerte || 'incident'}.mp4`}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                background: '#f1f5f9',
+                color: '#334155',
+                border: '1px solid #cbd5e1',
+                padding: '10px 16px',
+                borderRadius: '8px',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Download size={15} />
+              <span>Télécharger la preuve MP4</span>
+            </a>
+          )}
+
           <button
             onClick={() => handleConfirmAction("Alerte vérifiée")}
             style={{

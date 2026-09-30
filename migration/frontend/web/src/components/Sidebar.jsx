@@ -7,8 +7,8 @@ import {
   FileText,
   Building2,
   Users,
-  Package,
-  Router
+  Router,
+  X
 } from 'lucide-react';
 import PreviaLogo from './PreviaLogo';
 
@@ -17,69 +17,95 @@ import PreviaLogo from './PreviaLogo';
 // (defaultAdmin.jsx : comptes/bâtiments/pièces/caméras) mais absente de
 // cette interface, réservée au compte admin par défaut (voir App.jsx).
 export function Sidebar({
-  currentTab, onSelectTab, isCollapsed = false, unreadAlerts = 3, showOrganisation = false,
+  currentTab, onSelectTab, isCollapsed = false, isMobileOpen = false, onCloseMobile, unreadAlerts = 3, showOrganisation = false,
   joursRestantsLicence = null,
 }) {
   const menuItems = [
     { id: 'dashboard', label: 'Tableau de bord', icon: Home },
     { id: 'cameras', label: 'Caméras', icon: Cctv },
-    { id: 'personnes', label: 'Personnes', icon: Users },
-    { id: 'objets', label: 'Objets', icon: Package },
-    { id: 'events', label: 'Événements', icon: FileVideo },
+    { id: 'personnes', label: 'Personnel & Face ID', icon: Users },
+    { id: 'events', label: 'Historique', icon: FileVideo },
     { id: 'alerts', label: 'Alertes', icon: Bell, badge: unreadAlerts },
     { id: 'reports', label: 'Rapports', icon: FileText },
     ...(showOrganisation ? [
       { id: 'organisation', label: 'Organisation', icon: Building2 },
-      { id: 'configAlerte', label: 'Config Alarme', icon: Router },
+      { id: 'configAlerte', label: 'Boîtiers d\'alarme', icon: Router },
     ] : []),
   ];
 
   return (
-    <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
-      <div className="sidebar-top">
-        {/* CENTERED & ENLARGED ORIGINAL PREVIA LOGO */}
-        <div 
-          className="sidebar-logo"
-          onClick={() => onSelectTab('dashboard')}
-          title="PREVIA Operations Center"
-          style={{ 
-            cursor: 'pointer', 
-            marginBottom: '32px', 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center',
-            width: '100%' 
-          }}
-        >
-          <PreviaLogo size={isCollapsed ? "small" : "medium"} />
-        </div>
+    <>
+      {isMobileOpen && (
+        <div
+          className="mobile-sidebar-backdrop"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+      )}
+      <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
+        <div className="sidebar-top">
+          {/* MOBILE CLOSE BUTTON */}
+          <div className="mobile-sidebar-header">
+            <button
+              className="mobile-sidebar-close-btn"
+              onClick={onCloseMobile}
+              aria-label="Fermer le menu"
+            >
+              <X size={20} />
+            </button>
+          </div>
 
-        {/* NAVIGATION LINKS */}
-        <nav className="sidebar-nav">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentTab === item.id;
+          {/* CENTERED & ENLARGED ORIGINAL PREVIA LOGO */}
+          <div 
+            className="sidebar-logo"
+            onClick={() => {
+              onSelectTab('dashboard');
+              if (onCloseMobile) onCloseMobile();
+            }}
+            title="PREVIA Operations Center"
+            style={{ 
+              cursor: 'pointer', 
+              marginBottom: '32px', 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center',
+              width: '100%' 
+            }}
+          >
+            <PreviaLogo size={isCollapsed ? "small" : "medium"} />
+          </div>
 
-            return (
-              <button
-                key={item.id}
-                className={`nav-item ${isActive ? 'active' : ''}`}
-                onClick={() => onSelectTab(item.id)}
-                title={item.label}
-              >
-                <Icon className="nav-icon" size={19} strokeWidth={isActive ? 2.4 : 1.8} />
-                {!isCollapsed && (
-                  <>
-                    <span className="nav-label">{item.label}</span>
-                    {item.badge && item.badge > 0 && !isActive && (
-                      <span className="nav-badge">{item.badge}</span>
-                    )}
-                  </>
-                )}
-              </button>
-            );
-          })}
-        </nav>
+          {/* NAVIGATION LINKS */}
+          <nav className="sidebar-nav">
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentTab === item.id;
+
+              return (
+                <button
+                  key={item.id}
+                  className={`nav-item ${isActive ? 'active' : ''}`}
+                  onClick={() => {
+                    onSelectTab(item.id);
+                    if (onCloseMobile) onCloseMobile();
+                  }}
+                  title={item.label}
+                  aria-label={item.label}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <Icon className="nav-icon" size={19} strokeWidth={isActive ? 2.4 : 1.8} aria-hidden="true" />
+                  {!isCollapsed && (
+                    <>
+                      <span className="nav-label">{item.label}</span>
+                      {item.badge && item.badge > 0 && !isActive && (
+                        <span className="nav-badge" aria-label={`${item.badge} notifications non lues`}>{item.badge}</span>
+                      )}
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
 
         {/* Licence de cette installation (voir Infrastructure/licence.py
             côté backend, LicenceDisabledScreen dans admin.jsx) -- demandée
@@ -135,6 +161,7 @@ export function Sidebar({
         </svg>
       </div>
     </aside>
+    </>
   );
 }
 

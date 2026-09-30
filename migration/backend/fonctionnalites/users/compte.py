@@ -107,10 +107,20 @@ def creer_utilisateur(
     if trouver_par_email(email) is not None:
         raise ValueError(f"Un compte existe déjà avec l'email {email}")
 
+    nom_str = nom.strip()
+    prenom_str = prenom.strip()
+    nom_complet = f"{prenom_str} {nom_str}".lower()
+
+    # Empêcher les doublons d'admins ou d'utilisateurs avec le même nom complet
+    for existant in lister_utilisateurs():
+        e_nom = f"{existant.get('prenom', '')} {existant.get('nom', '')}".strip().lower()
+        if e_nom == nom_complet:
+            raise ValueError(f"Un compte pour '{prenom_str} {nom_str}' existe déjà.")
+
     utilisateur = {
         "id": uuid.uuid4().hex,
-        "nom": nom.strip(),
-        "prenom": prenom.strip(),
+        "nom": nom_str,
+        "prenom": prenom_str,
         "email": email,
         "role": role,
         "est_par_defaut": est_par_defaut,

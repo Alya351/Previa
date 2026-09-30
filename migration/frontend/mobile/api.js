@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import Zeroconf from 'react-native-zeroconf';
 
 // Connexion au vrai backend PREVIA — voir migration/backend/fonctionnalites/main/main.py.
 //
@@ -38,10 +37,17 @@ function detecterAdresseServeur() {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     return window.location.hostname;
   }
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (!hostUri) return null;
-  const hote = hostUri.split(':')[0];
-  return hote || null;
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    Constants.manifest2?.extra?.expoClient?.hostUri ||
+    (Constants.linkingUri ? Constants.linkingUri.replace(/^exp:\/\//, '').replace(/^http:\/\//, '') : null) ||
+    (Constants.experienceUrl ? Constants.experienceUrl.replace(/^exp:\/\//, '').replace(/^http:\/\//, '') : null);
+
+  if (hostUri) {
+    const hote = hostUri.split(':')[0];
+    if (hote) return hote;
+  }
+  return '192.168.1.101';
 }
 
 const ADRESSE_SERVEUR = detecterAdresseServeur();
@@ -55,21 +61,29 @@ const ADRESSE_SERVEUR = detecterAdresseServeur();
 // de façon bloquante ici — le tout premier appel échoue simplement le
 // temps que la découverte aboutisse, puis les tentatives suivantes
 // (polling toutes les 1-5s selon l'endroit) passent normalement.
-export let API_BASE = ADRESSE_SERVEUR ? `http://${ADRESSE_SERVEUR}:8080` : null;
+// URL du tunnel Cloud HTTPS sécurisé de secours (Bascule automatique en 4G/5G)
+const URL_TUNNEL_CLOUD_SECOURS = 'https://api-previa.ngrok-free.app';
 
-// Découverte mDNS (voir docker/mdns_previa.py) : Android ne résout pas
-// `.local` tout seul dans une requête réseau classique (contrairement à
-// iOS/macOS/Linux, qui le font nativement) — il faut passer par une
-// vraie recherche active (NsdManager, via react-native-zeroconf) pour
-// obtenir l'IP résolue, puis l'utiliser comme une IP normale ensuite.
-function decouvrirParMdns(delaiMs = 6000) {
+export let API_BASE = ADRESSE_SERVEUR ? `http://${ADRESSE_SERVEUR}:8080` : null;
+let modeSecoursActif = false;
+
+function decouvrirParMdns(delaiMs = 4000) {
+  if (Platform.OS === 'web') return Promise.resolve(null);
   return new Promise((resolve) => {
     let fini = false;
-    const zeroconf = new Zeroconf();
+    let zeroconf;
+    try {
+      const ZeroconfModule = require('react-native-zeroconf');
+      const Zeroconf = ZeroconfModule.default || ZeroconfModule;
+      zeroconf = new Zeroconf();
+    } catch (e) {
+      resolve(null);
+      return;
+    }
     const terminer = (valeur) => {
       if (fini) return;
       fini = true;
-      try { zeroconf.stop(); } catch (e) { /* pas grave */ }
+      try { zeroconf?.stop?.(); } catch (e) { /* pas grave */ }
       resolve(valeur);
     };
     zeroconf.on('resolved', (service) => {
@@ -88,17 +102,6 @@ function decouvrirParMdns(delaiMs = 6000) {
   });
 }
 
-// AVANT : la découverte n'était lancée qu'UNE SEULE FOIS, ici, au tout
-// premier chargement du bundle JS — si elle échouait (Wi-Fi pas encore
-// pleinement associé au lancement de l'app, sonde multicast trop lente
-// à démarrer, etc.), API_BASE restait `null` pour TOUJOURS : aucun appel
-// suivant ne retentait quoi que ce soit, donc retaper "Se connecter"
-// autant de fois qu'on veut redonnait exactement la même erreur, même
-// une fois bien sur le même réseau. `assurerAdresseServeur()` reprend
-// cette même recherche mais la relance à CHAQUE appel API tant qu'elle
-// n'a pas abouti (avec un verrou `decouverteEnCours` pour ne jamais
-// lancer deux scans mDNS en parallèle) — donc un simple nouvel appui sur
-// "Se connecter" redonne une vraie nouvelle chance.
 let decouverteEnCours = null;
 
 async function assurerAdresseServeur() {
@@ -109,14 +112,18 @@ async function assurerAdresseServeur() {
     });
   }
   const trouve = await decouverteEnCours;
-  if (trouve) API_BASE = trouve;
+  if (trouve) {
+    API_BASE = trouve;
+    modeSecoursActif = false;
+  } else if (!API_BASE) {
+    // Si mDNS et l'IP locale sont injoignables (Agent en 4G/5G à l'extérieur),
+    // bascule automatique transparente vers le tunnel Cloud HTTPS
+    API_BASE = URL_TUNNEL_CLOUD_SECOURS;
+    modeSecoursActif = true;
+  }
   return API_BASE;
 }
 
-// Tentative de fond dès le chargement du bundle, pour que la découverte
-// ait déjà une longueur d'avance avant même que quelqu'un touche
-// l'écran de connexion — `assurerAdresseServeur()` ci-dessus reprendra
-// la main si elle n'a pas fini à temps.
 if (!API_BASE && Platform.OS !== 'web') {
   assurerAdresseServeur();
 }
@@ -124,21 +131,39 @@ if (!API_BASE && Platform.OS !== 'web') {
 async function appelApi(chemin, options = {}) {
   await assurerAdresseServeur();
   if (!API_BASE) {
-    throw new Error("Adresse du serveur introuvable. Vérifie que ton téléphone est bien sur le même Wi-Fi que le serveur PREVIA, puis réessaie.");
+    throw new Error("Serveur introuvable. Vérifiez la connexion du site.");
   }
-  const reponse = await fetch(`${API_BASE}${chemin}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!reponse.ok) {
-    let detail = `Erreur ${reponse.status}`;
-    try {
-      const corps = await reponse.json();
-      detail = corps?.detail || detail;
-    } catch (e) { /* pas de corps JSON, on garde le message générique */ }
-    throw new Error(detail);
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const reponse = await fetch(`${API_BASE}${chemin}`, {
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      ...options,
+    });
+    clearTimeout(timeoutId);
+
+    if (!reponse.ok) {
+      let detail = `Erreur ${reponse.status}`;
+      try {
+        const corps = await reponse.json();
+        detail = corps?.detail || detail;
+      } catch (e) { /* pas de corps JSON */ }
+      throw new Error(detail);
+    }
+    return reponse.json();
+  } catch (err) {
+    // Si la tentative locale échoue (ex: passage du Wi-Fi à la 4G), bascule transparente
+    if (!modeSecoursActif && URL_TUNNEL_CLOUD_SECOURS) {
+      console.warn("Échec réseau local, bascule transparente vers le Tunnel Cloud 4G/5G...");
+      API_BASE = URL_TUNNEL_CLOUD_SECOURS;
+      modeSecoursActif = true;
+      return appelApi(chemin, options);
+    }
+    throw err;
   }
-  return reponse.json();
 }
 
 // POST /utilisateurs/connexion — voir compte.authentifier() côté backend.
@@ -278,6 +303,11 @@ const TYPES_CRITIQUES = ['feu_fumee', 'intrusion_zone', 'infiltration'];
 // réellement déjà tout allumé (voir Alertes/alertes.py, activation
 // automatique) — GET /alertes ne renvoie pas encore l'état de
 // l'alarme, seulement GET /alarme/etat le fait.
+export function nettoyerNomCamera(nom) {
+  if (!nom) return 'Caméra';
+  return nom.replace(/\s*\[IP\]/gi, '').trim();
+}
+
 export function mapAlerteApi(a) {
   const critique = TYPES_CRITIQUES.includes(a.type_evenement);
   const date = a.horodatage ? new Date(a.horodatage * 1000) : new Date();
@@ -287,7 +317,7 @@ export function mapAlerteApi(a) {
     title: LABEL_TYPE_ALERTES[a.type_evenement] || a.description || 'Alerte',
     criticite: critique ? 'CRITIQUE' : 'MODÉRÉE',
     criticiteColor: critique ? '#dc2626' : '#009fe3',
-    camera: a.num || a.id_camera,
+    camera: nettoyerNomCamera(a.num || a.id_camera),
     emplacement: [a.batiment, a.piece].filter(Boolean).join(' / ') || 'Emplacement inconnu',
     time: date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
     date: date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),

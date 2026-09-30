@@ -77,42 +77,23 @@ RODEUR_PHRASE_FR = {
 # faux positifs sur quelqu'un qui s'arrête juste un instant).
 # ============================================================
 
-# Fenêtre glissante d'observation des positions récentes. Doit rester
-# PLUS LONGUE que RODEUR_DUREE_A_VERIFIER_S (plus bas) — sinon ce palier
-# ne serait jamais atteignable, les positions les plus anciennes étant
-# oubliées avant.
-RODEUR_FENETRE_S = 120.0  # 2 min (était 900.0 / 15 min)
+# REQ-CAM-04 : Seuil de rôdage/immobilité paramétrable par zone/caméra.
+# Fenêtre glissante d'observation des positions récentes.
+RODEUR_FENETRE_S = 300.0  # 5 min
 
-# Temps minimum passé dans la même petite zone, DANS cette fenêtre, pour
-# suspecter un rôdeur — pas juste quelqu'un qui traverse le cadre une
-# fois.
-RODEUR_DUREE_MIN_S = 8.0  # 8s (était 60.0)
+# Temps minimum passé dans la même petite zone pour suspecter un rôdeur (défaut : 60s).
+# Évite les fausses alertes sur des arrêts courts ou des personnes assises au bureau.
+RODEUR_DUREE_MIN_S = 60.0  # 60s (paramétrable par caméra/zone)
 
-# Rayon max autour du centre de gravité des positions récentes pour dire
-# "reste dans la même zone", en fraction de la DIAGONALE de l'image (pas
-# en pixels fixes) — reste valable quelle que soit la résolution/le
-# cadrage de la caméra, pas besoin de retoucher ce seuil si la caméra
-# change. Relevé (0.10 -> 0.20) après un test réel : un "va-et-vient" au
-# même endroit implique un peu de mouvement (marcher, se tourner) — pas
-# rester parfaitement immobile — et 0.10 rejetait à tort une présence
-# prolongée de plusieurs minutes avec un rayon mesuré de 178 à 277px
-# (trop strict pour du mouvement normal dans un coin de pièce).
+# Rayon max autour du centre de gravité des positions récentes (fraction de la diagonale)
 RODEUR_RAYON_MAX_FRACTION = 0.20
 
-# Nombre minimum d'observations distinctes dans la fenêtre avant de
-# juger — une seule image ne suffit jamais à conclure.
-RODEUR_OBSERVATIONS_MIN = 3  # était 5 — 3 reste une vraie répétition, pas un coup isolé
+# Nombre minimum d'observations distinctes dans la fenêtre avant de juger
+RODEUR_OBSERVATIONS_MIN = 3
 
-# Paliers de sévérité au-delà du seuil de confirmation — un rôdage qui
-# dure plus longtemps mérite plus d'attention, mais un rôdage QUASI SANS
-# INTERRUPTION pendant très longtemps devient au contraire suspect pour
-# une autre raison : une vraie personne bouge, sort du cadre, change de
-# posture de temps en temps — une présence parfaitement continue
-# ressemble davantage à un objet fixe mal détecté (voir la fusion
-# assistée par le modèle général, _corrobore_par_modele_general dans
-# on_voit_qui.py) qu'à un comportement humain réel.
-RODEUR_DUREE_PROLONGE_S = 20.0         # 20s (était 180.0 / 3 min) : passe en "prolongé"
-RODEUR_DUREE_A_VERIFIER_S = 60.0       # 60s (était 600.0 / 10 min) : à vérifier
+# Paliers de sévérité au-delà du seuil de confirmation
+RODEUR_DUREE_PROLONGE_S = 120.0       # 2 min : passe en "prolongé"
+RODEUR_DUREE_A_VERIFIER_S = 300.0     # 5 min : à vérifier (immobilité extrême)
 
 # Tout ce qui suit est indexé par id_camera EN PREMIER, puis par pid (ou
 # zone_id pour les détections anonymes) — voir docstring du module.
@@ -142,21 +123,37 @@ def observer_position(id_camera: str, pid: str, centroid: tuple, now: float) -> 
         dq.popleft()
 
 
+from fonctionnalites.Infrastructure.local_store import db
+
+
+def est_collaborateur_autorise(pid: str) -> bool:
+    if not pid:
+        return False
+    try:
+        personnel_db = db.reference("personnel").get() or {}
+        personnel_liste = list(personnel_db.values()) if isinstance(personnel_db, dict) else (personnel_db if isinstance(personnel_db, list) else [])
+        for emp in personnel_liste:
+            if emp and (emp.get("id") == pid or emp.get("face_id") == pid or str(emp.get("id")) in str(pid)):
+                if emp.get("statut") != "revoque":
+                    return True
+    except Exception:
+        pass
+    return False
+
+
 def evalue_rodeur(id_camera: str, pid: str, now: float, diagonale_frame: float, assis: bool = False) -> dict:
     """Dit si `pid` a l'air de rôder SUR CETTE CAMÉRA : reste dans une
     petite zone depuis un moment, revu plusieurs fois distinctes dans la
-    fenêtre récente. `diagonale_frame` : diagonale en pixels de l'image
-    analysée, pour exprimer la zone en fraction de l'image plutôt qu'en
-    pixels fixes (portable quelle que soit la résolution de la caméra).
+    fenêtre récente."""
+    if est_collaborateur_autorise(pid):
+        return {
+            "rodeur": False,
+            "statut": "collaborateur_autorise",
+            "depuis_secondes": 0.0,
+            "zone_rayon_px": 0.0,
+            "avis_ia": None,
+        }
 
-    `assis` : posture confirmée (voir qui_fait_quoi.py) — une personne
-    ASSISE qui reste au même endroit longtemps est très probablement en
-    train d'attendre normalement (arrêt de bus, salle d'attente, bureau),
-    pas en train de rôder. Sans cette distinction, les deux comportements
-    sont indiscernables par la seule position (bug constaté : quelqu'un
-    simplement assis à attendre était signalé comme rôdeur). La position
-    continue d'être suivie normalement — seule l'interprétation finale
-    change."""
     dq = _positions.get(id_camera, {}).get(pid)
     if not dq or len(dq) < RODEUR_OBSERVATIONS_MIN:
         return {"rodeur": False, "statut": "pas_assez_d_observations", "vu": len(dq) if dq else 0}

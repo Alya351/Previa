@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, User, LogOut, Radio } from 'lucide-react';
+import { Bell, User, LogOut, Radio, Trash2, X } from 'lucide-react';
+import { supprimerAlerte, supprimerToutesAlertes } from '../api.js';
 
 // `notifications` et `utilisateur` : branchés sur les vraies données
 // (GET /alertes et le compte connecté, voir sessionStorage dans
 // pages/admin.jsx) — remplace les 3 notifications et le profil "OP"
 // fictifs d'origine.
-export function HeaderDecor({ onNavigate, onLogout, unreadCount = 3, notifications = [], utilisateur }) {
+export function HeaderDecor({ onNavigate, onLogout, onRefresh, unreadCount = 3, notifications = [], utilisateur }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [hasUnread, setHasUnread] = useState(true);
   const [showProfile, setShowProfile] = useState(false);
@@ -30,6 +31,26 @@ export function HeaderDecor({ onNavigate, onLogout, unreadCount = 3, notificatio
     setShowNotifications(false);
     if (onNavigate) {
       onNavigate('alerts');
+    }
+  };
+
+  const handleDeleteNotification = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await supprimerAlerte(id);
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleClearAllNotifications = async (e) => {
+    e.stopPropagation();
+    try {
+      await supprimerToutesAlertes();
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -94,50 +115,90 @@ export function HeaderDecor({ onNavigate, onLogout, unreadCount = 3, notificatio
             aria-label="Notifications"
           >
             <Bell size={21} strokeWidth={2.4} fill="#ffffff" />
-            {hasUnread && (
+            {hasUnread && notifications.length > 0 && (
               <span className="wave-badge-dot" />
             )}
           </button>
 
           {showNotifications && (
-            <div className="wave-dropdown-panel" style={{ width: '320px' }}>
+            <div className="wave-dropdown-panel" style={{ width: '340px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--ink-primary)' }}>
-                  Alertes de Sécurité ({notifications.length})
+                  Notifications ({notifications.length})
                 </span>
-                <button 
-                  onClick={handleGoToAlerts}
-                  style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                  Voir tout
-                </button>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  {notifications.length > 0 && (
+                    <button 
+                      onClick={handleClearAllNotifications}
+                      style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
+                      title="Effacer toutes les notifications"
+                    >
+                      <Trash2 size={12} />
+                      Effacer
+                    </button>
+                  )}
+                  <button 
+                    onClick={handleGoToAlerts}
+                    style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Voir tout
+                  </button>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {notifications.map((n) => (
-                  <div 
-                    key={n.id}
-                    onClick={handleGoToAlerts}
-                    style={{
-                      background: '#f8fafc',
-                      padding: '10px 12px',
-                      borderRadius: '10px',
-                      cursor: 'pointer',
-                      borderLeft: `4px solid ${n.type === 'critical' ? '#ef4444' : (n.type === 'warning' ? '#f59e0b' : '#0284c7')}`,
-                      transition: 'background 0.15s ease'
-                    }}
-                  >
-                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink-primary)' }}>{n.title}</div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--ink-muted)', marginTop: '2px', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>{n.cam}</span>
-                      <span>{n.time}</span>
-                    </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '360px', overflowY: 'auto' }}>
+                {notifications.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--ink-muted)', fontSize: '0.82rem' }}>
+                    Aucune notification active
                   </div>
-                ))}
+                ) : (
+                  notifications.map((n) => (
+                    <div 
+                      key={n.id}
+                      onClick={handleGoToAlerts}
+                      style={{
+                        background: '#f8fafc',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        borderLeft: `4px solid ${n.type === 'critical' ? '#ef4444' : (n.type === 'warning' ? '#f59e0b' : '#0284c7')}`,
+                        transition: 'background 0.15s ease',
+                        position: 'relative'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink-primary)', flex: 1 }}>{n.title}</div>
+                        <button
+                          onClick={(e) => handleDeleteNotification(e, n.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#94a3b8',
+                            cursor: 'pointer',
+                            padding: '2px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            borderRadius: '4px'
+                          }}
+                          title="Supprimer cette notification"
+                          onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
+                          onMouseLeave={(e) => e.currentTarget.style.color = '#94a3b8'}
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--ink-muted)', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{n.cam}</span>
+                        <span>{n.time}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
         </div>
+
 
         {/* USER PROFILE DROPDOWN */}
         <div ref={profileRef} style={{ position: 'relative' }}>

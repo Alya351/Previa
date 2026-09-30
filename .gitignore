@@ -1,4 +1,5 @@
-# Python
+models/
+scratch/
 __pycache__/
 *.pyc
 *.pt

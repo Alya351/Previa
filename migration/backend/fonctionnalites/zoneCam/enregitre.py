@@ -25,9 +25,16 @@ def _chemin(id_camera: str) -> Path:
     return ZONES_DIR / f"{id_camera}.json"
 
 
-def enregistrer_zone(id_camera: str, points: list[dict]) -> dict:
+def enregistrer_zone(
+    id_camera: str,
+    points: list[dict],
+    nom_zone: str | None = None,
+    plage_horaire: dict | None = None,
+) -> dict:
     """Remplace (ou crée) la zone de `id_camera` par `points` — une
     liste d'au moins 3 points `{"x": .., "y": ..}`, chacun entre 0 et 1.
+    Accepte également un nom de zone (`nom_zone`) et une plage horaire
+    d'activation (`plage_horaire` : {"active_24h": bool, "heure_debut": "HH:MM", "heure_fin": "HH:MM", "jours_actifs": [0..6]}).
     Lève ValueError si `points` ne forme pas un polygone valide."""
     if not isinstance(points, list) or len(points) < 3:
         raise ValueError("Une zone a besoin d'au moins 3 points pour former un polygone")
@@ -38,9 +45,28 @@ def enregistrer_zone(id_camera: str, points: list[dict]) -> dict:
         if not (0 <= x <= 1 and 0 <= y <= 1):
             raise ValueError("Les coordonnées x et y doivent être comprises entre 0 et 1")
 
+    # Plage horaire par défaut (24h/24, tous les jours) si non spécifiée
+    plage_valide = {
+        "active_24h": True,
+        "heure_debut": "00:00",
+        "heure_fin": "23:59",
+        "jours_actifs": [0, 1, 2, 3, 4, 5, 6],
+    }
+    if isinstance(plage_horaire, dict):
+        plage_valide["active_24h"] = bool(plage_horaire.get("active_24h", True))
+        plage_valide["heure_debut"] = str(plage_horaire.get("heure_debut", "20:00"))
+        plage_valide["heure_fin"] = str(plage_horaire.get("heure_fin", "06:00"))
+        jours = plage_horaire.get("jours_actifs")
+        if isinstance(jours, list) and len(jours) > 0:
+            plage_valide["jours_actifs"] = [int(j) for j in jours if 0 <= int(j) <= 6]
+        else:
+            plage_valide["jours_actifs"] = [0, 1, 2, 3, 4, 5, 6]
+
     zone = {
         "id_camera": id_camera,
+        "nom_zone": str(nom_zone).strip() if nom_zone else "Zone Surveillée",
         "points": [{"x": p["x"], "y": p["y"]} for p in points],
+        "plage_horaire": plage_valide,
         "enregistre_le": time.time(),
     }
     ZONES_DIR.mkdir(parents=True, exist_ok=True)

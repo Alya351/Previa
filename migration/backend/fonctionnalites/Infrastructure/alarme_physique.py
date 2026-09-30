@@ -17,24 +17,50 @@ comportement sûr par défaut (mieux vaut redémarrer "éteint" que
 redémarrer avec une sirène qui recommence à sonner toute seule sans
 qu'aucune alerte réelle ne soit en cours)."""
 
+import threading
+
 _etat = {"lampe": False, "sirene": False}
+_timer_extinction = None
+DUREE_MAX_SIRENE_SECONDES = 120  # 2 minutes maximum
 
 
 def etat() -> dict:
     return dict(_etat)
 
 
+def _extinction_automatique():
+    global _timer_extinction
+    _etat["lampe"] = False
+    _etat["sirene"] = False
+    _timer_extinction = None
+
+
 def activer() -> dict:
-    """Appelé quand une alerte CRITIQUE se déclenche (voir
-    Alertes/alertes.py, enregistrer_alerte) — allume lampe ET sirène."""
+    """Appelé quand une alerte CRITIQUE se déclenche.
+    Allume lampe ET sirène et lance un minuteur d'extinction automatique à 2 min.
+    """
+    global _timer_extinction
     _etat["lampe"] = True
     _etat["sirene"] = True
+
+    if _timer_extinction is not None:
+        _timer_extinction.cancel()
+
+    _timer_extinction = threading.Timer(DUREE_MAX_SIRENE_SECONDES, _extinction_automatique)
+    _timer_extinction.daemon = True
+    _timer_extinction.start()
+
     return etat()
 
 
 def arreter() -> dict:
-    """"Arrêter l'alerte" — voir POST /alarme/arreter dans main.py,
-    appelé par l'app mobile (handleStopAlert)."""
+    """"Arrêter l'alerte" manuellement depuis le web ou le mobile."""
+    global _timer_extinction
+    if _timer_extinction is not None:
+        _timer_extinction.cancel()
+        _timer_extinction = None
+
     _etat["lampe"] = False
     _etat["sirene"] = False
     return etat()
+

@@ -49,10 +49,7 @@ IPAddress AP_SUBNET(255, 255, 255, 0);
 #define SIRENE_PIN            4
 #define POLL_INTERVAL_MS      3000
 #define CLIGNOTEMENT_LAMPE_MS 400  // vitesse du clignotement en danger (~1,25 Hz)
-// Par reseau essaye (raccourci par rapport a avant : comme on peut en
-// essayer PLUSIEURS a la suite, un delai plus long par reseau ferait
-// trainer le demarrage si le premier de la liste est hors de portee).
-#define WIFI_CONNECT_TIMEOUT_MS 8000
+#define WIFI_CONNECT_TIMEOUT_MS 20000
 #define MAX_RESEAUX             5
 
 WebServer configServer(80);
@@ -144,13 +141,26 @@ bool supprimerReseau(const String& ssid) {
 // Mode configuration : point d'acces + page web (choix du WiFi + mdp)
 // ---------------------------------------------------------------------------
 String scanNetworksOptionsHtml() {
-  int n = WiFi.scanNetworks();
+  // Scan materiel en direct sur les canaux 2.4 GHz
+  WiFi.scanDelete();
+  int n = WiFi.scanNetworks(false, false, false, 300, 0);
+  if (n <= 0) {
+    delay(200);
+    n = WiFi.scanNetworks(false, false, false, 300, 0);
+  }
   String options = "";
+  String vus = "|";
+
   for (int i = 0; i < n; i++) {
     String ssid = WiFi.SSID(i);
-    options += "<option value='" + ssid + "'>" + ssid + " (" + String(WiFi.RSSI(i)) + " dBm)</option>";
+    if (ssid.length() == 0 || vus.indexOf("|" + ssid + "|") != -1) continue;
+    vus += ssid + "|";
+    options += "<option value='" + ssid + "'>" + ssid + "</option>";
   }
-  if (n == 0) options = "<option value=''>(aucun reseau trouve, rafraichis)</option>";
+
+  if (options.length() == 0) {
+    options = "<option value='' disabled selected>(Aucun réseau détecté, actualisez)</option>";
+  }
   return options;
 }
 
@@ -193,14 +203,16 @@ const char PAGE_STYLE[] PROGMEM = R"CSS(
   .champ{margin-bottom:16px}
   select,input[type=password]{
     width:100%;padding:12px 14px;font-size:0.95rem;color:#0f172a;
-    background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;outline:none;
+    background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;outline:none;
+    display:block;
   }
+  select{cursor:pointer;background:#f1f5f9;font-weight:600}
   select:focus,input:focus{border-color:#0284c7;background:#ffffff}
   button{
     width:100%;padding:13px;margin-top:8px;font-size:0.95rem;font-weight:700;
     color:#ffffff;background:#0284c7;border:none;border-radius:999px;cursor:pointer;
   }
-  button:active{background:#0369a1}
+  button:hover{background:#0369a1}
   .lien-refresh{display:block;text-align:center;margin-top:16px;font-size:0.8rem;
     color:#0284c7;font-weight:600;text-decoration:none}
   .icone-ok{width:56px;height:56px;border-radius:50%;background:#dcfce7;
@@ -221,17 +233,18 @@ void handleConfigRoot() {
     "' alt='Previa'><span>Previa</span></div>"
     "<div class='sous-titre'>Surveillance intelligente</div>"
     "<h1>Connecter cette alarme au Wi-Fi</h1>"
-    "<p class='intro'>Choisis ton reseau et son mot de passe — l'appareil redemarre et rejoint automatiquement Previa une fois connecte.</p>"
+    "<p class='intro'>Choisissez votre réseau Wi-Fi dans la liste :</p>"
     "<form method='POST' action='/save'>"
-    "<div class='champ'><label>Reseau Wi-Fi</label>"
+    "<div class='champ'><label>Réseau Wi-Fi</label>"
     "<select name='ssid' required>"
+    "<option value='' disabled selected>-- Sélectionnez votre réseau Wi-Fi --</option>"
     + scanNetworksOptionsHtml() +
     "</select></div>"
     "<div class='champ'><label>Mot de passe</label>"
-    "<input type='password' name='password' placeholder='••••••••'></div>"
+    "<input type='password' name='password' placeholder='••••••••' required></div>"
     "<button type='submit'>Connecter</button>"
     "</form>"
-    "<a class='lien-refresh' href='/'>Rafraichir la liste des reseaux</a>"
+    "<a class='lien-refresh' href='/'>↻ Actualiser la liste des réseaux</a>"
     "</div></body></html>";
   configServer.send(200, "text/html", html);
 }
@@ -239,7 +252,9 @@ void handleConfigRoot() {
 void handleConfigSave() {
   String ssid = configServer.arg("ssid");
   String password = configServer.arg("password");
-  ajouterReseau(ssid, password);  // AJOUTE a la liste, n'efface pas les autres
+  if (ssid.length() > 0) {
+    ajouterReseau(ssid, password);  // AJOUTE a la liste, n'efface pas les autres
+  }
   String html = String(
     "<!DOCTYPE html><html><head><meta charset='utf-8'>"
     "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -261,10 +276,14 @@ void startConfigMode() {
   String apSsid = "PreviaAlarme-" + idAppareil();
   Serial.println("=== Mode configuration (point d'acces) ===");
   WiFi.mode(WIFI_AP_STA);  // AP_STA : permet de scanner les reseaux tout en servant l'AP
+  WiFi.disconnect();
+  delay(100);
   WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET);
   WiFi.softAP(apSsid.c_str(), AP_PASSWORD);
   Serial.printf("Connecte-toi au WiFi '%s' (mdp '%s') puis va sur http://%s\n",
                 apSsid.c_str(), AP_PASSWORD, AP_IP.toString().c_str());
+
+  WiFi.scanNetworks(true);  // Scan asynchrone immediat en arriere-plan
 
   configServer.on("/", handleConfigRoot);
   configServer.on("/save", HTTP_POST, handleConfigSave);
@@ -272,6 +291,7 @@ void startConfigMode() {
 
   while (true) {
     configServer.handleClient();
+    delay(2);
   }
 }
 
@@ -285,6 +305,9 @@ bool connecterReseauParIndex(int idx) {
   Serial.printf("Tentative de connexion a '%s' (reseau enregistre %d/%d)...\n",
                 ssid.c_str(), idx + 1, nombreReseaux());
 
+  WiFi.softAPdisconnect(true);
+  WiFi.disconnect(true);
+  delay(150);
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid.c_str(), password.c_str());
 
@@ -294,7 +317,7 @@ bool connecterReseauParIndex(int idx) {
       Serial.println("  -> echec (reseau introuvable ou mot de passe refuse).");
       return false;
     }
-    delay(300);
+    delay(400);
     Serial.print(".");
   }
   Serial.println();

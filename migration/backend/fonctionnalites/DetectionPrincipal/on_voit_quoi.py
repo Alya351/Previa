@@ -38,11 +38,18 @@ from pathlib import Path
 
 import numpy as np
 from fonctionnalites.Infrastructure import rapport_cam
-from ultralytics import YOLO
+try:
+    from ultralytics import YOLO
+except Exception as _exc:
+    print(f"[on_voit_quoi] ultralytics non chargé ({_exc})", flush=True)
+    YOLO = None
 
 from fonctionnalites.ComportementsSupects import abandonne, feu_fume
 
-MODELS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "models"
+_racine = Path(__file__).resolve().parents[4]
+MODELS_DIR = _racine / "models"
+if not MODELS_DIR.exists():
+    MODELS_DIR = Path(__file__).resolve().parents[3] / "models"
 
 COCO_FR = {
     "bicycle": "vélo", "car": "voiture", "motorcycle": "moto", "airplane": "avion",
@@ -74,7 +81,7 @@ COCO_FR = {
     "toothbrush": "brosse à dents",
 }
 
-CONF = 0.5
+CONF = 0.35
 
 # Si une instance suivie n'est plus revue pendant ce délai, ByteTrack lui-
 # même l'a perdue (son propre buffer interne l'oublie) : elle passe dans
@@ -111,18 +118,31 @@ _track_state: dict[str, dict] = {}
 _track_perdus: dict[str, dict] = {}
 
 
-def _get_model(id_camera: str) -> YOLO:
+def _get_model(id_camera: str):
+    if YOLO is None:
+        return None
     if id_camera not in _models:
-        print(f"[on_voit_quoi] chargement du modèle xlarge (segmentation) pour la caméra {id_camera}...", flush=True)
-        # Variante -seg (masques de segmentation), pas juste détection —
-        # même classes/précision (80 classes COCO, mesuré identique),
-        # +0.18s/image mesuré (0.30s -> 0.48s), négligeable comparé aux
-        # ~8s du pipeline /qui. Sert à donner aux objets suivis ici
-        # (vélo, sac, valise...) un centre de MASQUE plutôt que de boîte
-        # englobante pour les calculs de proximité (rôdeur/abandon/vol).
-        _models[id_camera] = YOLO(MODELS_DIR / "yolo11x-seg.pt")
-        print(f"[on_voit_quoi] modèle prêt (caméra {id_camera})", flush=True)
-    return _models[id_camera]
+        print(f"[on_voit_quoi] chargement du modèle pour la caméra {id_camera}...", flush=True)
+        candidats = [
+            MODELS_DIR / "yolo11n-seg.pt",
+            MODELS_DIR / "yolo11n.pt",
+            MODELS_DIR / "yolov8n.pt",
+            MODELS_DIR / "yolo11x.pt",
+            MODELS_DIR / "person-seg-yolo12l.pt",
+            MODELS_DIR / "yolo11x-pose.pt",
+            Path("yolo11n-pose.pt"),
+        ]
+        chemin_choisi = next((c for c in candidats if c.exists()), None)
+        if chemin_choisi and chemin_choisi.exists():
+            try:
+                _models[id_camera] = YOLO(str(chemin_choisi))
+                print(f"[on_voit_quoi] modèle prêt ({chemin_choisi.name} - caméra {id_camera})", flush=True)
+            except Exception as e:
+                print(f"[on_voit_quoi] modèle ignoré : {e}", flush=True)
+                return None
+        else:
+            return None
+    return _models.get(id_camera)
 
 
 def _box_centroid(box) -> tuple:
@@ -200,9 +220,7 @@ def _suivre_instances(id_camera: str, result, now: float, diagonale_frame: float
 
     vus_maintenant = {}
     for i, box in enumerate(result.boxes):
-        if box.id is None:
-            continue  # le tracker n'a pas pu assigner d'identité cet appel
-        track_id = int(box.id[0])
+        track_id = int(box.id[0]) if (getattr(box, "id", None) is not None and box.id is not None) else (i + 1)
         label = result.names[int(box.cls[0])]
         centroid = _centroid_instance(result, i, box)
 
@@ -223,19 +241,22 @@ def _suivre_instances(id_camera: str, result, now: float, diagonale_frame: float
 
 
 def analyser(id_camera: str, frame) -> dict:
-    """Détecte + suit avec le modèle xlarge DE CETTE CAMÉRA sur CETTE
-    image, compare avec la mémoire accumulée depuis les appels précédents
-    DE CETTE MÊME CAMÉRA, et écrit le résultat dans son propre rapport
-    (voir rapport_cam.py) — jamais dans un état partagé entre caméras."""
+    """Détecte + suit avec le modèle IA sur CETTE image DE CETTE CAMÉRA."""
     model = _get_model(id_camera)
+    if model is None:
+        return {"objets": {}, "alertes_feu_fumee": None}
     now = time.time()
     diagonale_frame = (frame.shape[0] ** 2 + frame.shape[1] ** 2) ** 0.5
 
-    result = model.track(frame, persist=True, conf=CONF, verbose=False)[0]
+    try:
+        result = model.track(frame, persist=True, conf=CONF, verbose=False)[0]
+    except Exception:
+        result = model.predict(frame, conf=CONF, verbose=False)[0]
+
     instances = _suivre_instances(id_camera, result, now, diagonale_frame)
     track_state_camera = _track_state[id_camera]
     labels = [result.names[int(box.cls[0])] for box in result.boxes]
-    print(f"[on_voit_quoi] caméra {id_camera} — xlarge voit : {labels}", flush=True)
+    print(f"[on_voit_quoi] caméra {id_camera} — détections : {labels}", flush=True)
 
     # Positions des personnes de CET appel — sert à savoir si un objet
     # portable (sac, valise...) a quelqu'un à proximité ou non (voir

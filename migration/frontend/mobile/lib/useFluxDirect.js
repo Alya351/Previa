@@ -27,7 +27,7 @@ export function useFluxDirect(idCamera) {
 
   useEffect(() => {
     setStream(null);
-    if (!idCamera || !API_BASE) return;
+    if (!idCamera || !API_BASE || typeof RTCPeerConnection !== 'function') return;
 
     let ws;
     try {

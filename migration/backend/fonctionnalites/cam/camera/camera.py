@@ -49,7 +49,7 @@ def trouver_par_id(id_camera: str) -> dict | None:
         return json.load(f)
 
 
-def creer_camera(num: str, piece_id: str, est_entree: bool = False) -> dict:
+def creer_camera(num: str, piece_id: str, est_entree: bool = False, url_flux: str | None = None) -> dict:
     """Lève ValueError si `piece_id` ne correspond à aucune pièce
     existante."""
     if piece.trouver_par_id(piece_id) is None:
@@ -60,6 +60,7 @@ def creer_camera(num: str, piece_id: str, est_entree: bool = False) -> dict:
         "num": num.strip() if isinstance(num, str) else num,
         "piece_id": piece_id,
         "est_entree": bool(est_entree),
+        "url_flux": url_flux.strip() if url_flux else None,
         "cree_le": time.time(),
     }
     CAMERAS_DIR.mkdir(parents=True, exist_ok=True)
@@ -69,7 +70,7 @@ def creer_camera(num: str, piece_id: str, est_entree: bool = False) -> dict:
 
 
 def modifier_camera(
-    id_camera: str, num: str | None = None, piece_id: str | None = None, est_entree: bool | None = None,
+    id_camera: str, num: str | None = None, piece_id: str | None = None, est_entree: bool | None = None, url_flux: str | None = None,
 ) -> dict | None:
     """Lève ValueError si la nouvelle `piece_id` ne correspond à aucune
     pièce existante."""
@@ -84,6 +85,8 @@ def modifier_camera(
         c["num"] = num.strip() if isinstance(num, str) else num
     if est_entree is not None:
         c["est_entree"] = bool(est_entree)
+    if url_flux is not None:
+        c["url_flux"] = url_flux.strip() if url_flux else None
     with open(_chemin(id_camera), "w", encoding="utf-8") as f:
         json.dump(c, f, ensure_ascii=False, indent=2)
     return c

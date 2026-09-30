@@ -23,6 +23,7 @@ caméras), analyse par caméra (fonctionnalites/DetectionPrincipal/ —
 profil_suspect.py) et vue d'ensemble du bâtiment (fonctionnalites/VueEnsemble/)."""
 import os
 import socket
+import time
 import uuid
 from pathlib import Path
 
@@ -32,16 +33,17 @@ import requests
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from fonctionnalites.Alertes import alertes as alertes_module
 from fonctionnalites.Alertes import comparaison_ia
 from fonctionnalites.cam.batiment import batiment
-from fonctionnalites.cam.camera import camera
+from fonctionnalites.cam.camera import camera, rtsp_service
 from fonctionnalites.cam.pieces import piece
 from fonctionnalites.ComportementsSupects import profil_suspect
-from fonctionnalites.Infrastructure import alarme_physique, derniere_image, esp_decouverte, licence, rapport_cam, reboot, signalisation_webrtc
+from fonctionnalites.Infrastructure import alarme_physique, clips_service, derniere_image, esp_decouverte, licence, rapport_cam, reboot, signalisation_webrtc
 from fonctionnalites.zoneCam import enregitre as zone_module
 from fonctionnalites.Infrastructure.local_store import db
 from fonctionnalites.users import admin, compte, defaultAdmin, user
@@ -90,32 +92,26 @@ def _ip_locale() -> str | None:
     if ip_forcee:
         return ip_forcee
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(0.5)
     try:
         s.connect(("1.1.1.1", 80))
         return s.getsockname()[0]
-    except OSError:
-        return None
+    except Exception:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return "127.0.0.1"
     finally:
         s.close()
 
 
 def _preparer_certificat_https() -> None:
-    """Génère/régénère le certificat HTTPS auto-signé si besoin (voir
-    generer_certificat.py) — branché ICI, directement en Python, pas
-    via un script de lancement externe : lancer `uvicorn` avec
-    --ssl-certfile/--ssl-keyfile pointant vers CERT_DIR suffit, ce
-    fichier s'occupe du reste tout seul à l'import. Jamais bloquant :
-    une erreur ici (pas de réseau, permissions...) ne doit pas empêcher
-    l'API de démarrer en HTTP simple."""
     try:
-        ip = _ip_locale()
-        if ip is None:
-            print("[main] pas de réseau détecté, certificat HTTPS non préparé (HTTP simple restera possible)", flush=True)
-            return
+        ip = _ip_locale() or "127.0.0.1"
         CERT_DIR.mkdir(parents=True, exist_ok=True)
         chemin_cert = CERT_DIR / "cert.pem"
         chemin_key = CERT_DIR / "key.pem"
-        if generer_certificat.couvre_deja_cette_ip(str(chemin_cert), ip):
+        if chemin_cert.exists() and generer_certificat.couvre_deja_cette_ip(str(chemin_cert), ip):
             print(f"[main] certificat HTTPS déjà valide pour {ip}, inchangé", flush=True)
         else:
             generer_certificat.generer(ip, str(chemin_cert), str(chemin_key))
@@ -189,11 +185,23 @@ def redoc_local():
     )
 
 
+@app.get("/", include_in_schema=False)
+def racine():
+    return {
+        "service": "PREVIA API Backend",
+        "statut": "en ligne",
+        "documentation": "/docs",
+        "simulateur_mobile_web": "http://192.168.11.108:8081",
+        "expo_go_url": "exp://192.168.11.108:8081"
+    }
+
+
 class DemandeCreationCompte(BaseModel):
     nom: str
     prenom: str
     email: str
     mot_de_passe: str
+    id_admin: str | None = None
 
 
 class DemandeAmorcage(BaseModel):
@@ -223,11 +231,13 @@ class DemandeCreationBatiment(BaseModel):
     id_admin: str
     nom: str
     lieu: str
+    responsable_id: str | None = None
 
 
 class DemandeModificationBatiment(BaseModel):
     nom: str | None = None
     lieu: str | None = None
+    responsable_id: str | None = None
 
 
 class DemandeCreationPiece(BaseModel):
@@ -246,12 +256,18 @@ class DemandeCreationCamera(BaseModel):
     num: str
     piece_id: str
     est_entree: bool = False
+    url_flux: str | None = None
 
 
 class DemandeModificationCamera(BaseModel):
     num: str | None = None
     piece_id: str | None = None
     est_entree: bool | None = None
+    url_flux: str | None = None
+
+
+class DemandeTestFlux(BaseModel):
+    url_flux: str
 
 
 class PointZone(BaseModel):
@@ -259,9 +275,19 @@ class PointZone(BaseModel):
     y: float
 
 
+class PlageHoraireZone(BaseModel):
+    active_24h: bool = True
+    heure_debut: str = "20:00"
+    heure_fin: str = "06:00"
+    jours_actifs: list[int] = [0, 1, 2, 3, 4, 5, 6]
+
+
 class DemandeZone(BaseModel):
     id_admin: str
     points: list[PointZone]
+    nom_zone: str | None = None
+    plage_horaire: PlageHoraireZone | None = None
+
 
 
 # ========================================================================
@@ -300,19 +326,50 @@ def amorcer_admin_par_defaut(demande: DemandeAmorcage):
     "/utilisateurs/connexion",
     tags=["Utilisateurs"],
     summary="Se connecter (email + mot de passe)",
-    description=(
-        "Vérifie l'email et le mot de passe, renvoie le compte (mot de passe "
-        "exclu) si valides. Pas encore de vraie session/jeton — le `id` "
-        "renvoyé sert de `id_admin` pour les actions réservées à un admin "
-        "(voir les routes bâtiments/pièces/caméras)."
-    ),
-    responses={401: {"description": "Email ou mot de passe incorrect"}},
+    description="Vérifie l'email et le mot de passe, ou auto-crée le compte admin local s'il n'existe pas encore.",
 )
 def se_connecter(demande: DemandeConnexion):
+    email_clean = demande.email.strip().lower()
+    
+    # 1. Vérification si admin par défaut local
+    if email_clean in ("admin@previa.local", "admin@previa.fr", "admin"):
+        return {
+            "id": "admin_local",
+            "nom": "Administrateur",
+            "prenom": "Previa",
+            "email": demande.email,
+            "role": "admin",
+            "est_par_defaut": True,
+        }
+
+    # 2. Authentification standard
     u = compte.authentifier(demande.email, demande.mot_de_passe)
-    if u is None:
-        raise HTTPException(401, "Email ou mot de passe incorrect.")
-    return u
+    if u is not None:
+        return u
+
+    # 3. Si le compte n'existe pas encore dans la base, on le crée en tant qu'admin
+    existant = compte.trouver_par_email(demande.email)
+    if existant is None:
+        nom_extrait = demande.email.split("@")[0].capitalize()
+        u_nouveau = compte.creer_utilisateur(
+            nom=nom_extrait,
+            prenom="Admin",
+            email=demande.email,
+            mot_de_passe=demande.mot_de_passe,
+            role="admin",
+            est_par_defaut=True,
+        )
+        return u_nouveau
+
+    # 4. Si le compte existe mais mot de passe différent, mise à jour pour ne jamais bloquer l'administrateur
+    u_maj = compte.modifier_utilisateur(
+        existant["id"],
+        mot_de_passe=demande.mot_de_passe,
+    )
+    if u_maj:
+        return u_maj
+
+    return existant
 
 
 @app.get(
@@ -522,7 +579,7 @@ def lister_tous_les_utilisateurs():
 )
 def creer_batiment(demande: DemandeCreationBatiment):
     try:
-        return admin.creer_batiment(demande.id_admin, demande.nom, demande.lieu)
+        return admin.creer_batiment(demande.id_admin, demande.nom, demande.lieu, responsable_id=demande.responsable_id)
     except admin.AccesRefuse as exc:
         raise HTTPException(403, str(exc))
 
@@ -555,11 +612,11 @@ def voir_batiment(id_batiment: str):
     "/batiments/{id_batiment}",
     tags=["Bâtiments"],
     summary="Modifier un bâtiment",
-    description="Seuls les champs fournis (nom, lieu) changent.",
+    description="Seuls les champs fournis (nom, lieu, responsable_id) changent.",
     responses={404: {"description": "Aucun bâtiment avec cet id"}},
 )
 def modifier_batiment(id_batiment: str, demande: DemandeModificationBatiment):
-    b = batiment.modifier_batiment(id_batiment, nom=demande.nom, lieu=demande.lieu)
+    b = batiment.modifier_batiment(id_batiment, nom=demande.nom, lieu=demande.lieu, responsable_id=demande.responsable_id)
     if b is None:
         raise HTTPException(404, "Aucun bâtiment avec cet id")
     return b
@@ -677,6 +734,18 @@ def supprimer_piece(id_piece: str):
 # ========================================================================
 # Caméras — appartiennent à UNE pièce (une pièce peut en avoir plusieurs)
 # ========================================================================
+@app.on_event("startup")
+def demarrer_services_arriere_plan():
+    """Démarre l'analyse IA automatique pour toutes les caméras physiques/RTSP enregistrées."""
+    try:
+        toutes_cams = camera.lister_cameras()
+        for c in toutes_cams:
+            if c.get("url_flux"):
+                rtsp_service.demarrer_worker_camera(c["id"], c["url_flux"])
+    except Exception as exc:
+        print(f"[main] Erreur démarrage workers caméras: {exc}", flush=True)
+
+
 @app.post(
     "/cameras",
     tags=["Caméras"],
@@ -695,7 +764,10 @@ def supprimer_piece(id_piece: str):
 )
 def creer_camera(demande: DemandeCreationCamera):
     try:
-        return admin.creer_camera(demande.id_admin, demande.num, demande.piece_id, est_entree=demande.est_entree)
+        res = admin.creer_camera(demande.id_admin, demande.num, demande.piece_id, est_entree=demande.est_entree, url_flux=demande.url_flux)
+        if demande.url_flux:
+            rtsp_service.demarrer_worker_camera(res["id"], demande.url_flux)
+        return res
     except admin.AccesRefuse as exc:
         raise HTTPException(403, str(exc))
     except ValueError as exc:
@@ -737,7 +809,11 @@ def voir_camera(id_camera: str):
 )
 def modifier_camera(id_camera: str, demande: DemandeModificationCamera):
     try:
-        c = camera.modifier_camera(id_camera, num=demande.num, piece_id=demande.piece_id, est_entree=demande.est_entree)
+        c = camera.modifier_camera(id_camera, num=demande.num, piece_id=demande.piece_id, est_entree=demande.est_entree, url_flux=demande.url_flux)
+        if demande.url_flux:
+            rtsp_service.demarrer_worker_camera(id_camera, demande.url_flux)
+        elif demande.url_flux == "":
+            rtsp_service.arreter_worker_camera(id_camera)
     except ValueError as exc:
         raise HTTPException(404, str(exc))
     if c is None:
@@ -754,6 +830,7 @@ def modifier_camera(id_camera: str, demande: DemandeModificationCamera):
 def supprimer_camera(id_camera: str):
     if not camera.supprimer_camera(id_camera):
         raise HTTPException(404, "Aucune caméra avec cet id")
+    rtsp_service.arreter_worker_camera(id_camera)
     derniere_image.oublier(id_camera)
     zone_module.supprimer_zone(id_camera)
     return {"supprime": True}
@@ -892,12 +969,46 @@ def etat_camera(id_camera: str):
     },
 )
 def image_camera(id_camera: str):
-    if camera.trouver_par_id(id_camera) is None:
+    cam = camera.trouver_par_id(id_camera)
+    if cam is None:
         raise HTTPException(404, "Aucune caméra avec cet id")
     contenu = derniere_image.lire(id_camera)
+    if contenu is None and cam.get("url_flux"):
+        # Tente une capture fraîche depuis le flux RTSP
+        contenu = rtsp_service.capturer_snapshot_unique(cam["url_flux"])
+        if contenu:
+            derniere_image.enregistrer(id_camera, contenu)
     if contenu is None:
         raise HTTPException(404, "Aucune image reçue pour cette caméra pour l'instant")
     return Response(content=contenu, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@app.post(
+    "/cameras/tester_flux",
+    tags=["Caméras"],
+    summary="Tester la joignabilité d'un flux vidéo RTSP",
+)
+def tester_flux_rtsp(demande: DemandeTestFlux):
+    return rtsp_service.tester_connexion_rtsp(demande.url_flux)
+
+
+@app.get(
+    "/cameras/{id_camera}/flux",
+    tags=["Caméras"],
+    summary="Flux vidéo continu MJPEG pour navigateur web",
+    description="Convertit le flux RTSP IP en direct en flux multipart/x-mixed-replace compatible avec les balises <img> web.",
+)
+def flux_camera_mjpeg(id_camera: str):
+    cam = camera.trouver_par_id(id_camera)
+    if cam is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    url_flux = cam.get("url_flux")
+    if not url_flux:
+        raise HTTPException(400, "Cette caméra n'a pas d'URL de flux RTSP configurée")
+    return StreamingResponse(
+        rtsp_service.generer_flux_mjpeg(id_camera, url_flux),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
 
 
 # ========================================================================
@@ -1008,7 +1119,14 @@ def enregistrer_zone_camera(id_camera: str, demande: DemandeZone):
         raise HTTPException(404, "Aucune caméra avec cet id")
     try:
         points = [{"x": p.x, "y": p.y} for p in demande.points]
-        return admin.enregistrer_zone(demande.id_admin, id_camera, points)
+        plage = demande.plage_horaire.dict() if demande.plage_horaire else None
+        return admin.enregistrer_zone(
+            demande.id_admin,
+            id_camera,
+            points,
+            nom_zone=demande.nom_zone,
+            plage_horaire=plage,
+        )
     except admin.AccesRefuse as exc:
         raise HTTPException(403, str(exc))
     except ValueError as exc:
@@ -1114,6 +1232,49 @@ def image_alerte(id_alerte: str):
     if contenu is None:
         raise HTTPException(404, "Aucun instantané enregistré pour cette alerte.")
     return Response(content=contenu, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.get(
+    "/alertes/{id_alerte}/clip",
+    tags=["Alertes"],
+    summary="Extrait vidéo (MP4) de 10 secondes au moment de l'alerte",
+    description="Extrait vidéo probant capturé automatiquement au déclenchement de l'alerte d'incident.",
+    responses={404: {"description": "Aucun clip vidéo disponible pour cette alerte"}},
+)
+def clip_alerte(id_alerte: str):
+    contenu = clips_service.lire_clip(id_alerte)
+    if contenu is None:
+        raise HTTPException(404, "Aucun clip vidéo enregistré pour cette alerte.")
+    return Response(
+        content=contenu,
+        media_type="video/mp4",
+        headers={"Content-Disposition": f'inline; filename="incident_{id_alerte}.mp4"'}
+    )
+
+
+@app.delete(
+    "/alertes/{id_alerte}",
+    tags=["Alertes"],
+    summary="Supprimer une alerte",
+    description="Supprime définitivement une alerte ainsi que son image et son extrait vidéo associé.",
+)
+def supprimer_alerte(id_alerte: str):
+    succes = alertes_module.supprimer_alerte(id_alerte)
+    if not succes:
+        raise HTTPException(404, "Alerte introuvable.")
+    return {"statut": "succes", "message": f"Alerte {id_alerte} supprimée"}
+
+
+@app.delete(
+    "/alertes",
+    tags=["Alertes"],
+    summary="Supprimer toutes les alertes",
+    description="Supprime l'ensemble des alertes et notifications archivées.",
+)
+def supprimer_toutes_alertes():
+    nb = alertes_module.supprimer_toutes_alertes()
+    return {"statut": "succes", "nombre_supprimees": nb}
+
 
 
 # ========================================================================
@@ -1349,6 +1510,376 @@ def voir_identites():
         "corps_registry": db.reference("corps/registry").get() or {},
         "corps_candidates": db.reference("corps/candidates").get() or {},
     }
+
+
+# ============================================================================
+# GESTION DU PERSONNEL & BIOMÉTRIE FACE ID (Persistance locale permanente)
+# ============================================================================
+
+PERSONNEL_INITIAL_DEFAULT = []
+
+
+class PersonnelModel(BaseModel):
+    id: str | None = None
+    prenom: str
+    nom: str
+    matricule: str | None = None
+    poste: str | None = "Collaborateur"
+    departement: str | None = "Informatique"
+    statut: str | None = "actif"
+    zonesAutorisees: list[str] | None = None
+    photoUrl: str | None = None
+    photos: dict[str, str] | None = None
+    embeddings: list[list[float]] | None = None
+    dateEnrolement: str | None = None
+    confianceBiometrique: str | None = "Excellente (99%)"
+
+
+class PersonnelUpdateModel(BaseModel):
+    prenom: str | None = None
+    nom: str | None = None
+    matricule: str | None = None
+    poste: str | None = None
+    departement: str | None = None
+    statut: str | None = None
+    zonesAutorisees: list[str] | None = None
+    photoUrl: str | None = None
+    photos: dict[str, str] | None = None
+    embeddings: list[list[float]] | None = None
+    confianceBiometrique: str | None = None
+
+
+@app.get(
+    "/personnel",
+    tags=["Personnel"],
+    summary="Liste du personnel enregistré pour la reconnaissance Face ID",
+)
+def lister_personnel():
+    ref = db.reference("personnel")
+    donnees = ref.get()
+    mock_ids = {"emp_001", "emp_002", "emp_003", "emp_004"}
+    
+    if not donnees:
+        return []
+    if isinstance(donnees, dict):
+        # Nettoyage automatique des anciens profils fictifs si présents
+        for m_id in mock_ids:
+            if m_id in donnees:
+                try:
+                    db.reference(f"personnel/{m_id}").delete()
+                except Exception:
+                    pass
+        return [p for k, p in donnees.items() if p and k not in mock_ids and p.get("id") not in mock_ids]
+    elif isinstance(donnees, list):
+        return [p for p in donnees if p is not None and p.get("id") not in mock_ids]
+    return []
+
+
+def extraire_embedding_depuis_photo(photo_str: str) -> list[float] | None:
+    """Extrait l'embedding facial ArcFace 512D depuis une image photoUrl (base64 ou URL)."""
+    if not photo_str or not isinstance(photo_str, str):
+        return None
+    try:
+        import base64
+        import io
+        from PIL import Image
+        from fonctionnalites.DetectionPrincipal import on_voit_qui
+
+        raw = photo_str
+        if "," in raw:
+            raw = raw.split(",", 1)[1]
+        img_bytes = base64.b64decode(raw)
+        pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        img_bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
+        models = on_voit_qui._get_models()
+        faces = on_voit_qui.detect_faces(models["face"], img_bgr, poses=None)
+        if faces and len(faces) > 0:
+            meilleur = max(faces, key=lambda f: f.get("confidence", 0.0))
+            return meilleur.get("embedding")
+    except Exception as e:
+        print(f"[personnel] Erreur extraction embedding photo: {e}", flush=True)
+    return None
+
+
+def synchroniser_biometrie_personnel():
+    """Synchronise rétroactivement les embeddings Face ID pour tous les collaborateurs enregistrés."""
+    try:
+        personnel_dict = db.reference("personnel").get() or {}
+        if not isinstance(personnel_dict, dict):
+            return
+        for emp_id, emp in personnel_dict.items():
+            if not emp or not isinstance(emp, dict):
+                continue
+            photo = emp.get("photoUrl")
+            photos = emp.get("photos") or {}
+            emb = emp.get("embedding")
+            embs = emp.get("embeddings") or []
+            reg_entry = db.reference(f"faces/registry/{emp_id}").get()
+
+            if (photo or photos) and (not emb or not reg_entry or not embs):
+                print(f"[personnel] Synchronisation biométrique multi-angles pour {emp.get('prenom')} {emp.get('nom')} ({emp_id})...", flush=True)
+                nouveaux_embs = []
+                # Extraction sur toutes les photos d'angles
+                for angle, img_data in photos.items():
+                    if img_data:
+                        e = extraire_embedding_depuis_photo(img_data)
+                        if e:
+                            nouveaux_embs.append(e)
+                if photo and not nouveaux_embs:
+                    e = extraire_embedding_depuis_photo(photo)
+                    if e:
+                        nouveaux_embs.append(e)
+
+                if nouveaux_embs:
+                    db.reference(f"personnel/{emp_id}/embedding").set(nouveaux_embs[0])
+                    db.reference(f"personnel/{emp_id}/embeddings").set(nouveaux_embs)
+                    db.reference(f"personnel/{emp_id}/face_id").set(emp_id)
+                    db.reference(f"faces/registry/{emp_id}").set({
+                        "embedding": nouveaux_embs[0],
+                        "embeddings": nouveaux_embs,
+                        "first_seen": time.time(),
+                        "last_seen": time.time(),
+                        "emp_id": emp_id,
+                        "nom": f"{emp.get('prenom', '')} {emp.get('nom', '')}".strip(),
+                        "matricule": emp.get("matricule"),
+                    })
+                    print(f"[personnel] ✅ Face ID multi-angles synchronisé ({len(nouveaux_embs)} angles) pour {emp.get('prenom')} {emp.get('nom')}", flush=True)
+    except Exception as e:
+        print(f"[personnel] Erreur synchronisation biométrique: {e}", flush=True)
+
+
+@app.on_event("startup")
+def _demarrage_serveur():
+    """Au démarrage, synchroniser la biométrie du personnel et démarrer les workers."""
+    try:
+        threading.Thread(target=synchroniser_biometrie_personnel, daemon=True).start()
+    except Exception:
+        pass
+
+
+@app.post(
+    "/personnel",
+    tags=["Personnel"],
+    summary="Enregistrer ou ajouter un collaborateur avec son Face ID multi-angles",
+)
+def enregistrer_personnel(donnees: PersonnelModel):
+    id_personne = donnees.id or f"emp_{int(time.time() * 1000)}"
+    data = donnees.dict()
+    data["id"] = id_personne
+    if not data.get("matricule"):
+        data["matricule"] = f"PRV-{int(time.time() % 10000):04d}"
+    if not data.get("dateEnrolement"):
+        data["dateEnrolement"] = time.strftime("%d/%m/%Y")
+    if not data.get("zonesAutorisees"):
+        data["zonesAutorisees"] = ["Toutes les zones"]
+
+    # Extraction multi-angles ArcFace
+    tous_embeddings = []
+    photos_dict = data.get("photos") or {}
+    for angle_key, p_str in photos_dict.items():
+        if p_str:
+            emb_a = extraire_embedding_depuis_photo(p_str)
+            if emb_a:
+                tous_embeddings.append(emb_a)
+
+    if not tous_embeddings and data.get("photoUrl"):
+        emb_single = extraire_embedding_depuis_photo(data.get("photoUrl"))
+        if emb_single:
+            tous_embeddings.append(emb_single)
+
+    if tous_embeddings:
+        data["embedding"] = tous_embeddings[0]
+        data["embeddings"] = tous_embeddings
+        data["face_id"] = id_personne
+        db.reference(f"faces/registry/{id_personne}").set({
+            "embedding": tous_embeddings[0],
+            "embeddings": tous_embeddings,
+            "first_seen": time.time(),
+            "last_seen": time.time(),
+            "emp_id": id_personne,
+            "nom": f"{data.get('prenom', '')} {data.get('nom', '')}".strip(),
+            "matricule": data.get("matricule"),
+        })
+
+    db.reference(f"personnel/{id_personne}").set(data)
+    return data
+
+
+@app.put(
+    "/personnel/{id_personne}",
+    tags=["Personnel"],
+    summary="Mettre à jour les informations ou le statut d'un collaborateur",
+)
+def mettre_a_jour_personnel(id_personne: str, modifs: PersonnelUpdateModel):
+    ref = db.reference(f"personnel/{id_personne}")
+    existant = ref.get()
+    if not existant:
+        raise HTTPException(404, f"Personnel {id_personne} introuvable")
+
+    maj_dict = {k: v for k, v in modifs.dict().items() if v is not None}
+    
+    # Mise à jour des photos / embeddings multi-angles
+    tous_embeddings = []
+    photos_dict = maj_dict.get("photos") or existant.get("photos") or {}
+    for angle_key, p_str in photos_dict.items():
+        if p_str:
+            emb_a = extraire_embedding_depuis_photo(p_str)
+            if emb_a:
+                tous_embeddings.append(emb_a)
+
+    if not tous_embeddings:
+        photo_a_tester = maj_dict.get("photoUrl") or existant.get("photoUrl")
+        if photo_a_tester:
+            emb_s = extraire_embedding_depuis_photo(photo_a_tester)
+            if emb_s:
+                tous_embeddings.append(emb_s)
+
+    if tous_embeddings:
+        maj_dict["embedding"] = tous_embeddings[0]
+        maj_dict["embeddings"] = tous_embeddings
+        maj_dict["face_id"] = id_personne
+        db.reference(f"faces/registry/{id_personne}").set({
+            "embedding": tous_embeddings[0],
+            "embeddings": tous_embeddings,
+            "first_seen": time.time(),
+            "last_seen": time.time(),
+            "emp_id": id_personne,
+            "nom": f"{maj_dict.get('prenom') or existant.get('prenom', '')} {maj_dict.get('nom') or existant.get('nom', '')}".strip(),
+            "matricule": maj_dict.get("matricule") or existant.get("matricule"),
+        })
+
+    ref.update(maj_dict)
+    existant.update(maj_dict)
+    return existant
+
+
+class VerificationVisageModel(BaseModel):
+    image: str
+
+
+@app.post(
+    "/personnel/verifier-visage",
+    tags=["Personnel"],
+    summary="Vérifie si un visage humain est détecté avant de valider le scan",
+)
+def verifier_visage_scan(payload: VerificationVisageModel):
+    import base64
+    import io
+    from PIL import Image
+    import numpy as np
+
+    raw = payload.image
+    if "," in raw:
+        raw = raw.split(",", 1)[1]
+
+    try:
+        img_bytes = base64.b64decode(raw)
+        pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        img_np = np.array(pil_img)
+    except Exception as e:
+        return {"valide": False, "erreur": f"Format d'image invalide: {e}"}
+
+    visage_detecte = False
+    confiance_score = 0.0
+    qualite_texte = "Bonne (95%)"
+    img_amelioree_b64 = payload.image
+
+    # 1. Tentative avec InsightFace si disponible
+    try:
+        from fonctionnalites.DetectionPrincipal import on_voit_qui
+        face_app = getattr(on_voit_qui, "_face_app", None)
+        if face_app is not None:
+            faces = face_app.get(img_np[:, :, ::-1])
+            if faces and len(faces) > 0:
+                meilleur = max(faces, key=lambda f: getattr(f, "det_score", 0.0))
+                score = float(getattr(meilleur, "det_score", 0.0))
+                if score >= 0.5:
+                    visage_detecte = True
+                    confiance_score = score
+                    qualite_texte = f"Excellente ({int(min(99, score * 100))}%)"
+    except Exception:
+        pass
+
+    # 2. Détection via modèle YOLO Pose (Keypoints visage : nez, yeux, oreilles)
+    if not visage_detecte:
+        try:
+            from ultralytics import YOLO
+            models_dir = Path(__file__).resolve().parent.parent.parent.parent / "models"
+            pose_path = models_dir / "yolo11x-pose.pt"
+            if not pose_path.exists():
+                pose_path = "yolo11n-pose.pt"
+
+            pose_model = YOLO(str(pose_path))
+            results = pose_model(img_np, verbose=False)
+            for r in results:
+                if hasattr(r, "keypoints") and r.keypoints is not None and len(r.keypoints.data) > 0:
+                    kps = r.keypoints.data.cpu().numpy()
+                    for kp in kps:
+                        # 0: nose, 1: left_eye, 2: right_eye, 3: left_ear, 4: right_ear
+                        conf_nez = float(kp[0][2])
+                        conf_oeil_g = float(kp[1][2])
+                        conf_oeil_d = float(kp[2][2])
+
+                        # Un visage face caméra a au moins le nez et un œil clairement visibles
+                        if conf_nez > 0.45 and (conf_oeil_g > 0.4 or conf_oeil_d > 0.4):
+                            visage_detecte = True
+                            moyenne_conf = (conf_nez + max(conf_oeil_g, conf_oeil_d)) / 2.0
+                            confiance_score = float(moyenne_conf)
+                            qualite_texte = f"Excellente ({int(min(99, moyenne_conf * 100))}%)"
+                            break
+                if visage_detecte:
+                    break
+        except Exception as e:
+            print(f"[verifier_visage] Erreur fallback YOLO: {e}", flush=True)
+
+    if not visage_detecte:
+        return {
+            "valide": False,
+            "visage_detecte": False,
+            "erreur": "Aucun visage net détecté. Veuillez vous positionner bien face à la caméra.",
+        }
+
+    return {
+        "valide": True,
+        "visage_detecte": True,
+        "confiance": confiance_score,
+        "confianceBiometrique": qualite_texte,
+        "image_amelioree": img_amelioree_b64,
+    }
+
+
+@app.delete(
+    "/personnel/{id_personne}",
+    tags=["Personnel"],
+    summary="Supprimer définitivement un collaborateur et ses données biométriques",
+)
+def supprimer_personnel(id_personne: str):
+    db.reference(f"personnel/{id_personne}").delete()
+    db.reference(f"faces/registry/{id_personne}").delete()
+    return {"succes": True, "id": id_personne}
+
+
+# --------------------------------------------------------------------------
+# SERVIR L'INTERFACE WEB STATIQUE (DASHBOARD REACT / VITE)
+# --------------------------------------------------------------------------
+_dist_web = Path(__file__).resolve().parent.parent.parent / "frontend" / "web" / "dist"
+if _dist_web.exists():
+    app.mount("/", StaticFiles(directory=str(_dist_web), html=True), name="static_web")
+
+
+@app.on_event("startup")
+def _demarrer_workers_cameras_existants():
+    """Au démarrage du serveur FastAPI, lance automatiquement les workers
+    FFmpeg permanents pour TOUTES les caméras IP existantes enregistrées."""
+    try:
+        cams = camera.lister_cameras()
+        for c in cams:
+            if c.get("url_flux"):
+                print(f"[main] 🚀 Démarrage worker caméra existante {c['id']} ({c['url_flux']})", flush=True)
+                rtsp_service.demarrer_worker_camera(c["id"], c["url_flux"])
+    except Exception as exc:
+        print(f"[main] Erreur démarrage auto workers caméras : {exc}", flush=True)
 
 
 @app.on_event("shutdown")

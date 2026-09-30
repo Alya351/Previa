@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { API_BASE, urlFluxWebSocket } from '../api.js';
+import {
+  API_BASE, urlFluxWebSocket, urlDirectEmettre, envoyerFrameVoir, envoyerFrameQui, listerCameras,
+} from '../api.js';
 import logoPrevia from '../assets/logo_previa_clean.png';
 import { Icone } from '../lib/icones.jsx';
 import './camera.css';
@@ -51,7 +53,7 @@ export default function Camera() {
   const peersRef = useRef(new Map());
 
   const [cameras, setCameras] = useState([]);
-  const [idCamera, setIdCamera] = useState('');
+  const [idCamera, setIdCamera] = useState(() => localStorage.getItem('previa_broadcaster_camera') || '');
   const [chargementCameras, setChargementCameras] = useState(true);
 
   const [actif, setActif] = useState(false);
@@ -70,9 +72,9 @@ export default function Camera() {
   async function chargerCameras() {
     try {
       const [cams, pieces, batiments] = await Promise.all([
-        fetch(`${API_BASE}/cameras`).then((r) => r.json()),
-        fetch(`${API_BASE}/pieces`).then((r) => r.json()),
-        fetch(`${API_BASE}/batiments`).then((r) => r.json()),
+        listerCameras().catch(() => []),
+        fetch(`${API_BASE}/pieces`).then((r) => r.json()).catch(() => []),
+        fetch(`${API_BASE}/batiments`).then((r) => r.json()).catch(() => []),
       ]);
       const enrichies = cams.map((c) => {
         const p = pieces.find((pp) => pp.id === c.piece_id);
@@ -80,7 +82,14 @@ export default function Camera() {
         return { ...c, nomPiece: p?.nom, nomBatiment: b?.nom };
       });
       setCameras(enrichies);
-      if (enrichies.length > 0) setIdCamera(enrichies[0].id);
+      if (enrichies.length > 0) {
+        const saved = localStorage.getItem('previa_broadcaster_camera');
+        if (saved && enrichies.some((c) => c.id === saved)) {
+          setIdCamera(saved);
+        } else {
+          setIdCamera(enrichies[0].id);
+        }
+      }
     } catch {
       setErreur('Impossible de charger la liste des caméras enregistrées.');
     } finally {
@@ -126,7 +135,7 @@ export default function Camera() {
   // fonctionner indépendamment.
   function demarrerSignalisation(camId) {
     try {
-      const ws = new WebSocket(urlFluxWebSocket(`/cameras/${camId}/direct/emettre`));
+      const ws = new WebSocket(urlDirectEmettre(camId));
       wsSignalRef.current = ws;
       ws.onmessage = (evt) => traiterMessageSignalisation(JSON.parse(evt.data));
       ws.onerror = () => { /* silencieux : le flux direct est un bonus d'affichage, pas l'analyse */ };
@@ -230,23 +239,14 @@ export default function Camera() {
     canvas.toBlob(async (blob) => {
       if (!blob) { busyRef.current = false; return; }
       try {
-        const form1 = new FormData();
-        form1.append('file', blob, 'frame.jpg');
-        const form2 = new FormData();
-        form2.append('file', blob, 'frame.jpg');
-
-        // Séquentiel, pas Promise.all — /qui lit les objets déjà écrits
-        // par /voir pour cette même caméra (rapportCam/<id>/etat.json,
-        // "vueActuelle") pour juger "tient un objet"/vol ; en parallèle,
-        // rien ne garantit que /voir ait fini d'écrire avant que /qui
-        // lise. Même raison exacte que l'ancien cam.js.
-        const resVoir = await fetch(`${API_BASE}/cameras/${camId}/voir`, { method: 'POST', body: form1 });
-        const resQui = await fetch(`${API_BASE}/cameras/${camId}/qui`, { method: 'POST', body: form2 });
+        // Séquentiel : /voir écrit les objets, puis /qui analyse les personnes
+        const resVoir = await envoyerFrameVoir(camId, blob).catch((e) => ({ err: e.message }));
+        const resQui = await envoyerFrameQui(camId, blob).catch((e) => ({ err: e.message }));
 
         setDerniereLatence(Math.round(performance.now() - debut));
         setFramesEnvoyees((f) => f + 1);
-        setStatutVoir(resVoir.ok ? 200 : resVoir.status);
-        setStatutQui(resQui.ok ? 200 : resQui.status);
+        setStatutVoir(resVoir?.err ? 'err' : 200);
+        setStatutQui(resQui?.err ? 'err' : 200);
       } catch (e) {
         setErreur(`Erreur lors de l'envoi de la trame : ${e.message}`);
         setStatutVoir('err');
@@ -264,7 +264,7 @@ export default function Camera() {
       <header className="cam-header">
         <div className="cam-header-brand">
           <img src={logoPrevia} alt="Previa" />
-          <span>Flux Caméra & Analyse IA</span>
+          <span>Flux Caméra & Surveillance</span>
         </div>
         <Link className="cam-lien-admin" to="/admin">Dashboard Admin <Icone.flecheDroite width={14} height={14} /></Link>
       </header>
@@ -279,7 +279,15 @@ export default function Camera() {
               Aucune caméra enregistrée — crée-en une depuis le tableau de bord admin avant de démarrer un flux.
             </p>
           ) : (
-            <select className="cam-select" value={idCamera} disabled={actif} onChange={(e) => setIdCamera(e.target.value)}>
+            <select
+              className="cam-select"
+              value={idCamera}
+              disabled={actif}
+              onChange={(e) => {
+                setIdCamera(e.target.value);
+                localStorage.setItem('previa_broadcaster_camera', e.target.value);
+              }}
+            >
               {cameras.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.num} — {c.nomBatiment || '?'} / {c.nomPiece || '?'}{c.est_entree ? ' (entrée)' : ''}

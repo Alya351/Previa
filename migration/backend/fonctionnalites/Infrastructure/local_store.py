@@ -42,6 +42,16 @@ def _charger() -> dict:
         return {}
 
 
+def _json_default(obj):
+    if hasattr(obj, "item"):
+        return obj.item()
+    if hasattr(obj, "tolist"):
+        return obj.tolist()
+    if hasattr(obj, "dtype"):
+        return float(obj)
+    return str(obj)
+
+
 def _sauvegarder(arbre: dict) -> None:
     # Écriture dans un fichier temporaire puis renommage atomique — évite
     # un fichier JSON à moitié écrit si le processus est interrompu
@@ -49,7 +59,7 @@ def _sauvegarder(arbre: dict) -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)  # sinon plante sur un tout premier lancement (dossier db/ pas encore créé)
     tmp = DB_PATH.with_suffix(".tmp")
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(arbre, f, ensure_ascii=False)
+        json.dump(arbre, f, ensure_ascii=False, default=_json_default)
     tmp.replace(DB_PATH)
 
 

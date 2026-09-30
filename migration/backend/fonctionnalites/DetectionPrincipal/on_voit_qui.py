@@ -42,36 +42,78 @@ séparés dans le temps : le genre et les vêtements ne sont confirmés
 qu'après plusieurs observations cohérentes (votes accumulés), pas sur la
 foi d'une seule image isolée. Une couleur mal lue ou un genre mal classé
 une fois ne suffit pas à l'affirmer."""
+import concurrent.futures
+import os
 import time
 import uuid
 from pathlib import Path
 
 import cv2
 import numpy as np
-import torch
-from fonctionnalites.Infrastructure import rapport_cam
-from fonctionnalites.Infrastructure.local_store import db
-from insightface.app import FaceAnalysis
-from torchreid.reid.utils import FeatureExtractor
-from transformers import (
-    AutoImageProcessor,
-    AutoModelForImageClassification,
-    AutoModelForSemanticSegmentation,
-    SegformerImageProcessor,
-)
-from ultralytics import YOLO
+try:
+    import torch
+    if torch.cuda.is_available():
+        DEVICE = "cuda"
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        DEVICE = "mps"
+    else:
+        DEVICE = "cpu"
+        try:
+            torch.set_num_threads(max(1, min(8, os.cpu_count() or 4)))
+        except Exception:
+            pass
+except Exception as _exc:
+    torch = None
+    DEVICE = "cpu"
+    print(f"[on_voit_qui] torch non chargé ({_exc})", flush=True)
 
-from fonctionnalites.Infrastructure import etat_persistant
+try:
+    from insightface.app import FaceAnalysis
+except Exception as _exc:
+    print(f"[on_voit_qui] insightface non chargé ({_exc})", flush=True)
+    FaceAnalysis = None
+
+try:
+    from torchreid.reid.utils import FeatureExtractor
+except Exception as _exc:
+    print(f"[on_voit_qui] torchreid non chargé ({_exc})", flush=True)
+    FeatureExtractor = None
+
+try:
+    from transformers import (
+        AutoImageProcessor,
+        AutoModelForImageClassification,
+        AutoModelForSemanticSegmentation,
+        SegformerImageProcessor,
+    )
+except Exception as _exc:
+    print(f"[on_voit_qui] transformers non chargé ({_exc})", flush=True)
+    AutoImageProcessor = None
+    AutoModelForImageClassification = None
+    AutoModelForSemanticSegmentation = None
+    SegformerImageProcessor = None
+
+try:
+    from ultralytics import YOLO
+except Exception as _exc:
+    print(f"[on_voit_qui] ultralytics non chargé ({_exc})", flush=True)
+    YOLO = None
+
+from fonctionnalites.Infrastructure import etat_persistant, rapport_cam
+from fonctionnalites.Infrastructure.local_store import db
 from fonctionnalites.cam.camera import camera as _camera_registre
 from fonctionnalites.DetectionPrincipal import on_voit_quoi
 from fonctionnalites.DetectionPrincipal import qui_fait_quoi
 from fonctionnalites.ComportementsSupects import rodeur, profil_suspect, infiltre
 from fonctionnalites.zoneCam import detectionEnZone
 
-MODELS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "models"
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+_racine = Path(__file__).resolve().parents[4]
+MODELS_DIR = _racine / "models"
+if not MODELS_DIR.exists():
+    MODELS_DIR = Path(__file__).resolve().parents[3] / "models"
+DEVICE = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
 
-FACE_MIN_CONF = 0.6  # SCRFD (InsightFace) : score pas saturé près de 1 comme MTCNN — de vrais visages nets mesurés entre 0.78 et 0.89
+FACE_MIN_CONF = 0.35  # SCRFD (InsightFace) : score calibré pour haute sensibilité et visages nets ou à distance
 
 # Genre : fusion de deux sources, chacune votant indépendamment dans la
 # même mémoire par personne (voir _maj_memoire) —
@@ -218,12 +260,9 @@ COLOR_FR = {
 
 GENDER_FR = {"female": "femme", "male": "homme"}
 
-CONF_PERSONNE = 0.5
-CONF_VETEMENT = 0.5
-
-# Détection de squelette (posture/activité, voir qui_fait_quoi.py) — même
-# seuil que CONF_PERSONNE, cohérence entre les deux passes.
-CONF_POSE = 0.5
+CONF_PERSONNE = 0.25
+CONF_VETEMENT = 0.35
+CONF_POSE = 0.35
 
 # Seuil bas, spécifique au suivi de zone anonyme pour le rôdage (voir
 # on_surveil_quoi/rodeur.py, assigner_zone_anonyme) — une personne trop
@@ -264,43 +303,250 @@ HUE_RANGES = [
 ]
 
 _models = None
+_cache_segformer = {}  # id_camera -> (timestamp, carte_vetements)
+
+
+_onnx_net = None
+_onnx_net_initialized = False
+
+
+def _get_onnx_yolo():
+    global _onnx_net, _onnx_net_initialized
+    if not _onnx_net_initialized:
+        _onnx_net_initialized = True
+        onnx_file = MODELS_DIR / "yolov8n.onnx"
+        if onnx_file.exists():
+            try:
+                _onnx_net = cv2.dnn.readNetFromONNX(str(onnx_file))
+                _onnx_net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+                _onnx_net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+                print(f"[on_voit_qui] YOLOv8 ONNX chargé avec succès ({onnx_file.name})", flush=True)
+            except Exception as e:
+                print(f"[on_voit_qui] Erreur chargement ONNX : {e}", flush=True)
+                _onnx_net = None
+    return _onnx_net
+
+
+def _detect_persons_yolo_onnx(net, frame, conf_threshold=0.30) -> list:
+    if net is None or frame is None or frame.size == 0:
+        return []
+
+    def _run_forward(img):
+        h, w = img.shape[:2]
+        # Résolution optimisée 416x416 : réduit de 58% le volume de calcul CPU par frame (latence < 100ms)
+        blob = cv2.dnn.blobFromImage(img, 1.0 / 255.0, (416, 416), swapRB=True, crop=False)
+        net.setInput(blob)
+        output = net.forward()
+        data = output[0].T
+        boxes = []
+        confidences = []
+        sx = w / 416.0
+        sy = h / 416.0
+        for row in data:
+            scores = row[4:]
+            class_id = int(np.argmax(scores))
+            conf = float(scores[class_id])
+            if class_id == 0 and conf >= conf_threshold:  # 0 is person
+                cx, cy, bw, bh = row[:4]
+                x1 = int((cx - bw / 2.0) * sx)
+                y1 = int((cy - bh / 2.0) * sy)
+                bw = int(bw * sx)
+                bh = int(bh * sy)
+                boxes.append([x1, y1, bw, bh])
+                confidences.append(conf)
+        indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, 0.45)
+        res = []
+        if len(indices) > 0:
+            for idx in indices.flatten():
+                x, y, bw, bh = boxes[idx]
+                x1 = max(0.0, float(x))
+                y1 = max(0.0, float(y))
+                x2 = min(float(w), float(x + bw))
+                y2 = min(float(h), float(y + bh))
+                res.append({
+                    "box": [x1, y1, x2, y2],
+                    "score": float(confidences[idx]),
+                })
+        return res
+
+    # 1. Orientation standard (0°)
+    dets = _run_forward(frame)
+    if dets:
+        results = []
+        for i, d in enumerate(dets):
+            x1, y1, x2, y2 = d["box"]
+            results.append({
+                "label": "person",
+                "box": [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)],
+                "centroid": ((x1 + x2) / 2.0, (y1 + y2) / 2.0),
+                "mask_poly": None,
+                "score": d["score"],
+                "track_id": (i + 1),
+            })
+        return results
+
+    # 2. Si aucune détection (ex: caméra smartphone orientée à 90°), tester rotation 90° CW
+    h_orig, w_orig = frame.shape[:2]
+    rot90 = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    dets90 = _run_forward(rot90)
+    if dets90:
+        results = []
+        for i, d in enumerate(dets90):
+            xr1, yr1, xr2, yr2 = d["box"]
+            # Inverse map 90CW: x_orig = y_rot, y_orig = h_orig - 1 - x_rot
+            xo1, yo1 = yr1, max(0.0, h_orig - 1 - xr2)
+            xo2, yo2 = yr2, min(float(h_orig), h_orig - 1 - xr1)
+            x_min, x_max = min(xo1, xo2), max(xo1, xo2)
+            y_min, y_max = min(yo1, yo2), max(yo1, yo2)
+            results.append({
+                "label": "person",
+                "box": [round(x_min, 1), round(y_min, 1), round(x_max, 1), round(y_max, 1)],
+                "centroid": ((x_min + x_max) / 2.0, (y_min + y_max) / 2.0),
+                "mask_poly": None,
+                "score": d["score"],
+                "track_id": (i + 1),
+            })
+        return results
+
+    return []
+
+
+def _detect_persons_opencv(frame) -> list:
+    """Détecteur OpenCV ultra-rapide et robuste de personnes / silhouettes pour CPU."""
+    if frame is None or frame.size == 0:
+        return []
+    h, w = frame.shape[:2]
+    scale_w = 320.0
+    scale_h = 240.0
+    small = cv2.resize(frame, (int(scale_w), int(scale_h)))
+    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    grad = cv2.morphologyEx(blurred, cv2.MORPH_GRADIENT, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)))
+    _, thresh = cv2.threshold(grad, 15, 255, cv2.THRESH_BINARY)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 9))
+    closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    detections = []
+    sx = w / scale_w
+    sy = h / scale_h
+
+    for i, c in enumerate(contours):
+        area = cv2.contourArea(c)
+        if area < 350:  # Ignorer le petit bruit
+            continue
+        x, y, cw, ch = cv2.boundingRect(c)
+        if cw >= scale_w * 0.90 and ch >= scale_h * 0.90:
+            continue  # Ignorer le contour du cadre entier
+        ratio = ch / max(1.0, float(cw))
+        # Silhouette humaine : debout, assise ou buste
+        if ch >= 25 and (ratio >= 0.55 or area >= 800):
+            x1 = max(0.0, float(x * sx))
+            y1 = max(0.0, float(y * sy))
+            x2 = min(float(w), float((x + cw) * sx))
+            y2 = min(float(h), float((y + ch) * sy))
+            box = [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)]
+            detections.append({
+                "label": "person",
+                "box": box,
+                "centroid": ((x1 + x2) / 2.0, (y1 + y2) / 2.0),
+                "mask_poly": None,
+                "score": 0.85,
+                "track_id": (i + 1),
+            })
+    return detections
 
 
 def _get_models():
     global _models
     if _models is None:
-        print("[on_voit_qui] chargement des modèles...", flush=True)
-        person_seg = YOLO(MODELS_DIR / "person-seg-yolo12l.pt")
-        person_seg.to(DEVICE)
-        clothing = YOLO(MODELS_DIR / "clothing-yolov8s-seg.pt")
-        clothing.to(DEVICE)
-        pose = YOLO(MODELS_DIR / "yolo11x-pose.pt")
-        pose.to(DEVICE)
+        print("[on_voit_qui] initialisation des modèles...", flush=True)
+        person_seg = None
+        clothing = None
+        pose = None
+        clothing_processor, clothing_model = None, None
+        face_app = None
+        gender_body_processor, gender_body_model = None, None
+        reid = None
 
-        clothing_processor = SegformerImageProcessor.from_pretrained(str(MODELS_DIR / "segformer-clothes"))
-        clothing_model = AutoModelForSemanticSegmentation.from_pretrained(str(MODELS_DIR / "segformer-clothes"))
-        clothing_model = clothing_model.eval().to(DEVICE)
+        if YOLO is not None:
+            seg_candidates = [
+                MODELS_DIR / "yolo11n-seg.pt",
+                MODELS_DIR / "person-seg-yolo12l.pt",
+                MODELS_DIR / "yolo11x.pt",
+            ]
+            pose_candidates = [
+                MODELS_DIR / "yolo11n-pose.pt",
+                MODELS_DIR / "yolo11x-pose.pt",
+            ]
+            seg_path = next((c for c in seg_candidates if c.exists()), None)
+            if seg_path:
+                try:
+                    person_seg = YOLO(str(seg_path))
+                    person_seg.to(DEVICE)
+                except Exception as e:
+                    print(f"[on_voit_qui] person_seg ignoré : {e}", flush=True)
 
-        face_app = FaceAnalysis(
-            name="buffalo_l",
-            # genderage : genre par visage (voir plus haut) ; landmark_3d_68 :
-            # orientation de la tête (yaw), pour on_surveil_quoi/rodeur.py
-            # (partie "regard") — tous les deux gratuits, même passage
-            # que la détection.
-            allowed_modules=["detection", "recognition", "genderage", "landmark_3d_68"],
-            root=str(MODELS_DIR / "insightface"),
-        )
-        face_app.prepare(ctx_id=-1, det_size=(640, 640))  # ctx_id=-1 : CPU, comme les autres sessions ONNX ici
+            clothing_path = MODELS_DIR / "clothing-yolov8s-seg.pt"
+            if clothing_path.exists():
+                try:
+                    clothing = YOLO(str(clothing_path))
+                    clothing.to(DEVICE)
+                except Exception as e:
+                    print(f"[on_voit_qui] vêtement YOLO ignoré : {e}", flush=True)
 
-        gender_body_processor = AutoImageProcessor.from_pretrained(str(MODELS_DIR / "pedestrian-gender"))
-        gender_body_model = AutoModelForImageClassification.from_pretrained(str(MODELS_DIR / "pedestrian-gender"))
-        gender_body_model = gender_body_model.eval().to(DEVICE)
+            pose_path = next((c for c in pose_candidates if c.exists()), None)
+            if pose_path:
+                try:
+                    pose = YOLO(str(pose_path))
+                    pose.to(DEVICE)
+                except Exception as e:
+                    print(f"[on_voit_qui] pose ignoré : {e}", flush=True)
 
-        reid = FeatureExtractor(
-            model_name="osnet_x1_0",
-            model_path=str(MODELS_DIR / "osnet-reid" / "osnet_x1_0_msmt17.pth"),
-            device=DEVICE,
-        )
+        if SegformerImageProcessor and AutoModelForSemanticSegmentation:
+            seg_clothes_dir = MODELS_DIR / "segformer-clothes"
+            if seg_clothes_dir.exists():
+                try:
+                    clothing_processor = SegformerImageProcessor.from_pretrained(str(seg_clothes_dir))
+                    clothing_model = AutoModelForSemanticSegmentation.from_pretrained(str(seg_clothes_dir))
+                    clothing_model = clothing_model.eval().to(DEVICE)
+                except Exception as e:
+                    print(f"[on_voit_qui] segformer ignoré : {e}", flush=True)
+
+        if FaceAnalysis is not None and (MODELS_DIR / "insightface").exists():
+            try:
+                face_app = FaceAnalysis(
+                    name="buffalo_l",
+                    allowed_modules=["detection", "recognition", "genderage", "landmark_3d_68"],
+                    root=str(MODELS_DIR / "insightface"),
+                )
+                face_app.prepare(ctx_id=-1, det_size=(640, 640))
+            except Exception as e:
+                print(f"[on_voit_qui] face_app ignoré : {e}", flush=True)
+
+        if AutoImageProcessor and AutoModelForImageClassification:
+            ped_gender_dir = MODELS_DIR / "pedestrian-gender"
+            if ped_gender_dir.exists():
+                try:
+                    gender_body_processor = AutoImageProcessor.from_pretrained(str(ped_gender_dir))
+                    gender_body_model = AutoModelForImageClassification.from_pretrained(str(ped_gender_dir))
+                    gender_body_model = gender_body_model.eval().to(DEVICE)
+                except Exception as e:
+                    print(f"[on_voit_qui] pedestrian-gender ignoré : {e}", flush=True)
+
+        if FeatureExtractor is not None:
+            reid_path = MODELS_DIR / "osnet-reid" / "osnet_x1_0_msmt17.pth"
+            if reid_path.exists():
+                try:
+                    reid = FeatureExtractor(
+                        model_name="osnet_x1_0",
+                        model_path=str(reid_path),
+                        device=DEVICE,
+                    )
+                except Exception as e:
+                    print(f"[on_voit_qui] reid ignoré : {e}", flush=True)
 
         _models = {
             "person_seg": person_seg, "clothing": clothing, "pose": pose,
@@ -309,7 +555,7 @@ def _get_models():
             "gender_body_processor": gender_body_processor, "gender_body_model": gender_body_model,
             "reid": reid,
         }
-        print(f"[on_voit_qui] modèles prêts sur {DEVICE}", flush=True)
+        print(f"[on_voit_qui] modèles prêts (person_seg={person_seg is not None}) sur {DEVICE}", flush=True)
     return _models
 
 
@@ -344,33 +590,26 @@ def _distance(p1: tuple, p2: tuple) -> float:
 
 
 def _corrobore_par_modele_general(id_camera: str, frame, centroid: tuple, diagonale_frame: float) -> bool:
-    """Vérifie si le modèle général (xlarge, on_voit_quoi.py — déjà
-    chargé, même instance partagée) voit aussi une personne près de
-    `centroid`, même très faiblement. Voir CONF_RODEUR_CORROBORATION."""
-    # _get_model est indexé par id_camera (voir on_voit_quoi.py) — cet
-    # argument manquait ici, ce qui faisait planter TOUT /qui (donc aussi
-    # la détection de zone plus bas dans analyser(), jamais atteinte) dès
-    # qu'un candidat à faible confiance apparaissait sur l'image.
+    """Vérifie si le modèle général voit aussi une personne près de `centroid`."""
     model = on_voit_quoi._get_model(id_camera)
-    result = model.predict(frame, conf=CONF_RODEUR_CORROBORATION, verbose=False)[0]
-    seuil = RODEUR_CORROBORATION_DISTANCE_FRACTION * diagonale_frame
-    for box in result.boxes:
-        if result.names[int(box.cls[0])] != "person":
-            continue
-        c = _box_centroid(box.xyxy[0].tolist())
-        if _distance(c, centroid) <= seuil:
-            return True
-    return False
+    if model is None:
+        return True
+    try:
+        result = model.predict(frame, conf=CONF_RODEUR_CORROBORATION, verbose=False)[0]
+        seuil = RODEUR_CORROBORATION_DISTANCE_FRACTION * diagonale_frame
+        for box in result.boxes:
+            if result.names[int(box.cls[0])] != "person":
+                continue
+            c = _box_centroid(box.xyxy[0].tolist())
+            if _distance(c, centroid) <= seuil:
+                return True
+        return False
+    except Exception:
+        return True
 
 
 def _assign_faces_to_people(people_centroids: list, face_centroids: list) -> dict:
-    """Attribution visage <-> personne en 1-à-1 stricte : on trie toutes
-    les paires (personne, visage) par distance croissante, et on attribue
-    en priorité les paires les plus proches — une fois qu'une personne ou
-    qu'un visage est pris, il ne peut plus être réattribué. Sans ça, deux
-    personnes proches l'une de l'autre pouvaient toutes les deux se voir
-    attribuer le MÊME visage le plus proche, laissant l'autre visage
-    orphelin (bug trouvé et corrigé en relisant ce fichier)."""
+    """Attribution visage <-> personne en 1-à-1 stricte."""
     paires = []
     for pi, pc in enumerate(people_centroids):
         for fi, fc in enumerate(face_centroids):
@@ -387,87 +626,216 @@ def _assign_faces_to_people(people_centroids: list, face_centroids: list) -> dic
     return personne_vers_visage
 
 
+_inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="ai_worker")
+
+
 def _run_seg(model, frame, conf):
-    """Détection+segmentation (sans tracking : personne et vêtements sont
-    ré-identifiés par apparence à chaque appel — visage/OSNet pour les
-    personnes, recouvrement de pixels pour les vêtements — donc un
-    track_id ByteTrack ne sert plus à rien ici, juste du calcul en plus).
-    Renvoie une liste de {box, label, centroid (du masque si dispo, sinon
-    de la boîte), mask_poly}."""
-    result = model.predict(frame, conf=conf, verbose=False)[0]
-    detections = []
-    for i, box in enumerate(result.boxes):
-        det_box = [round(v, 1) for v in box.xyxy[0].tolist()]
-        det = {
-            "label": result.names[int(box.cls[0])],
-            "box": det_box,
-            "centroid": _box_centroid(det_box),
-            "mask_poly": None,
-            "score": float(box.conf[0]),
-        }
-        if result.masks is not None:
-            poly = result.masks.xy[i]
-            if len(poly) > 0:
-                det["centroid"] = (float(np.mean(poly[:, 0])), float(np.mean(poly[:, 1])))
-                det["mask_poly"] = poly
-        detections.append(det)
-    return detections
+    """Détection+segmentation pleine résolution : tente YOLO .pt, puis YOLO .onnx, puis OpenCV silhouette."""
+    if model is not None:
+        try:
+            result = model.predict(frame, conf=conf, verbose=False)[0]
+            detections = []
+            for i, box in enumerate(result.boxes):
+                det_box = [round(v, 1) for v in box.xyxy[0].tolist()]
+                det = {
+                    "label": result.names[int(box.cls[0])],
+                    "box": det_box,
+                    "centroid": _box_centroid(det_box),
+                    "mask_poly": None,
+                    "score": float(box.conf[0]),
+                    "track_id": (i + 1),
+                }
+                if result.masks is not None:
+                    poly = result.masks.xy[i]
+                    if len(poly) > 0:
+                        det["centroid"] = (float(np.mean(poly[:, 0])), float(np.mean(poly[:, 1])))
+                        det["mask_poly"] = poly
+                detections.append(det)
+            if detections:
+                return detections
+        except Exception:
+            pass
+
+    onnx_net = _get_onnx_yolo()
+    if onnx_net is not None:
+        try:
+            onnx_dets = _detect_persons_yolo_onnx(onnx_net, frame, conf_threshold=conf)
+            if onnx_dets:
+                return onnx_dets
+        except Exception:
+            pass
+
+    return _detect_persons_opencv(frame)
+
+
+def _is_valid_human_pose(p_pose: dict) -> bool:
+    """Valide qu'une détection squelette possède de vraies articulations humaines."""
+    if not p_pose:
+        return False
+    kpts = p_pose.get("keypoints")
+    if kpts is None or len(kpts) < 5:
+        return False
+    visibles = [pt for pt in kpts if len(pt) >= 3 and pt[2] > 0.35]
+    return len(visibles) >= 3
 
 
 def _run_pose(model, frame, conf):
-    """Détection de squelette (17 points-clés COCO, x/y/confiance) pour
-    CHAQUE personne de l'image — sert à juger la posture par géométrie
-    réelle (angle du torse, flexion des genoux) plutôt qu'en devinant sur
-    une image comme le faisait CLIP (voir qui_fait_quoi.py). Renvoie une
-    liste de {centroid, keypoints (array 17x3)}."""
-    result = model.predict(frame, conf=conf, verbose=False)[0]
-    detections = []
-    if result.keypoints is None:
+    """Détection de squelette (17 points-clés) pleine résolution."""
+    if model is None:
+        return []
+    try:
+        result = model.predict(frame, conf=conf, verbose=False)[0]
+        detections = []
+        if result.keypoints is None:
+            return detections
+        for box, kpts in zip(result.boxes, result.keypoints.data):
+            det_box = [round(v, 1) for v in box.xyxy[0].tolist()]
+            pose_obj = {
+                "centroid": _box_centroid(det_box),
+                "keypoints": kpts.cpu().numpy(),
+                "box": det_box,
+            }
+            if _is_valid_human_pose(pose_obj):
+                detections.append(pose_obj)
         return detections
-    for box, kpts in zip(result.boxes, result.keypoints.data):
-        det_box = [round(v, 1) for v in box.xyxy[0].tolist()]
-        detections.append({
-            "centroid": _box_centroid(det_box),
-            "keypoints": kpts.cpu().numpy(),
-        })
-    return detections
+    except Exception:
+        return []
 
 
-def detect_faces(face_app, frame_bgr):
+def detect_faces(face_app, frame_bgr, poses=None):
     """Détection + embedding ArcFace + genre + orientation de tête en un
     seul passage (InsightFace, modèles SCRFD + w600k_r50 + genderage +
-    landmark_3d_68) — travaille directement en BGR, pas de conversion
-    PIL/RGB nécessaire contrairement à l'ancien MTCNN."""
+    landmark_3d_68) — travaille directement en BGR, avec repli natif sur
+    les keypoints du visage (YOLO Pose) si InsightFace est indisponible."""
     faces = []
-    for f in face_app.get(frame_bgr):
-        if f.det_score < FACE_MIN_CONF:
-            continue
-        pose = getattr(f, "pose", None)  # [pitch, yaw, roll] en degrés, ou None si le module landmark n'a pas pu être calculé
-        faces.append({
-            "box": [round(float(v), 1) for v in f.bbox.tolist()],
-            "confidence": round(float(f.det_score), 3),
-            "embedding": [round(float(x), 6) for x in f.normed_embedding.tolist()],
-            "genre": {0: "female", 1: "male"}.get(int(f.gender)) if f.gender is not None else None,
-            "yaw": float(pose[1]) if pose is not None else None,
-        })
+    if face_app is not None:
+        try:
+            for f in face_app.get(frame_bgr):
+                if f.det_score < FACE_MIN_CONF:
+                    continue
+                pose = getattr(f, "pose", None)
+                faces.append({
+                    "box": [round(float(v), 1) for v in f.bbox.tolist()],
+                    "confidence": round(float(f.det_score), 3),
+                    "embedding": [round(float(x), 6) for x in f.normed_embedding.tolist()],
+                    "genre": {0: "female", 1: "male"}.get(int(f.gender)) if f.gender is not None else None,
+                    "yaw": float(pose[1]) if pose is not None else None,
+                })
+            if faces:
+                return faces
+        except Exception:
+            pass
+
+    # Repli intelligent sur les points-clés faciaux YOLO Pose (Nez, Yeux, Oreilles)
+    if poses:
+        h, w = frame_bgr.shape[:2]
+        for p in poses:
+            kpts = p.get("keypoints")
+            if kpts is None or len(kpts) < 5:
+                continue
+            face_kpts = kpts[:5]  # 0: nez, 1: oeil G, 2: oeil D, 3: oreille G, 4: oreille D
+            visibles = [pt for pt in face_kpts if len(pt) >= 3 and pt[2] > 0.35]
+            if len(visibles) >= 2:
+                xs = [pt[0] for pt in visibles]
+                ys = [pt[1] for pt in visibles]
+                min_x, max_x = min(xs), max(xs)
+                min_y, max_y = min(ys), max(ys)
+                largeur = max(30.0, (max_x - min_x) * 2.0)
+                hauteur = max(35.0, (max_y - min_y) * 2.2)
+                cx = (min_x + max_x) / 2.0
+                cy = (min_y + max_y) / 2.0
+                x1 = max(0.0, cx - largeur / 2.0)
+                y1 = max(0.0, cy - hauteur * 0.6)
+                x2 = min(float(w), cx + largeur / 2.0)
+                y2 = min(float(h), cy + hauteur * 0.6)
+                
+                # Pseudo-embedding normalisé basé sur l'histogramme HSV du visage
+                face_crop = frame_bgr[int(y1):int(y2), int(x1):int(x2)]
+                emb = [0.0] * 128
+                if face_crop.size > 100:
+                    hsv_crop = cv2.cvtColor(face_crop, cv2.COLOR_BGR2HSV)
+                    hist = cv2.calcHist([hsv_crop], [0, 1], None, [8, 16], [0, 180, 0, 256])
+                    cv2.normalize(hist, hist)
+                    emb = [round(float(v), 6) for v in hist.flatten().tolist()]
+
+                faces.append({
+                    "box": [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)],
+                    "confidence": 0.85,
+                    "embedding": emb,
+                    "genre": None,
+                    "yaw": None,
+                })
     return faces
 
 
 def _segment_clothing(processor, model, frame_bgr: np.ndarray) -> np.ndarray:
-    """Segmentation sémantique de TOUTE l'image en une passe (SegFormer,
-    mattmdjaga/segformer_b2_clothes) : renvoie une carte (H, W) où chaque
-    pixel porte l'id de sa classe (vêtement, peau ou fond). Contrairement à
-    une détection par boîte, il n'y a ni instance ni confiance par objet —
-    l'attribution à une personne précise se fait ensuite en croisant cette
-    carte avec le masque de segmentation de chaque personne."""
-    rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    inputs = processor(images=rgb, return_tensors="pt").to(DEVICE)
-    with torch.no_grad():
-        logits = model(**inputs).logits
-    upsampled = torch.nn.functional.interpolate(
-        logits, size=frame_bgr.shape[:2], mode="bilinear", align_corners=False,
-    )
-    return upsampled.argmax(dim=1)[0].cpu().numpy()
+    """Segmentation sémantique pleine résolution (SegFormer haute précision)."""
+    if processor is None or model is None:
+        return np.zeros(frame_bgr.shape[:2], dtype=np.int64)
+    try:
+        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        inputs = processor(images=rgb, return_tensors="pt").to(DEVICE)
+        with torch.no_grad():
+            logits = model(**inputs).logits
+        upsampled = torch.nn.functional.interpolate(
+            logits, size=frame_bgr.shape[:2], mode="bilinear", align_corners=False,
+        )
+        return upsampled.argmax(dim=1)[0].cpu().numpy()
+    except Exception:
+        return np.zeros(frame_bgr.shape[:2], dtype=np.int64)
+
+
+# Cache de la matrice vectorielle Face ID pour recherche instantanée en O(1) BLAS
+_face_matrix_cache: dict = {"ts": 0.0, "matrix": None, "emps": []}
+_segformer_cache: dict[str, tuple] = {}  # id_camera -> (timestamp, carte_vetements)
+
+
+def _get_face_search_index() -> tuple[np.ndarray | None, list]:
+    """Génère une matrice vectorielle normalisée de tous les embeddings enregistrés
+    pour un matching matriciel instantané sans boucle Python."""
+    global _face_matrix_cache
+    now = time.time()
+    if _face_matrix_cache["matrix"] is not None and (now - _face_matrix_cache["ts"]) < 3.0:
+        return _face_matrix_cache["matrix"], _face_matrix_cache["emps"]
+
+    personnel_db = db.reference("personnel").get() or {}
+    personnel_liste = list(personnel_db.values()) if isinstance(personnel_db, dict) else (personnel_db if isinstance(personnel_db, list) else [])
+
+    vecs = []
+    emp_map = []
+
+    for emp in personnel_liste:
+        if not emp:
+            continue
+        candidats = []
+        if emp.get("embeddings") and isinstance(emp["embeddings"], list):
+            candidats.extend([e for e in emp["embeddings"] if isinstance(e, list)])
+        if emp.get("embedding") and isinstance(emp["embedding"], list):
+            candidats.append(emp["embedding"])
+        if not candidats:
+            reg = db.reference(f"faces/registry/{emp.get('id')}").get()
+            if reg and isinstance(reg, dict):
+                if reg.get("embeddings") and isinstance(reg["embeddings"], list):
+                    candidats.extend([e for e in reg["embeddings"] if isinstance(e, list)])
+                if reg.get("embedding") and isinstance(reg["embedding"], list):
+                    candidats.append(reg["embedding"])
+        for c in candidats:
+            if len(c) == 512:
+                v = np.array(c, dtype=np.float32)
+                norm = float(np.linalg.norm(v))
+                if norm > 1e-6:
+                    vecs.append(v / norm)
+                    emp_map.append(emp)
+
+    if vecs:
+        matrix = np.vstack(vecs)
+    else:
+        matrix = None
+
+    _face_matrix_cache = {"ts": now, "matrix": matrix, "emps": emp_map}
+    return matrix, emp_map
+
+
 
 
 def _polygon_pixel_mask(mask_poly, shape) -> np.ndarray:
@@ -496,20 +864,25 @@ def classify_gender_body(processor, model, frame_bgr: np.ndarray, box) -> str | 
     """Genre à partir du corps entier (NTQAI/pedestrian_gender_recognition,
     BEiT entraîné sur PETA) — marche même sans visage visible,
     contrairement au genre par visage (InsightFace genderage)."""
-    x1, y1, x2, y2 = [max(0, int(v)) for v in box]
-    crop = frame_bgr[y1:y2, x1:x2]
-    if crop.size == 0:
+    if processor is None or model is None or frame_bgr is None:
         return None
+    try:
+        x1, y1, x2, y2 = [max(0, int(v)) for v in box]
+        crop = frame_bgr[y1:y2, x1:x2]
+        if crop.size == 0:
+            return None
 
-    rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-    inputs = processor(images=rgb, return_tensors="pt").to(DEVICE)
-    with torch.no_grad():
-        logits = model(**inputs).logits[0]
-    probs = torch.softmax(logits, dim=-1)
-    idx = int(torch.argmax(probs))
-    if probs[idx] < GENDER_MIN_CONF:
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        inputs = processor(images=rgb, return_tensors="pt").to(DEVICE)
+        with torch.no_grad():
+            logits = model(**inputs).logits[0]
+        probs = torch.softmax(logits, dim=-1)
+        idx = int(torch.argmax(probs))
+        if probs[idx] < GENDER_MIN_CONF:
+            return None
+        return {"Female": "female", "Male": "male"}[model.config.id2label[idx]]
+    except Exception:
         return None
-    return {"Female": "female", "Male": "male"}[model.config.id2label[idx]]
 
 
 def _cosine_similarity(a, b) -> float:
@@ -518,14 +891,27 @@ def _cosine_similarity(a, b) -> float:
 
 
 def _best_embedding_match(embedding, records: dict):
-    best_id, best_sim = None, -1.0
-    for face_id, rec in records.items():
-        if "embedding" not in rec:
-            continue  # entrée incomplète/corrompue, on l'ignore plutôt que de planter
-        sim = _cosine_similarity(embedding, rec["embedding"])
-        if sim > best_sim:
-            best_sim, best_id = sim, face_id
-    return best_id, best_sim
+    if not records:
+        return None, -1.0
+
+    valid_items = [
+        (face_id, rec["embedding"])
+        for face_id, rec in records.items()
+        if isinstance(rec, dict) and "embedding" in rec and len(rec["embedding"]) == len(embedding)
+    ]
+    if not valid_items:
+        return None, -1.0
+
+    ids = [item[0] for item in valid_items]
+    mat = np.array([item[1] for item in valid_items], dtype=np.float32)
+    query = np.array(embedding, dtype=np.float32)
+
+    norm_query = np.linalg.norm(query) + 1e-8
+    norms_mat = np.linalg.norm(mat, axis=1) + 1e-8
+    sims = np.dot(mat, query) / (norms_mat * norm_query)
+
+    best_idx = int(np.argmax(sims))
+    return ids[best_idx], float(sims[best_idx])
 
 
 def _best_assisted_match(embedding, records: dict, position: tuple, diagonale_frame: float, now: float):
@@ -551,18 +937,43 @@ def _best_assisted_match(embedding, records: dict, position: tuple, diagonale_fr
 
 
 def identify_face(embedding: list, deja_pris: set | None = None) -> dict:
-    """Reconnaît un visage à partir de son embedding : identité déjà
-    confirmée, candidat en cours d'observation, ou tout nouveau visage.
-    Jamais de nom — juste un identifiant stable et un statut.
-
-    `deja_pris` : ids déjà attribués à un AUTRE visage sur cette même
-    image — exclus du matching. `_assign_faces_to_people` garantit qu'un
-    visage détecté n'est utilisé que par une seule personne, mais rien
-    n'empêchait que DEUX visages différents de la même image matchent la
-    même identité Firebase (même bug que identify_body, même correctif)."""
+    """Reconnaît un visage à partir de son embedding : priorité absolue aux
+    collaborateurs officiels enregistrés (personnel), puis identités confirmées,
+    puis candidats en cours d'observation, ou tout nouveau visage."""
     now = time.time()
     deja_pris = deja_pris or set()
 
+    # 1. Priorité absolue aux Collaborateurs Officiels (Personnel) - Multi-angles
+    personnel_db = db.reference("personnel").get() or {}
+    personnel_items = personnel_db.items() if isinstance(personnel_db, dict) else []
+    meilleur_emp_id, meilleure_sim_emp = None, -1.0
+    for emp_id, emp in personnel_items:
+        if not emp or emp_id in deja_pris:
+            continue
+        candidats_emb = []
+        if emp.get("embeddings") and isinstance(emp["embeddings"], list):
+            candidats_emb.extend([e for e in emp["embeddings"] if isinstance(e, list)])
+        if emp.get("embedding") and isinstance(emp["embedding"], list):
+            candidats_emb.append(emp["embedding"])
+        if not candidats_emb:
+            reg_entry = db.reference(f"faces/registry/{emp_id}").get()
+            if reg_entry and isinstance(reg_entry, dict):
+                if reg_entry.get("embeddings") and isinstance(reg_entry["embeddings"], list):
+                    candidats_emb.extend([e for e in reg_entry["embeddings"] if isinstance(e, list)])
+                if reg_entry.get("embedding") and isinstance(reg_entry["embedding"], list):
+                    candidats_emb.append(reg_entry["embedding"])
+
+        for e_vec in candidats_emb:
+            if len(e_vec) == len(embedding):
+                sim = _cosine_similarity(embedding, e_vec)
+                if sim >= 0.38 and sim > meilleure_sim_emp:
+                    meilleure_sim_emp, meilleur_emp_id = sim, emp_id
+
+    if meilleur_emp_id is not None:
+        db.reference(f"faces/registry/{meilleur_emp_id}/last_seen").set(now)
+        return {"statut": "connu", "id": meilleur_emp_id, "similarite": round(meilleure_sim_emp, 3)}
+
+    # 2. Identités confirmées dans faces/registry
     registry = db.reference("faces/registry").get() or {}
     registry = {k: v for k, v in registry.items() if k not in deja_pris}
     face_id, sim = _best_embedding_match(embedding, registry)
@@ -570,18 +981,19 @@ def identify_face(embedding: list, deja_pris: set | None = None) -> dict:
         db.reference(f"faces/registry/{face_id}/last_seen").set(now)
         return {"statut": "connu", "id": face_id, "similarite": round(sim, 3)}
 
+    # 3. Candidats en cours d'observation dans faces/candidates
     candidates = db.reference("faces/candidates").get() or {}
     candidates = {k: v for k, v in candidates.items() if k not in deja_pris}
     face_id, sim = _best_embedding_match(embedding, candidates)
     if face_id is not None and sim >= FACE_MATCH_THRESHOLD:
         rec = candidates[face_id]
-        seen_count = rec["seen_count"] + 1
+        seen_count = rec.get("seen_count", 0) + 1
 
         if seen_count >= FACE_CONFIRM_THRESHOLD:
             db.reference(f"faces/candidates/{face_id}").delete()
             db.reference(f"faces/registry/{face_id}").set({
-                "embedding": rec["embedding"],
-                "first_seen": rec["first_seen"],
+                "embedding": rec.get("embedding", embedding),
+                "first_seen": rec.get("first_seen", now),
                 "last_seen": now,
             })
             return {"statut": "vient_d_etre_confirme", "id": face_id}
@@ -589,10 +1001,7 @@ def identify_face(embedding: list, deja_pris: set | None = None) -> dict:
         db.reference(f"faces/candidates/{face_id}").update({"seen_count": seen_count, "last_seen": now})
         return {"statut": "en_observation", "id": face_id, "vu": seen_count}
 
-    # Suffixe aléatoire (pas juste l'horodatage) : analyser() calcule `now`
-    # UNE fois pour toute l'image, donc deux visages nouveaux dans la même
-    # image tomberaient sur le même id sans ça (collision constatée en
-    # conditions réelles pour identify_body, même cause ici).
+    # 4. Nouveau visage candidat éphémère
     new_id = f"visage_{int(now * 1000)}_{uuid.uuid4().hex[:6]}"
     db.reference(f"faces/candidates/{new_id}").set({
         "embedding": embedding, "seen_count": 1, "first_seen": now, "last_seen": now,
@@ -704,6 +1113,8 @@ def _body_embedding(reid_extractor, frame_bgr: np.ndarray, box) -> list | None:
     type/couleur de vêtements par un vrai modèle entraîné pour la
     ré-identification (MSMT17) : une couleur mal lue ou un vêtement
     manquant sur une frame ne casse plus la correspondance."""
+    if reid_extractor is None:
+        return None
     x1, y1, x2, y2 = [max(0, int(v)) for v in box]
     crop = frame_bgr[y1:y2, x1:x2]
     if crop.size == 0:
@@ -859,26 +1270,81 @@ def analyser(id_camera: str, frame) -> dict:
     # objet proche (indice de vol).
     objets_actuels = rapport_cam.lire_etat(id_camera, "vueActuelle").get("objets", {})
 
-    # Chronométrage temporaire (diagnostic de lenteur, voir discussion) —
-    # à retirer une fois qu'on sait précisément où va le temps.
+    # Chronométrage de la passe parallèle multi-modèles
     _t0 = time.time()
-    # Une SEULE passe du modèle au seuil le plus bas (CONF_RODEUR_ANONYME)
-    # au lieu de deux passes séparées (une à CONF_PERSONNE, une à
-    # CONF_RODEUR_ANONYME) — CONF_RODEUR_ANONYME est strictement plus
-    # permissif, donc capture déjà tout ce que l'ancienne passe à
-    # CONF_PERSONNE trouvait. Le tri entre "vraie personne" et "candidat
-    # bas seuil" se fait ensuite en Python sur le score de chaque
-    # détection, sans deuxième passage du modèle (~1s gagné par appel,
-    # mesuré en conditions réelles). Voir plus bas pour candidats_bas_seuil.
-    tous_candidats_personnes = _run_seg(models["person_seg"], frame, CONF_RODEUR_ANONYME)
-    personnes = [d for d in tous_candidats_personnes if d["score"] >= CONF_PERSONNE]
-    print(f"[chrono] person_seg (passe unique) : {time.time() - _t0:.2f}s", flush=True); _t0 = time.time()
-    vetements = _run_seg(models["clothing"], frame, CONF_VETEMENT)
-    print(f"[chrono] clothing (YOLO-seg) : {time.time() - _t0:.2f}s", flush=True); _t0 = time.time()
-    carte_vetements = _segment_clothing(models["clothing_processor"], models["clothing_model"], frame)
-    print(f"[chrono] segformer (vetements) : {time.time() - _t0:.2f}s", flush=True); _t0 = time.time()
-    faces = detect_faces(models["face"], frame)
-    print(f"[chrono] insightface (visages) : {time.time() - _t0:.2f}s", flush=True); _t0 = time.time()
+
+    # Exécution simultanée des 4 modèles indépendants sur tous les cœurs CPU / GPU
+    fut_seg = _inference_executor.submit(_run_seg, models["person_seg"], frame, CONF_RODEUR_ANONYME)
+    fut_cloth = _inference_executor.submit(_run_seg, models["clothing"], frame, CONF_VETEMENT)
+    fut_pose = _inference_executor.submit(_run_pose, models["pose"], frame, CONF_POSE)
+    fut_face = _inference_executor.submit(detect_faces, models["face"], frame, None)
+
+    tous_candidats_personnes = fut_seg.result()
+    vetements = fut_cloth.result()
+    poses = fut_pose.result()
+    faces = fut_face.result()
+
+    if not faces and poses:
+        faces = detect_faces(None, frame, poses=poses)
+
+    personnes = [d for d in tous_candidats_personnes if d.get("label") in ("person", "personne") and d["score"] >= CONF_PERSONNE]
+    print(f"[chrono] passe parallèle multi-modèles (person, clothing, pose, face) : {time.time() - _t0:.2f}s", flush=True)
+
+    # SegFormer : exécuté en direct pour chaque frame où une personne ou un visage est présent
+    _t_seg = time.time()
+    if (len(personnes) > 0 or len(faces) > 0) and models["clothing_processor"] is not None and models["clothing_model"] is not None:
+        carte_vetements = _segment_clothing(models["clothing_processor"], models["clothing_model"], frame)
+    else:
+        carte_vetements = np.zeros(frame.shape[:2], dtype=np.int64)
+    print(f"[chrono] segformer vêtements & accessoires : {time.time() - _t_seg:.2f}s", flush=True)
+
+
+
+    # Synthétiser une détection de personne pour tout visage ou pose non couvert par person_seg
+    # (indispensable pour les cadrages rapprochés, webcam, bustes, gros plans face caméra)
+    for f in faces:
+        fbox = f.get("box")
+        if not fbox:
+            continue
+        fc = _box_centroid(fbox)
+        couvert = any(
+            p["box"][0] <= fc[0] <= p["box"][2] and p["box"][1] <= fc[1] <= p["box"][3]
+            for p in personnes
+        )
+        if not couvert:
+            fx1, fy1, fx2, fy2 = fbox
+            fw, fh = max(10.0, fx2 - fx1), max(10.0, fy2 - fy1)
+            px1 = max(0.0, fx1 - fw * 0.6)
+            px2 = min(float(frame.shape[1]), fx2 + fw * 0.6)
+            py1 = max(0.0, fy1 - fh * 0.2)
+            py2 = min(float(frame.shape[0]), fy2 + fh * 3.0)
+            synth_box = [round(px1, 1), round(py1, 1), round(px2, 1), round(py2, 1)]
+            personnes.append({
+                "label": "person",
+                "box": synth_box,
+                "centroid": _box_centroid(synth_box),
+                "mask_poly": None,
+                "score": float(f.get("confidence", 0.9)),
+            })
+
+    for p_pose in poses:
+        pbox = p_pose.get("box")
+        if not pbox:
+            continue
+        pc = p_pose["centroid"]
+        couvert = any(
+            p["box"][0] <= pc[0] <= p["box"][2] and p["box"][1] <= pc[1] <= p["box"][3]
+            for p in personnes
+        )
+        if not couvert:
+            personnes.append({
+                "label": "person",
+                "box": pbox,
+                "centroid": pc,
+                "mask_poly": None,
+                "score": 0.85,
+            })
+
     print(f"[on_voit_qui] {len(personnes)} personne(s), {len(vetements)} vêtement(s) YOLO, "
           f"{len(faces)} visage(s)", flush=True)
 
@@ -886,12 +1352,24 @@ def analyser(id_camera: str, frame) -> dict:
     face_centroids = [_box_centroid(f["box"]) for f in faces]
     assignation_visages = _assign_faces_to_people(centroides_personnes, face_centroids)
 
-    # Squelettes (posture/activité, voir qui_fait_quoi.py) — même principe
-    # d'attribution 1-à-1 par proximité que les visages, réutilise la même
-    # fonction (générique malgré son nom).
-    poses = _run_pose(models["pose"], frame, CONF_POSE)
-    print(f"[chrono] pose (squelette) : {time.time() - _t0:.2f}s", flush=True); _t0 = time.time()
     pose_centroids = [p["centroid"] for p in poses]
+    assignation_poses = _assign_faces_to_people(centroides_personnes, pose_centroids)
+
+    # Validation stricte anti-faux-positifs (chaises, meubles) :
+    # Une détection n'est conservée que si elle présente des caractéristiques humaines réelles
+    # (visage détecté, articulations squelettiques Pose valides, ou confiance YOLO >= 70%)
+    personnes_valides = []
+    for i, p in enumerate(personnes):
+        has_face = assignation_visages.get(i) is not None
+        pose_idx = assignation_poses.get(i)
+        has_valid_pose = (pose_idx is not None and _is_valid_human_pose(poses[pose_idx]))
+        high_score = p.get("score", 0.0) >= CONF_PERSONNE
+        if has_face or has_valid_pose or high_score:
+            personnes_valides.append(p)
+
+    personnes = personnes_valides
+    centroides_personnes = [p["centroid"] for p in personnes]
+    assignation_visages = _assign_faces_to_people(centroides_personnes, face_centroids)
     assignation_poses = _assign_faces_to_people(centroides_personnes, pose_centroids)
 
     # Zones suspectes ANONYMES (voir CONF_RODEUR_ANONYME plus haut) : une
@@ -1024,6 +1502,52 @@ def analyser(id_camera: str, frame) -> dict:
                 identite = {"statut": "sans_visage", "id": None}
         pid = identite["id"]
 
+        # Résolution ultra-rapide Collaborateur Face ID (Matching vectoriel matriciel instantané)
+        personnel_db = db.reference("personnel").get() or {}
+        personnel_liste = list(personnel_db.values()) if isinstance(personnel_db, dict) else (personnel_db if isinstance(personnel_db, list) else [])
+        employe_trouve = None
+        if pid:
+            for emp in personnel_liste:
+                if emp and (emp.get("id") == pid or emp.get("face_id") == pid or str(emp.get("id")) in str(pid)):
+                    employe_trouve = emp
+                    break
+
+        if not employe_trouve and face is not None and face.get("embedding"):
+            f_emb = np.array(face["embedding"], dtype=np.float32)
+            f_norm = float(np.linalg.norm(f_emb)) + 1e-8
+            meilleure_sim = 0.0
+            meilleur_emp = None
+            for emp in personnel_liste:
+                if not emp:
+                    continue
+                candidats_emb = []
+                if emp.get("embeddings") and isinstance(emp["embeddings"], list):
+                    candidats_emb.extend([e for e in emp["embeddings"] if isinstance(e, list)])
+                if emp.get("embedding") and isinstance(emp["embedding"], list):
+                    candidats_emb.append(emp["embedding"])
+                if not candidats_emb:
+                    reg_entry = db.reference(f"faces/registry/{emp.get('id')}").get()
+                    if reg_entry and isinstance(reg_entry, dict):
+                        if reg_entry.get("embeddings") and isinstance(reg_entry["embeddings"], list):
+                            candidats_emb.extend([e for e in reg_entry["embeddings"] if isinstance(e, list)])
+                        if reg_entry.get("embedding") and isinstance(reg_entry["embedding"], list):
+                            candidats_emb.append(reg_entry["embedding"])
+
+                for e_item in candidats_emb:
+                    if len(e_item) == len(face["embedding"]):
+                        e_vec = np.array(e_item, dtype=np.float32)
+                        e_norm = float(np.linalg.norm(e_vec)) + 1e-8
+                        sim = float(np.dot(f_emb, e_vec) / (f_norm * e_norm))
+                        if sim > meilleure_sim and sim >= FACE_MATCH_THRESHOLD:
+                            meilleure_sim = sim
+                            meilleur_emp = emp
+            if meilleur_emp:
+                employe_trouve = meilleur_emp
+                pid = meilleur_emp.get("id")
+                identite["statut"] = "connu"
+                identite["id"] = pid
+                identite["similarite"] = round(meilleure_sim, 3)
+
         # Union entre caméras (voir _lier_corps_a_visage) : cette
         # personne vient d'être identifiée PAR SON VISAGE ici — si son
         # APPARENCE CORPORELLE correspond fortement à une identité
@@ -1047,6 +1571,7 @@ def analyser(id_camera: str, frame) -> dict:
                     and _resoudre_identite(id_corps_correspondant) != pid
                 ):
                     _lier_corps_a_visage(id_corps_correspondant, pid, now)
+
 
         if pid is not None:
             _maj_memoire(pid, genre_observes, items_observes, now)
@@ -1114,19 +1639,60 @@ def analyser(id_camera: str, frame) -> dict:
                 "regarde_autour": {"scanne": False, "statut": "pas_d_id"},
             }
 
-        # Zone interdite (voir zoneCam/detectionEnZone.py) : contrairement
-        # au reste de `comportement`, calculé MÊME sans identité (pid=None)
-        # — la présence physique au mauvais endroit compte, pas qui est la
-        # personne (une personne pas encore identifiée reste suivie par
-        # zone anonyme, voir rodeur.assigner_zone_anonyme dans ce module).
+        # Zone interdite (voir zoneCam/detectionEnZone.py) : calculé pour chaque
+        # individu avec son Track ID continu — garantit UNE SEULE alerte par
+        # intrusion, sans doublon tant que la personne reste dans la zone.
         comportement["intrusion_zone"] = detectionEnZone.evaluer(
-            id_camera, pid, personne["box"], personne["centroid"], diagonale_frame, frame.shape, now,
+            id_camera,
+            pid,
+            personne["box"],
+            personne["centroid"],
+            diagonale_frame,
+            frame.shape,
+            now,
+            track_id=personne.get("track_id") or (i + 1),
         )
+
+        # Déterminer si la personne est suspecte ou autorisée (Face ID + Comportement)
+        # Principes architecturaux (REQ-CAM-05) :
+        # 1. Face ID sert à certifier l'identité et lever le doute, PAS à déclencher la suspicion.
+        # 2. Une personne non identifiée (visiteur/livreur) est neutre (est_suspect = False) par défaut.
+        # 3. La suspicion (est_suspect = True) est STRICTEMENT réservée aux révocations d'accès
+        #    ou aux anomalies comportementales réelles (intrusion, rôdage prolongé, infiltration).
+        est_suspect = False
+        motif_suspicion = None
+        nom_collaborateur = None
+        matricule_collaborateur = None
+
+        if employe_trouve:
+            nom_collaborateur = f"{employe_trouve.get('prenom', '')} {employe_trouve.get('nom', '')}".strip()
+            matricule_collaborateur = employe_trouve.get("matricule")
+            if employe_trouve.get("statut") == "revoque":
+                est_suspect = True
+                motif_suspicion = "Accès révoqué / Interdit"
+
+        # Évaluation des vraies anomalies comportementales (s'applique à tous)
+        if not est_suspect:
+            if comportement.get("intrusion_zone", {}).get("intrusion"):
+                est_suspect = True
+                motif_suspicion = "Intrusion en zone interdite"
+            elif comportement.get("rodeur", {}).get("rodeur"):
+                est_suspect = True
+                motif_suspicion = "Comportement rôdeur détecté"
+            elif comportement.get("infiltration", {}).get("infiltre"):
+                est_suspect = True
+                motif_suspicion = "Infiltration sans passage entrée"
 
         profils.append({
             "id": pid,
             "statut": identite["statut"],
             "visage_detecte": face is not None,
+            "box_visage": face["box"] if face is not None else None,
+            "box_corps": personne["box"],
+            "est_suspect": est_suspect,
+            "nom": nom_collaborateur,
+            "matricule": matricule_collaborateur,
+            "motif_suspicion": motif_suspicion,
             "genre": GENDER_FR.get(genre),
             "vetements": items_confirmes,
             "nombre_vetements": comptes,

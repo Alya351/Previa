@@ -93,7 +93,27 @@ export function AiAnalysisCard({ situations = [], alerteEnCours, onSelectModule 
       {/* LIST OF SITUATIONS */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {situations.length === 0 && (
-          <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', margin: 0 }}>Rien à signaler pour l'instant.</p>
+          <div
+            style={{
+              padding: '24px 16px',
+              textAlign: 'center',
+              background: '#f8fafc',
+              borderRadius: '12px',
+              border: '1px dashed var(--border-light)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <ShieldCheck size={26} color="#10b981" />
+            <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--ink-primary)' }}>
+              Aucun comportement suspect détecté
+            </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>
+              Surveillance active en temps réel sur l'ensemble des caméras
+            </div>
+          </div>
         )}
         {situations.map((item) => {
           const style = ICONES_PAR_NIVEAU[item.riskLevel] || ICONES_PAR_NIVEAU.low;

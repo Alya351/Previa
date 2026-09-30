@@ -32,11 +32,12 @@ déclenché CETTE alerte", pas "ce que montre la caméra maintenant" —
 sans ça, consulter une alerte de la veille afficherait une image du
 moment présent, sans rapport."""
 import json
+import threading
 import time
 import uuid
 from pathlib import Path
 
-from fonctionnalites.Infrastructure import derniere_image, alarme_physique
+from fonctionnalites.Infrastructure import derniere_image, alarme_physique, clips_service
 
 ALERTES_DIR = Path(__file__).resolve().parent.parent.parent.parent / "db" / "alertes"
 
@@ -81,6 +82,44 @@ def _chemin(id_alerte: str) -> Path:
     return ALERTES_DIR / f"{id_alerte}.json"
 
 
+from fonctionnalites.Infrastructure.local_store import db
+
+
+def _est_autorise(pid: str | None) -> bool:
+    if not pid:
+        return False
+    try:
+        vus = set()
+        cur = pid
+        while cur and cur not in vus:
+            vus.add(cur)
+            rec = db.reference(f"corps/registry/{cur}").get()
+            if not rec or "lie_a" not in rec:
+                break
+            cur = rec["lie_a"]
+
+        personnel_db = db.reference("personnel").get() or {}
+        personnel_liste = list(personnel_db.values()) if isinstance(personnel_db, dict) else (personnel_db if isinstance(personnel_db, list) else [])
+        for emp in personnel_liste:
+            if not emp:
+                continue
+            e_id = emp.get("id")
+            f_id = emp.get("face_id")
+            if (
+                e_id == pid
+                or f_id == pid
+                or e_id == cur
+                or f_id == cur
+                or (e_id and str(e_id) in str(pid))
+                or (e_id and str(e_id) in str(cur))
+            ):
+                if emp.get("statut") != "revoque":
+                    return True
+    except Exception:
+        pass
+    return False
+
+
 def enregistrer_alerte(
     type_evenement: str,
     id_camera: str,
@@ -97,6 +136,10 @@ def enregistrer_alerte(
     if type_evenement not in TYPES_VALIDES:
         raise ValueError(f"type_evenement invalide : {type_evenement!r} (attendu : {TYPES_VALIDES})")
 
+    # Un collaborateur autorisé en règle n'est jamais un rôdeur ni un infiltré
+    if type_evenement in {"rodeur", "infiltration"} and _est_autorise(pid):
+        return {"id": "ignored", "statut": "collaborateur_autorise_ignore"}
+
     alerte = {
         "id": uuid.uuid4().hex,
         "type_evenement": type_evenement,
@@ -110,9 +153,11 @@ def enregistrer_alerte(
     with open(_chemin(alerte["id"]), "w", encoding="utf-8") as f:
         json.dump(alerte, f, ensure_ascii=False, indent=2)
     _enregistrer_instantane(alerte["id"], id_camera)
+    threading.Thread(target=clips_service.enregistrer_clip, args=(alerte["id"], id_camera), daemon=True).start()
     if type_evenement in TYPES_CRITIQUES:
         alarme_physique.activer()
     return alerte
+
 
 
 def lister_alertes(id_camera: str | None = None, pid: str | None = None) -> list[dict]:
@@ -121,10 +166,42 @@ def lister_alertes(id_camera: str | None = None, pid: str | None = None) -> list
     ALERTES_DIR.mkdir(parents=True, exist_ok=True)
     alertes = []
     for fichier in ALERTES_DIR.glob("*.json"):
-        with open(fichier, encoding="utf-8") as f:
-            alertes.append(json.load(f))
+        try:
+            with open(fichier, encoding="utf-8") as f:
+                alertes.append(json.load(f))
+        except Exception:
+            pass
     if id_camera is not None:
-        alertes = [a for a in alertes if a["id_camera"] == id_camera]
+        alertes = [a for a in alertes if a.get("id_camera") == id_camera]
     if pid is not None:
-        alertes = [a for a in alertes if a["pid"] == pid]
-    return sorted(alertes, key=lambda a: a["horodatage"], reverse=True)
+        alertes = [a for a in alertes if a.get("pid") == pid]
+    return sorted(alertes, key=lambda a: a.get("horodatage", 0), reverse=True)
+
+
+def supprimer_alerte(id_alerte: str) -> bool:
+    """Supprime une alerte ainsi que son image et son extrait vidéo éventuel."""
+    fichier_json = _chemin(id_alerte)
+    fichier_img = _chemin_image(id_alerte)
+    fichier_clip = ALERTES_DIR / f"{id_alerte}.mp4"
+    supprime = False
+    if fichier_json.exists():
+        fichier_json.unlink(missing_ok=True)
+        supprime = True
+    if fichier_img.exists():
+        fichier_img.unlink(missing_ok=True)
+    if fichier_clip.exists():
+        fichier_clip.unlink(missing_ok=True)
+    return supprime
+
+
+def supprimer_toutes_alertes() -> int:
+    """Supprime l'ensemble des alertes, images et clips archivés."""
+    ALERTES_DIR.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for f in list(ALERTES_DIR.glob("*")):
+        if f.is_file():
+            if f.suffix == ".json":
+                count += 1
+            f.unlink(missing_ok=True)
+    return count
+
