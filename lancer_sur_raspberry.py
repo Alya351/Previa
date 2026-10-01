@@ -219,7 +219,7 @@ def synchroniser_modeles(ssh):
     if not fichiers:
         raise FileNotFoundError(f"Aucun modele IA trouve dans : {models_dir}")
 
-    executer_commande_distante(ssh, "mkdir -p ~/tech-impact/migration/models")
+    executer_commande_distante(ssh, "mkdir -p ~/tech-impact/migration/models && chmod -R u+rwX ~/tech-impact/migration/models || true")
     commande_inventaire = (
         "cd \"$HOME/tech-impact\" && "
         "find migration/models -type f -printf '%p\\t%s\\n'"

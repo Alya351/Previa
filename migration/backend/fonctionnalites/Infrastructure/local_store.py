@@ -24,22 +24,9 @@ import json
 import threading
 import time
 import uuid
-from pathlib import Path
-
-DB_PATH = Path(__file__).resolve().parent.parent.parent.parent / "db" / "db.json"
+from fonctionnalites.Infrastructure.sqlite_db import get_connection
 
 _lock = threading.Lock()
-
-
-def _charger() -> dict:
-    if not DB_PATH.exists():
-        return {}
-    try:
-        with open(DB_PATH, encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError) as exc:
-        print(f"[local_store] fichier {DB_PATH} illisible ({exc}) — redémarre avec une base vide", flush=True)
-        return {}
 
 
 def _json_default(obj):
@@ -52,19 +39,29 @@ def _json_default(obj):
     return str(obj)
 
 
-def _sauvegarder(arbre: dict) -> None:
-    # Écriture dans un fichier temporaire puis renommage atomique — évite
-    # un fichier JSON à moitié écrit si le processus est interrompu
-    # pendant la sauvegarde (kill -9, coupure...).
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)  # sinon plante sur un tout premier lancement (dossier db/ pas encore créé)
-    tmp = DB_PATH.with_suffix(".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(arbre, f, ensure_ascii=False, default=_json_default)
-    tmp.replace(DB_PATH)
-
-
 def _segments(chemin: str) -> list:
     return [s for s in chemin.strip("/").split("/") if s]
+
+
+def _charger_arbre() -> dict:
+    conn = get_connection()
+    row = conn.execute("SELECT value_json FROM kv_store WHERE key='root_tree'").fetchone()
+    if row and row["value_json"]:
+        try:
+            return json.loads(row["value_json"])
+        except Exception:
+            return {}
+    return {}
+
+
+def _sauvegarder_arbre(arbre: dict) -> None:
+    conn = get_connection()
+    val_json = json.dumps(arbre, ensure_ascii=False, default=_json_default)
+    with conn:
+        conn.execute(
+            "INSERT INTO kv_store (key, value_json, updated_at) VALUES ('root_tree', ?, ?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json, updated_at=excluded.updated_at",
+            (val_json, time.time())
+        )
 
 
 def _lire_a(arbre: dict, segments: list):
@@ -85,7 +82,7 @@ def _ecrire_a(arbre: dict, segments: list, valeur) -> None:
             noeud[s] = {}
         noeud = noeud[s]
     if valeur is None:
-        noeud.pop(segments[-1], None)  # Firebase : écrire None = supprimer la clé
+        noeud.pop(segments[-1], None)
     else:
         noeud[segments[-1]] = valeur
 
@@ -97,39 +94,33 @@ class Reference:
 
     def get(self):
         with _lock:
-            return _lire_a(_charger(), self._segments)
+            return _lire_a(_charger_arbre(), self._segments)
 
     def set(self, valeur) -> None:
         with _lock:
-            arbre = _charger()
+            arbre = _charger_arbre()
             _ecrire_a(arbre, self._segments, valeur)
-            _sauvegarder(arbre)
+            _sauvegarder_arbre(arbre)
 
     def update(self, valeurs: dict) -> None:
         with _lock:
-            arbre = _charger()
+            arbre = _charger_arbre()
             existant = _lire_a(arbre, self._segments)
             fusionne = dict(existant) if isinstance(existant, dict) else {}
             fusionne.update(valeurs)
             _ecrire_a(arbre, self._segments, fusionne)
-            _sauvegarder(arbre)
+            _sauvegarder_arbre(arbre)
 
     def push(self, valeur):
-        # Clé unique, à peu près triable chronologiquement (millisecondes
-        # + suffixe aléatoire) — pas l'algorithme exact des push-ids
-        # Firebase, mais le même usage : chaque appel obtient sa propre
-        # clé, jamais de collision entre deux pushes au même moment (même
-        # principe que les identifiants de personnes ailleurs dans ce
-        # projet).
         cle = f"{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
         with _lock:
-            arbre = _charger()
+            arbre = _charger_arbre()
             parent = _lire_a(arbre, self._segments)
             if not isinstance(parent, dict):
                 parent = {}
                 _ecrire_a(arbre, self._segments, parent)
             parent[cle] = valeur
-            _sauvegarder(arbre)
+            _sauvegarder_arbre(arbre)
         return Reference(f"{self.chemin}/{cle}")
 
     def delete(self) -> None:
@@ -142,3 +133,4 @@ class _DB:
 
 
 db = _DB()
+

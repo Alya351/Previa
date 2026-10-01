@@ -21,6 +21,7 @@ import threading
 import time
 from collections import defaultdict
 from pathlib import Path
+from fonctionnalites.Infrastructure.sqlite_db import get_connection
 
 RAPPORT_DIR = Path(__file__).resolve().parent.parent.parent.parent / "db" / "rapportCam"
 
@@ -115,30 +116,47 @@ def lire_etat(id_camera: str, cle: str | None = None, peremption_s: float = 10.0
 
 
 def ajouter_historique(id_camera: str, evenement: dict) -> None:
-    """Ajoute un événement horodaté à l'historique de CETTE caméra
-    (équivalent par-caméra de l'ancien db.reference("historique/...").push()).
-    Tronque à MAX_HISTORIQUE entrées (garde les plus récentes)."""
-    with _verrous[id_camera]:
-        chemin = _dossier_camera(id_camera) / "historique.json"
-        historique = []
-        if chemin.exists():
-            with open(chemin, encoding="utf-8") as f:
-                historique = json.load(f)
-        evenement = dict(evenement)
-        evenement.setdefault("horodatage", time.time())
-        historique.append(evenement)
-        if len(historique) > MAX_HISTORIQUE:
-            historique = historique[-MAX_HISTORIQUE:]
-        with open(chemin, "w", encoding="utf-8") as f:
-            json.dump(historique, f, ensure_ascii=False, indent=2, default=_json_default)
+    """Ajoute un événement horodaté à la table SQLite 'evenements_historique' avec synchronous=FULL (REQ-REP-01)."""
+    conn = get_connection()
+    evenement = dict(evenement)
+    ts = evenement.setdefault("horodatage", time.time())
+    type_ev = evenement.get("type") or evenement.get("type_evenement") or "detection"
+    gravite = evenement.get("gravite") or "info"
+    statut = evenement.get("statut") or "non_traite"
+    payload = json.dumps(evenement, ensure_ascii=False, default=_json_default)
+    
+    with conn:
+        # synchronous=FULL pour garantir la résistance absolue aux coupures de courant
+        conn.execute("PRAGMA synchronous=FULL;")
+        conn.execute("""
+            INSERT INTO evenements_historique (camera_id, timestamp, type_evenement, gravite, statut, payload_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (id_camera, ts, type_ev, gravite, statut, payload))
+        conn.execute("PRAGMA synchronous=NORMAL;")
 
 
-def lire_historique(id_camera: str) -> list[dict]:
-    chemin = _dossier_camera(id_camera) / "historique.json"
-    if not chemin.exists():
-        return []
-    with open(chemin, encoding="utf-8") as f:
-        return json.load(f)
+def lire_historique(id_camera: str, limit: int = 100) -> list[dict]:
+    """Lit l'historique indexé depuis SQLite (REQ-REP-01 & REQ-ALT-03)."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT payload_json, statut, acquitte_par, acquitte_le
+        FROM evenements_historique
+        WHERE camera_id = ?
+        ORDER BY timestamp DESC
+        LIMIT ?
+    """, (id_camera, limit)).fetchall()
+    
+    resultat = []
+    for r in rows:
+        try:
+            ev = json.loads(r["payload_json"])
+            ev["statut"] = r["statut"]
+            ev["acquitte_par"] = r["acquitte_par"]
+            ev["acquitte_le"] = r["acquitte_le"]
+            resultat.append(ev)
+        except Exception:
+            pass
+    return resultat
 
 
 def lister_cameras_avec_rapport() -> list[str]:
