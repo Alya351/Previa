@@ -76,8 +76,9 @@ def normaliser_url_rtsp(url: str) -> str:
         if ":" in auth:
             user, password = auth.split(":", 1)
             import urllib.parse
-            # Si le mot de passe se termine par un '@' déjà encodé ou brut
-            password_enc = urllib.parse.quote(password, safe="")
+            # Dé-encoder d'abord pour éviter de re-sur-encoder %40 en %2540
+            password_brut = urllib.parse.unquote(password)
+            password_enc = urllib.parse.quote(password_brut, safe="")
             return f"{scheme}://{user}:{password_enc}@{hote_et_chemin}"
     return u
 
@@ -148,26 +149,24 @@ def tester_connexion_rtsp(url_flux: str, timeout_sec: int = 5) -> dict:
                     return {"ok": True, "taille_image": len(proc_udp.stdout)}
 
             err_msg = proc.stderr.decode("utf-8", errors="ignore")[-250:]
-            return {"ok": False, "erreur": f"Impossible de lire le flux : {err_msg or 'Caméra injoignable'}"}
-        except subprocess.TimeoutExpired:
-            return {"ok": False, "erreur": f"Délai d'attente dépassé ({timeout_sec}s) pour joindre la caméra"}
-        except Exception as exc:
-            return {"ok": False, "erreur": str(exc)}
+        except Exception:
+            err_msg = "FFmpeg indisponible ou timeout"
 
-    # 2. Fallback universel OpenCV (si FFmpeg CLI non disponible)
+    # 2. Fallback universel OpenCV
     try:
         import cv2
         cap = cv2.VideoCapture(url)
-        if not cap.isOpened():
-            return {"ok": False, "erreur": "Échec d'ouverture du flux vidéo avec OpenCV"}
-        ret, frame = cap.read()
-        cap.release()
-        if ret and frame is not None:
-            _, buf = cv2.imencode('.jpg', frame)
-            return {"ok": True, "taille_image": len(buf)}
-        return {"ok": False, "erreur": "Aucune trame vidéo reçue de la caméra"}
+        if cap.isOpened():
+            ret, frame = cap.read()
+            cap.release()
+            if ret and frame is not None:
+                _, buf = cv2.imencode('.jpg', frame)
+                return {"ok": True, "taille_image": len(buf)}
+        return {"ok": False, "erreur": f"Impossible de lire le flux (FFmpeg & OpenCV) : {err_msg or 'Caméra injoignable'}"}
     except Exception as e:
-        return {"ok": False, "erreur": f"Erreur OpenCV : {str(e)}"}
+        return {"ok": False, "erreur": str(e)}
+
+
 
 
 def capturer_snapshot_unique(url_flux: str, timeout_sec: int = 4) -> Optional[bytes]:
