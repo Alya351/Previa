@@ -55,7 +55,14 @@ from fonctionnalites.VueEnsemble import vue_ensemble as vue_ensemble_module
 # vu dans l'ancien backend/main.py) ; les importer tôt, séquentiellement,
 # évite le problème.
 from fonctionnalites.DetectionPrincipal.on_voit_quoi import analyser as analyser_quoi
-from fonctionnalites.DetectionPrincipal.on_voit_qui import analyser as analyser_qui
+from fonctionnalites.DetectionPrincipal.on_voit_qui import analyser as analyser_qui, _get_models
+
+# Préchargement synchrone des modèles IA pour que 'on_voit_qui' soit immédiatement prêt
+try:
+    _get_models()
+except Exception as _e_init:
+    print(f"[main] avertissement préchargement modèles : {_e_init}", flush=True)
+
 
 from fonctionnalites.Infrastructure import etat_persistant, generer_certificat
 
