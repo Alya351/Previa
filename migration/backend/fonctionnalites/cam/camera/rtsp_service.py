@@ -208,6 +208,24 @@ def capturer_snapshot_unique(url_flux: str, timeout_sec: int = 4) -> Optional[by
     return None
 
 
+_stats_ticks_ia: dict[str, dict] = {}
+
+
+def obtenir_sante_ia(id_camera: str) -> dict:
+    """Renvoie les statistiques de santé du worker IA (taux de ticks ignorés / exécutés)."""
+    with _analyses_lock:
+        stats = _stats_ticks_ia.get(id_camera, {})
+        totaux = stats.get("totaux", 0)
+        ignores = stats.get("ignores", 0)
+        taux_drop = round((ignores / max(1, totaux)) * 100.0, 1) if totaux > 0 else 0.0
+        return {
+            "ticks_totaux": totaux,
+            "ticks_ignores": ignores,
+            "taux_drop_pourcent": taux_drop,
+            "sante_ia_ok": taux_drop < 20.0,
+        }
+
+
 def declencher_analyse_asynchrone(id_camera_ou_url: str, jpg_bytes: bytes) -> None:
     """Déclenche de façon asynchrone l'analyse IA (YOLO + Face ID + Objets) sur la trame la plus récente."""
     if not jpg_bytes or len(jpg_bytes) < 500:
@@ -218,7 +236,20 @@ def declencher_analyse_asynchrone(id_camera_ou_url: str, jpg_bytes: bytes) -> No
         return
 
     with _analyses_lock:
+        st = _stats_ticks_ia.setdefault(id_camera_ou_url, {"totaux": 0, "ignores": 0, "reset_ts": maintenant})
+        st["totaux"] += 1
+
+        # Réinitialisation de la fenêtre glissante d'une minute + log de contrôle de santé
+        if maintenant - st["reset_ts"] >= 60.0:
+            taux_drop = (st["ignores"] / max(1, st["totaux"])) * 100.0
+            if taux_drop >= 20.0:
+                print(f"[rtsp_service] ⚠️ AVERTISSEMENT SANTÉ IA ({id_camera_ou_url}) : {taux_drop:.1f}% de ticks d'analyse ignorés sur 60s (contention CPU/inférence).", flush=True)
+            st["totaux"] = 1
+            st["ignores"] = 0
+            st["reset_ts"] = maintenant
+
         if id_camera_ou_url in _analyses_actives:
+            st["ignores"] += 1
             return
         _analyses_actives.add(id_camera_ou_url)
 

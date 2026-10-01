@@ -192,7 +192,12 @@ La vidéosurveillance conventionnelle génère un volume massif d'images que les
 ### 5.4. Résilience Matérielle, API Ouverte & Exploitation
 * **Alimentation secourue (UPS)** : Interfaçage et recommandation d'une alimentation sans interruption pour la continuité de service en cas de coupure de courant.
 * **Détection de masquage / coupure caméra** : Alerte immédiate en cas d'obstruction optique, de masquage ou de câble débranché (> 15s sans frame).
-* **API Ouverte & Webhooks** : Endpoints REST et Webhooks sécurisés pour interconnexion avec les systèmes de contrôle d'accès existants (badgeuses) et SIEM.
+### 5.5. Architecture Edge AI, Décodage GPU & Traitement Vidéo Basse Latence
+* **NFA-AI-01 : Accélération Inférence ONNX C++** — Exécution des réseaux de neurones (YOLOv8n / YOLO11n) privilégiée au format ONNX via OpenCV DNN C++ avec instructions vectorielles ARM NEON, pour supprimer la surcharge d'exécution PyTorch et maintenir la latence d'inférence au plus bas.
+* **NFA-AI-02 : Décodage Vidéo Matériel GPU (v4l2m2m) & Repli à Chaud** — Décodage des flux RTSP pris en charge par le bloc GPU (VideoCore VI `h264_v4l2m2m` sous Linux/Pi 4) placé en option d'entrée FFmpeg. En cas d'incompatibilité de profil vidéo ou d'échec d'ouverture, basculement automatique et silencieux en décodage logiciel CPU sans interruption de service.
+* **NFA-AI-03 : Stockage Zéro-Disque & Tampons RAM Circulaires** — Conservation des instantanés vidéo et des clips de preuve (10s) exclusivement en mémoire vive (RAM) via des structures circulaires à taille fixe (`deque maxlen=150`). Garantit la protection contre le débordement mémoire (OOM) et élimine la contention I/O d'écriture sur carte SD.
+* **NFA-AI-04 : Verrou Anti-Contention & Télémétrie de Santé IA** — Protection par verrou d'exclusion mutuelle non-bloquant (`_analyses_lock`) éliminant tout risque d'accumulation de file d'attente. Suivi télémétrique continu du taux de ticks d'analyse ignorés sur fenêtre glissante de 60 secondes, avec alerte système si le taux dépasse 20%.
+* **NFA-AI-05 : Calibrage Statistique du Cadencement (`P95 × 1,3`)** — Définition de l'intervalle de cycle du worker IA basée sur le 95e percentile (P95) de latence d'inférence mesurée à chaud sous tension nominale, augmenté d'une marge de sécurité de 30% pour absorber la variance naturelle d'exécution.
 
 ---
 
