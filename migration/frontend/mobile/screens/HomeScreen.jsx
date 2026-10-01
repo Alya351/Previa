@@ -84,8 +84,10 @@ export const HomeScreen = ({
           </View>
         )}
 
-        {/* HERO CARD APPLE HOME ÉPURÉE & BLANCHE */}
+        {/* HERO CARD ELEGANTE AVEC RUBAN BLEU PREVIA */}
         <View style={[styles.heroCard, isDark && styles.heroCardDark]}>
+          <View style={styles.heroRibbon} />
+          
           <View style={styles.heroTopRow}>
             <View style={styles.heroStatusBadge}>
               <View style={styles.heroStatusDot} />
@@ -498,11 +500,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // HERO CARD APPLE HOME
+  // HERO CARD ELEGANTE AVEC RUBAN BLEU
   heroCard: {
     backgroundColor: PREVIA_COLORS.white,
     borderRadius: 22,
     padding: 20,
+    paddingTop: 22,
     marginBottom: 20,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 6 },
@@ -511,6 +514,16 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
     borderColor: '#EBF1F6',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  heroRibbon: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 5,
+    backgroundColor: PREVIA_COLORS.bluePrimary,
   },
   heroCardDark: {
     backgroundColor: PREVIA_COLORS.darkSurface,
