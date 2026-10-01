@@ -260,7 +260,7 @@ COLOR_FR = {
 
 GENDER_FR = {"female": "femme", "male": "homme"}
 
-CONF_PERSONNE = 0.25
+CONF_PERSONNE = 0.20
 CONF_VETEMENT = 0.35
 CONF_POSE = 0.35
 
@@ -327,7 +327,7 @@ def _get_onnx_yolo():
     return _onnx_net
 
 
-def _detect_persons_yolo_onnx(net, frame, conf_threshold=0.30) -> list:
+def _detect_persons_yolo_onnx(net, frame, conf_threshold=0.20) -> list:
     if net is None or frame is None or frame.size == 0:
         return []
 
