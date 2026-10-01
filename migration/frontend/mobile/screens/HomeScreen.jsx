@@ -104,7 +104,7 @@ export const HomeScreen = ({
               </Text>
             </View>
             <View style={styles.heroShieldCircle}>
-              <IconShieldCheck size={28} color="#00F2FE" />
+              <IconShieldCheck size={28} color="#009FE3" />
             </View>
           </View>
 

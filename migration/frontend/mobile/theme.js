@@ -4,36 +4,34 @@
 // ============================================================================
 
 export const PREVIA_COLORS = {
-  // Palette officielle PREVIA & Neons Cyber-Sécurité
-  bluePrimary: '#00A8FF',     // Bleu néon actif
-  blueDeep: '#013A81',        // Accent profond
-  blueMedium: '#1E88E5',      // Transitions dégradés
-  cyanGlow: '#00F2FE',        // Halo luminescent IA
-  emeraldSuccess: '#10B981',   // Validation / Service OK
-  navyText: '#0F172A',        // Texte mode clair
-  nearBlack: '#0B0F17',       // Fond sombre ultra-deep
-  redAlert: '#FF0055',        // Alerte critique néon
-  bgLight: '#F1F5F9',         // Fond général mode clair
+  // Palette officielle PREVIA (Extraite pixel par pixel du logo officiel PREVIA)
+  bluePrimary: '#009FE3',     // Bleu Ciel PREVIA (logo, CTA, accents principaux)
+  blueDeep: '#014791',        // Bleu Marine Nuit PREVIA (dégradés, titres, fond de marque)
+  blueMedium: '#2E9DE7',      // Bleu Intermédiaire PREVIA
+  navyText: '#152E4C',        // Texte principal foncé
+  nearBlack: '#111316',       // Fond sombre de barre et éléments profonds
+  redAlert: '#DB2323',        // Rouge Officiel PREVIA (Alertes uniquement)
+  bgLight: '#F4F8FB',         // Fond clair épuré officiel PREVIA
   white: '#FFFFFF',
+  graySecondary: '#6B7280',   // Texte secondaire / sous-titres
 
-  // Couleurs de sévérité calibrées
-  severityCritical: '#FF0055',
+  // Sévérité des alertes
+  severityCritical: '#DB2323',
   severityHigh: '#F59E0B',
-  severityInfo: '#00A8FF',
+  severityInfo: '#009FE3',
 
-  // Actions rapides ergonomiques
-  actionVerify: '#10B981',
-  actionReject: '#64748B',
-  actionWarning: '#F59E0B',
+  // Actions ergonomiques
+  actionVerify: '#16A34A',
+  actionReject: '#6B7280',
+  actionWarning: '#EAB308',
 
-  // Mode sombre ultra-premium (Glassmorphism & OLED pitch black)
-  darkBackground: '#0B0F17',
-  darkSurface: '#151C28',
-  darkSurfaceElevated: '#1E293B',
-  darkBorder: 'rgba(255, 255, 255, 0.08)',
-  darkBorderGlow: 'rgba(0, 168, 255, 0.25)',
-  darkTextPrimary: '#F8FAFC',
-  darkTextSecondary: '#94A3B8',
+  // Mode sombre officiel
+  darkBackground: '#111316',
+  darkSurface: '#1A1E24',
+  darkSurfaceElevated: '#242932',
+  darkBorder: '#2E3540',
+  darkTextPrimary: '#FFFFFF',
+  darkTextSecondary: '#D1D5DB',
 };
 
 // Échelle typographique
