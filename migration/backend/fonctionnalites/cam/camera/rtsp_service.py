@@ -76,6 +76,7 @@ def normaliser_url_rtsp(url: str) -> str:
         if ":" in auth:
             user, password = auth.split(":", 1)
             import urllib.parse
+            # Si le mot de passe se termine par un '@' déjà encodé ou brut
             password_enc = urllib.parse.quote(password, safe="")
             return f"{scheme}://{user}:{password_enc}@{hote_et_chemin}"
     return u
@@ -471,7 +472,8 @@ def generer_flux_mjpeg(id_camera: str, url_flux: str) -> Generator[bytes, None, 
             inactif_compteur = 0
             yield (
                 b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n"
+                b"Content-Type: image/jpeg\r\n"
+                b"Content-Length: " + str(len(jpg)).encode() + b"\r\n\r\n"
                 + jpg
                 + b"\r\n"
             )
