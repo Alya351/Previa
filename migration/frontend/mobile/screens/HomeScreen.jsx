@@ -84,46 +84,50 @@ export const HomeScreen = ({
           </View>
         )}
 
-        {/* HERO CARD ELEGANTE AVEC RUBAN BLEU PREVIA */}
+        {/* HERO CARD BLEU ÉLÉGANT AVEC VAGUES / DEGRADÉ PREVIA */}
         <View style={[styles.heroCard, isDark && styles.heroCardDark]}>
-          <View style={styles.heroRibbon} />
-          
+          {/* FORMES DÉCORATIVES FLUIDES BLEU DU LOGO */}
+          <View style={styles.heroBgDecoWrapper} pointerEvents="none">
+            <View style={styles.heroBgWave1} />
+            <View style={styles.heroBgWave2} />
+          </View>
+
           <View style={styles.heroTopRow}>
             <View style={styles.heroStatusBadge}>
               <View style={styles.heroStatusDot} />
               <Text style={styles.heroStatusText}>SURVEILLANCE ACTIVE • 100% LOCAL</Text>
             </View>
-            <Text style={[styles.heroPosteTag, isDark && styles.heroPosteTagDark]}>Poste 1</Text>
+            <Text style={styles.heroPosteTag}>Poste 1</Text>
           </View>
 
           <View style={styles.heroTitleRow}>
             <View style={styles.heroTitleWrap}>
-              <Text style={[styles.heroTitle, isDark && styles.heroTitleDark]}>Bâtiment Principal</Text>
-              <Text style={[styles.heroSubtitle, isDark && styles.heroSubtitleDark]}>
+              <Text style={styles.heroTitle}>Bâtiment Principal</Text>
+              <Text style={styles.heroSubtitle}>
                 {totalCameras} caméra(s) en supervision direct • 0 menace
               </Text>
             </View>
             <View style={styles.heroShieldCircle}>
-              <IconShieldCheck size={20} color={PREVIA_COLORS.bluePrimary} />
+              <IconShieldCheck size={20} color="#FFFFFF" />
             </View>
           </View>
 
-          {/* TELEMETRIE APPLE HOME MINIMALISTE */}
-          <View style={[styles.telemetryRow, isDark && styles.telemetryRowDark]}>
+          {/* TELEMETRIE INTEGREE EN PILLS TRANSLUCIDES */}
+          <View style={styles.telemetryRow}>
             <View style={styles.telemetryChip}>
-              <Text style={[styles.telemetryValue, isDark && styles.telemetryValueDark]}>{totalCameras}</Text>
+              <Text style={styles.telemetryValue}>{totalCameras}</Text>
               <Text style={styles.telemetryLabel}>Caméras</Text>
             </View>
-            <View style={[styles.telemetryDivider, isDark && styles.telemetryDividerDark]} />
+            <View style={styles.telemetryDivider} />
             <View style={styles.telemetryChip}>
-              <Text style={[styles.telemetryValue, unreadCount > 0 ? styles.telemetryValueAlert : (isDark && styles.telemetryValueDark)]}>
+              <Text style={[styles.telemetryValue, unreadCount > 0 && styles.telemetryValueAlert]}>
                 {unreadCount}
               </Text>
               <Text style={styles.telemetryLabel}>Incidents</Text>
             </View>
-            <View style={[styles.telemetryDivider, isDark && styles.telemetryDividerDark]} />
+            <View style={styles.telemetryDivider} />
             <View style={styles.telemetryChip}>
-              <Text style={[styles.telemetryValue, { color: '#16A34A' }]}>Normal</Text>
+              <Text style={[styles.telemetryValue, { color: '#4ADE80' }]}>Normal</Text>
               <Text style={styles.telemetryLabel}>État</Text>
             </View>
           </View>
@@ -500,108 +504,113 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // HERO CARD ELEGANTE AVEC RUBAN BLEU
+  // HERO CARD SAPPHIRE AVEC VAGUES BLEUES LOGO PREVIA
   heroCard: {
-    backgroundColor: PREVIA_COLORS.white,
+    backgroundColor: '#01356C',
     borderRadius: 22,
     padding: 20,
-    paddingTop: 22,
     marginBottom: 20,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
+    shadowColor: '#014791',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
     shadowRadius: 16,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#EBF1F6',
+    elevation: 4,
     overflow: 'hidden',
     position: 'relative',
   },
-  heroRibbon: {
+  heroBgDecoWrapper: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  heroBgWave1: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 5,
-    backgroundColor: PREVIA_COLORS.bluePrimary,
+    bottom: -60,
+    right: -40,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: '#009FE3',
+    opacity: 0.85,
+  },
+  heroBgWave2: {
+    position: 'absolute',
+    top: -50,
+    right: -50,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: '#014791',
+    opacity: 0.9,
   },
   heroCardDark: {
-    backgroundColor: PREVIA_COLORS.darkSurface,
-    borderColor: PREVIA_COLORS.darkBorder,
+    backgroundColor: '#0B192C',
   },
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
+    zIndex: 2,
   },
   heroStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(22, 163, 74, 0.08)',
+    backgroundColor: 'rgba(0, 159, 227, 0.25)',
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: PREVIA_RADIUS.pill,
     borderWidth: 1,
-    borderColor: 'rgba(22, 163, 74, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   heroStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#16A34A',
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#22C55E',
   },
   heroStatusText: {
-    color: '#15803D',
+    color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   heroPosteTag: {
     fontSize: 12,
     fontWeight: '700',
-    color: PREVIA_COLORS.graySecondary,
-  },
-  heroPosteTagDark: {
-    color: PREVIA_COLORS.darkTextSecondary,
+    color: 'rgba(255, 255, 255, 0.85)',
   },
   heroTitleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 18,
+    zIndex: 2,
   },
   heroTitleWrap: {
     flex: 1,
     paddingRight: 10,
   },
   heroTitle: {
-    color: PREVIA_COLORS.navyText,
-    fontSize: 21,
+    color: '#FFFFFF',
+    fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.4,
     marginBottom: 4,
   },
-  heroTitleDark: {
-    color: PREVIA_COLORS.darkTextPrimary,
-  },
   heroSubtitle: {
-    color: PREVIA_COLORS.graySecondary,
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 12.5,
     fontWeight: '500',
     lineHeight: 18,
   },
-  heroSubtitleDark: {
-    color: PREVIA_COLORS.darkTextSecondary,
-  },
   heroShieldCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0F9FF',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -609,12 +618,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(10, 25, 47, 0.45)',
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    zIndex: 2,
+  },
+  telemetryChip: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  telemetryValue: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  telemetryValueAlert: {
+    color: '#F87171',
+  },
+  telemetryLabel: {
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  telemetryDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   telemetryRowDark: {
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
