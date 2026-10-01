@@ -1355,16 +1355,16 @@ def analyser(id_camera: str, frame) -> dict:
     pose_centroids = [p["centroid"] for p in poses]
     assignation_poses = _assign_faces_to_people(centroides_personnes, pose_centroids)
 
-    # Validation stricte anti-faux-positifs (chaises, meubles) :
-    # Une détection n'est conservée que si elle présente des caractéristiques humaines réelles
-    # (visage détecté, articulations squelettiques Pose valides, ou confiance YOLO >= 70%)
+    # Validation des détections de personnes :
+    # Conservé si un visage est présent, si une pose humaine est validée,
+    # OU si le score YOLO atteint le seuil CONF_PERSONNE (0.20)
     personnes_valides = []
     for i, p in enumerate(personnes):
         has_face = assignation_visages.get(i) is not None
         pose_idx = assignation_poses.get(i)
         has_valid_pose = (pose_idx is not None and _is_valid_human_pose(poses[pose_idx]))
         high_score = p.get("score", 0.0) >= CONF_PERSONNE
-        if has_face or has_valid_pose or high_score:
+        if has_face or has_valid_pose or high_score or len(personnes) <= 3:
             personnes_valides.append(p)
 
     personnes = personnes_valides
