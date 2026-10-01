@@ -315,13 +315,9 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         ffmpeg,
                         "-hide_banner",
                         "-loglevel", "warning",
-                        "-timeout", "2000000",
-                        "-fflags", "nobuffer+flush_packets",
-                        "-flags", "low_delay",
                         "-rtsp_transport", "tcp",
                         "-probesize", "100000",
                         "-analyzeduration", "100000",
-                    ] + hw_opts + [
                         "-i", url_norm,
                         "-an",
                         "-vf", "scale='min(854,iw)':-2,format=yuv420p",
