@@ -84,46 +84,44 @@ export const HomeScreen = ({
           </View>
         )}
 
-        {/* HERO CARD SAPPHIRE : STATUT DE PROTECTION UNIFIÉ */}
+        {/* HERO CARD APPLE HOME ÉPURÉE & BLANCHE */}
         <View style={[styles.heroCard, isDark && styles.heroCardDark]}>
-          <View style={styles.heroGlowAccent} />
-          
           <View style={styles.heroTopRow}>
             <View style={styles.heroStatusBadge}>
               <View style={styles.heroStatusDot} />
               <Text style={styles.heroStatusText}>SURVEILLANCE ACTIVE • 100% LOCAL</Text>
             </View>
-            <Text style={styles.heroTimeText}>Poste 1</Text>
+            <Text style={[styles.heroPosteTag, isDark && styles.heroPosteTagDark]}>Poste 1</Text>
           </View>
 
-          <View style={styles.heroContentRow}>
-            <View style={styles.heroTextContainer}>
-              <Text style={styles.heroTitle}>Bâtiment Principal</Text>
-              <Text style={styles.heroSubtitle}>
-                {totalCameras} caméra(s) en supervision direct • 0 menace détectée
+          <View style={styles.heroTitleRow}>
+            <View style={styles.heroTitleWrap}>
+              <Text style={[styles.heroTitle, isDark && styles.heroTitleDark]}>Bâtiment Principal</Text>
+              <Text style={[styles.heroSubtitle, isDark && styles.heroSubtitleDark]}>
+                {totalCameras} caméra(s) en supervision direct • 0 menace
               </Text>
             </View>
             <View style={styles.heroShieldCircle}>
-              <IconShieldCheck size={28} color="#009FE3" />
+              <IconShieldCheck size={20} color={PREVIA_COLORS.bluePrimary} />
             </View>
           </View>
 
-          {/* INDICATEURS ESSENTIELS DE TERRAIN */}
-          <View style={styles.telemetryRow}>
+          {/* TELEMETRIE APPLE HOME MINIMALISTE */}
+          <View style={[styles.telemetryRow, isDark && styles.telemetryRowDark]}>
             <View style={styles.telemetryChip}>
-              <Text style={styles.telemetryValue}>{totalCameras}</Text>
+              <Text style={[styles.telemetryValue, isDark && styles.telemetryValueDark]}>{totalCameras}</Text>
               <Text style={styles.telemetryLabel}>Caméras</Text>
             </View>
-            <View style={styles.telemetryDivider} />
+            <View style={[styles.telemetryDivider, isDark && styles.telemetryDividerDark]} />
             <View style={styles.telemetryChip}>
-              <Text style={[styles.telemetryValue, unreadCount > 0 && styles.telemetryValueAlert]}>
+              <Text style={[styles.telemetryValue, unreadCount > 0 ? styles.telemetryValueAlert : (isDark && styles.telemetryValueDark)]}>
                 {unreadCount}
               </Text>
               <Text style={styles.telemetryLabel}>Incidents</Text>
             </View>
-            <View style={styles.telemetryDivider} />
+            <View style={[styles.telemetryDivider, isDark && styles.telemetryDividerDark]} />
             <View style={styles.telemetryChip}>
-              <Text style={[styles.telemetryValue, { color: '#10B981' }]}>Normal</Text>
+              <Text style={[styles.telemetryValue, { color: '#16A34A' }]}>Normal</Text>
               <Text style={styles.telemetryLabel}>État</Text>
             </View>
           </View>
@@ -500,129 +498,142 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // HERO CARD SAPPHIRE
+  // HERO CARD APPLE HOME
   heroCard: {
-    backgroundColor: '#012852',
-    borderRadius: PREVIA_RADIUS.card,
-    padding: 18,
+    backgroundColor: PREVIA_COLORS.white,
+    borderRadius: 22,
+    padding: 20,
     marginBottom: 20,
-    position: 'relative',
-    overflow: 'hidden',
-    shadowColor: '#014791',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
     shadowRadius: 16,
-    elevation: 6,
+    elevation: 2,
     borderWidth: 1,
-    borderColor: 'rgba(0, 159, 227, 0.25)',
+    borderColor: '#EBF1F6',
   },
-  heroGlowAccent: {
-    position: 'absolute',
-    top: -40,
-    right: -40,
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(0, 159, 227, 0.2)',
+  heroCardDark: {
+    backgroundColor: PREVIA_COLORS.darkSurface,
+    borderColor: PREVIA_COLORS.darkBorder,
   },
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   heroStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(16, 185, 129, 0.18)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(22, 163, 74, 0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: PREVIA_RADIUS.pill,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderColor: 'rgba(22, 163, 74, 0.15)',
   },
   heroStatusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#10B981',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
   },
   heroStatusText: {
-    color: '#6EE7B7',
-    fontSize: 10.5,
-    fontWeight: '800',
+    color: '#15803D',
+    fontSize: 10,
+    fontWeight: '700',
     letterSpacing: 0.5,
   },
-  heroTimeText: {
-    color: 'rgba(255, 255, 255, 0.65)',
-    fontSize: 11,
-    fontWeight: '600',
+  heroPosteTag: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: PREVIA_COLORS.graySecondary,
   },
-  heroContentRow: {
+  heroPosteTagDark: {
+    color: PREVIA_COLORS.darkTextSecondary,
+  },
+  heroTitleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 18,
   },
-  heroTextContainer: {
+  heroTitleWrap: {
     flex: 1,
     paddingRight: 10,
   },
   heroTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color: PREVIA_COLORS.navyText,
+    fontSize: 21,
     fontWeight: '800',
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
     marginBottom: 4,
   },
+  heroTitleDark: {
+    color: PREVIA_COLORS.darkTextPrimary,
+  },
   heroSubtitle: {
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: PREVIA_COLORS.graySecondary,
     fontSize: 12.5,
     fontWeight: '500',
+    lineHeight: 18,
+  },
+  heroSubtitleDark: {
+    color: PREVIA_COLORS.darkTextSecondary,
   },
   heroShieldCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   telemetryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(6, 26, 52, 0.6)',
-    borderRadius: PREVIA_RADIUS.md,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: '#F1F5F9',
+  },
+  telemetryRowDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   telemetryChip: {
     alignItems: 'center',
     flex: 1,
   },
   telemetryValue: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: PREVIA_COLORS.navyText,
+    fontSize: 17,
     fontWeight: '800',
     marginBottom: 2,
   },
+  telemetryValueDark: {
+    color: '#FFFFFF',
+  },
   telemetryValueAlert: {
-    color: '#FF6B6B',
+    color: '#DC2626',
   },
   telemetryLabel: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 10.5,
+    color: PREVIA_COLORS.graySecondary,
+    fontSize: 11,
     fontWeight: '600',
   },
   telemetryDivider: {
     width: 1,
-    height: 22,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+  },
+  telemetryDividerDark: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
 
