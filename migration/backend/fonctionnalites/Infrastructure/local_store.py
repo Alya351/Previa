@@ -43,18 +43,29 @@ def _segments(chemin: str) -> list:
     return [s for s in chemin.strip("/").split("/") if s]
 
 
+_arbre_cache: dict | None = None
+
+
 def _charger_arbre() -> dict:
+    global _arbre_cache
+    if _arbre_cache is not None:
+        return _arbre_cache
     conn = get_connection()
     row = conn.execute("SELECT value_json FROM kv_store WHERE key='root_tree'").fetchone()
     if row and row["value_json"]:
         try:
-            return json.loads(row["value_json"])
+            _arbre_cache = json.loads(row["value_json"])
+            return _arbre_cache
         except Exception:
+            _arbre_cache = {}
             return {}
-    return {}
+    _arbre_cache = {}
+    return _arbre_cache
 
 
 def _sauvegarder_arbre(arbre: dict) -> None:
+    global _arbre_cache
+    _arbre_cache = arbre
     conn = get_connection()
     val_json = json.dumps(arbre, ensure_ascii=False, default=_json_default)
     with conn:
@@ -62,6 +73,7 @@ def _sauvegarder_arbre(arbre: dict) -> None:
             "INSERT INTO kv_store (key, value_json, updated_at) VALUES ('root_tree', ?, ?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json, updated_at=excluded.updated_at",
             (val_json, time.time())
         )
+
 
 
 def _lire_a(arbre: dict, segments: list):
