@@ -84,27 +84,27 @@ export const HomeScreen = ({
           </View>
         )}
 
-        {/* HERO CARD SAPPHIRE : STATUT DE PROTECTION */}
-        <View style={styles.heroCard}>
+        {/* HERO CARD SAPPHIRE : STATUT DE PROTECTION UNIFIÉ */}
+        <View style={[styles.heroCard, isDark && styles.heroCardDark]}>
           <View style={styles.heroGlowAccent} />
           
           <View style={styles.heroTopRow}>
             <View style={styles.heroStatusBadge}>
               <View style={styles.heroStatusDot} />
-              <Text style={styles.heroStatusText}>EN SERVICE</Text>
+              <Text style={styles.heroStatusText}>SURVEILLANCE ACTIVE • 100% LOCAL</Text>
             </View>
             <Text style={styles.heroTimeText}>Poste 1</Text>
           </View>
 
           <View style={styles.heroContentRow}>
             <View style={styles.heroTextContainer}>
-              <Text style={styles.heroTitle}>Sécurité du Site</Text>
+              <Text style={styles.heroTitle}>Bâtiment Principal</Text>
               <Text style={styles.heroSubtitle}>
-                {currentUser?.prenom ? `Agent : ${currentUser.prenom} ${currentUser.nom || ''}` : 'Surveillance active'}
+                {totalCameras} caméra(s) en supervision direct • 0 menace détectée
               </Text>
             </View>
             <View style={styles.heroShieldCircle}>
-              <IconShieldCheck size={28} color="#00E5FF" />
+              <IconShieldCheck size={28} color="#00F2FE" />
             </View>
           </View>
 

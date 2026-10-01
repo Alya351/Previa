@@ -4,34 +4,36 @@
 // ============================================================================
 
 export const PREVIA_COLORS = {
-  // Palette officielle PREVIA
-  bluePrimary: '#009FE3',     // Couleur de marque : logo, icônes actives, CTA, onglet actif
-  blueDeep: '#014791',        // Dégradés, éléments d'accent profond
-  blueMedium: '#2E9DE7',      // Transitions, dégradés secondaires
-  navyText: '#152E4C',        // Titres, texte fort
-  nearBlack: '#111316',       // Fond barre de navigation basse
-  redAlert: '#DB2323',        // Badges de notification, états critiques UNIQUEMENT
-  bgLight: '#F4F8FB',         // Fond général des écrans
-  white: '#FFFFFF',           // Fond des cartes, surfaces
-  graySecondary: '#6B7280',   // Texte secondaire / labels
+  // Palette officielle PREVIA & Neons Cyber-Sécurité
+  bluePrimary: '#00A8FF',     // Bleu néon actif
+  blueDeep: '#013A81',        // Accent profond
+  blueMedium: '#1E88E5',      // Transitions dégradés
+  cyanGlow: '#00F2FE',        // Halo luminescent IA
+  emeraldSuccess: '#10B981',   // Validation / Service OK
+  navyText: '#0F172A',        // Texte mode clair
+  nearBlack: '#0B0F17',       // Fond sombre ultra-deep
+  redAlert: '#FF0055',        // Alerte critique néon
+  bgLight: '#F1F5F9',         // Fond général mode clair
+  white: '#FFFFFF',
 
-  // Sévérités strictes d'alerte (Règle : le rouge est réservé exclusivement au critique)
-  severityCritical: '#DB2323', // Intrusion, Feu/Fumée
-  severityHigh: '#F59E0B',     // Rôdeur, Infiltration suspectée
-  severityInfo: '#009FE3',     // Mouvement normal, événement système
+  // Couleurs de sévérité calibrées
+  severityCritical: '#FF0055',
+  severityHigh: '#F59E0B',
+  severityInfo: '#00A8FF',
 
-  // Validation au pouce (SF-MOB-03)
-  actionVerify: '#16A34A',     // "Marquer comme Vérifié"
-  actionReject: '#6B7280',     // "Rejeter / Faux positif"
-  actionWarning: '#EAB308',
+  // Actions rapides ergonomiques
+  actionVerify: '#10B981',
+  actionReject: '#64748B',
+  actionWarning: '#F59E0B',
 
-  // Mode sombre (fond principal --previa-near-black)
-  darkBackground: '#111316',
-  darkSurface: '#1A1E24',
-  darkSurfaceElevated: '#242932',
-  darkBorder: '#2E3540',
-  darkTextPrimary: '#FFFFFF',
-  darkTextSecondary: '#D1D5DB',
+  // Mode sombre ultra-premium (Glassmorphism & OLED pitch black)
+  darkBackground: '#0B0F17',
+  darkSurface: '#151C28',
+  darkSurfaceElevated: '#1E293B',
+  darkBorder: 'rgba(255, 255, 255, 0.08)',
+  darkBorderGlow: 'rgba(0, 168, 255, 0.25)',
+  darkTextPrimary: '#F8FAFC',
+  darkTextSecondary: '#94A3B8',
 };
 
 // Échelle typographique
