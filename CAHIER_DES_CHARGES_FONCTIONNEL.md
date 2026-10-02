@@ -231,7 +231,7 @@ La vidéosurveillance conventionnelle génère un volume massif d'images que les
 | **WebRTC** | Protocole de communication permettant la diffusion de flux audio/vidéo en temps réel et à faible latence dans un navigateur web. |
 | **RTSP** | Real Time Streaming Protocol : protocole standard utilisé par les caméras IP pour la diffusion de flux vidéo. |
 | **Face ID** | Fonction de reconnaissance faciale permettant d'identifier automatiquement une personne enregistrée à partir d'un flux vidéo. |
-| **ESP32** | Microcontrôleur Wi-Fi utilisé pour piloter les boîtiers d'alarme physiques (sirènes, gyrophares) connectés en IoT. |
+| **Raspberry Pi (Edge AI)** | Serveur embarqué autonome hébergeant le moteur d'IA, la base de données locale SQLite et le serveur web HTTPS (aucun boîtier externe requis). |
 | **mDNS** | Multicast DNS : protocole de découverte automatique d'appareils sur un réseau local sans serveur DNS central. |
 | **Track ID** | Identifiant unique attribué par le module de vision par ordinateur à un objet suivi d'image en image. |
 | **Levée de doute** | Processus de vérification humaine d'une alerte générée par l'IA avant décision d'action. |
