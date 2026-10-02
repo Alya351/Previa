@@ -4561,23 +4561,6 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
         </div>
       </div>
 
-      {/* Raccourcis / Préréglages rapides caméras réelles */}
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--ink-muted)' }}>⚡ Configuration rapide :</span>
-        <button
-          type="button"
-          onClick={() => appliquerPreset('Caméra 1', 'rtsp://admin:admin@192.168.11.102:554/11')}
-          style={{ ...btn, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '5px 10px', fontSize: '0.78rem' }}
-        >
-          📹 Caméra 1 (192.168.11.102)
-        </button>
-        <button
-          type="button"
-          onClick={() => appliquerPreset('Caméra 2', 'rtsp://admin:11Avril2002@@192.168.11.101:554/Streaming/Channels/101')}
-          style={{ ...btn, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', padding: '5px 10px', fontSize: '0.78rem' }}
-        >
-          📹 Caméra 2 (192.168.11.101)
-        </button>
       </div>
 
       <form onSubmit={creer} style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '18px' }}>
