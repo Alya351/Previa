@@ -242,6 +242,9 @@ def _suivre_instances(id_camera: str, result, now: float, diagonale_frame: float
 
 def analyser(id_camera: str, frame) -> dict:
     """Détecte + suit avec le modèle IA sur CETTE image DE CETTE CAMÉRA."""
+    if frame is not None and frame.shape[0] > frame.shape[1]:
+        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+
     model = _get_model(id_camera)
     if model is None:
         return {"objets": {}, "alertes_feu_fumee": None}

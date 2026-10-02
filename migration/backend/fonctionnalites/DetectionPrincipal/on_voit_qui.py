@@ -1252,6 +1252,12 @@ def analyser(id_camera: str, frame) -> dict:
     précédents (par personne, identité globale — voir docstring du
     module), et écrit le résultat confirmé dans le rapport DE CETTE
     CAMÉRA (voir rapport_cam.py, clé "personnesVues")."""
+    # Auto-redressement de l'image (si la caméra est montée verticalement à 90°, h > w)
+    # YOLO v8/v11 est entraîné sur des humains debout ; une personne couchée sur le côté à 90°
+    # voit son score de confiance s'effondrer.
+    if frame is not None and frame.shape[0] > frame.shape[1]:
+        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+
     models = _get_models()
     now = time.time()
     diagonale_frame = (frame.shape[0] ** 2 + frame.shape[1] ** 2) ** 0.5
