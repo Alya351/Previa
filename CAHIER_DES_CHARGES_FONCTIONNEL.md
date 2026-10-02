@@ -3,8 +3,8 @@
 ### *Plateforme Web de Vidéosurveillance Intelligente et d'Analyse Comportementale par IA*
 
 * **Type d'application** : Application Web Responsive (SPA — React / Vite)
-* **Version du document** : 2.0 — Document de référence consolidé
-* **Date** : 18 septembre 2026
+* **Version du document** : 2.2 — Document de référence consolidé (Version de Production Edge AI Raspberry Pi)
+* **Date** : 2 octobre 2026
 * **Statut** : Diffusable
 
 ---
@@ -118,8 +118,12 @@ La vidéosurveillance conventionnelle génère un volume massif d'images que les
   * Liste des personnes enregistrées : nom, prénom, département / fonction, photo d'enrôlement, statut (actif / bloqué).
 * **REQ-FACE-02 (Enrôlement photographique)** :
   * Formulaire d'ajout d'une personne avec téléversement d'une ou plusieurs photos de référence pour l'entraînement du modèle Face ID.
-* **REQ-FACE-03 (Journal des reconnaissances)** :
+* **REQ-FACE-03 (Journal des reconnaissances & repli gros plan)** :
   * Historique horodaté des détections faciales avec indice de confiance de l'IA (reconnu / inconnu).
+  * Repli d'urgence en détection faciale directe (InsightFace ArcFace) lorsque le corps n'est pas intégralement visible (ex: gros plan visage / selfie de très près).
+* **REQ-FACE-04 (Auto-redressement d'orientation des caméras à 90°)** :
+  * Détection automatique des trames orientées en mode portrait (`Hauteur > Largeur`) envoyées par les caméras pivotées sur leur support physique.
+  * Pivotement logiciel instantané par cv2.ROTATE_90_CLOCKWISE avant l'inférence pour présenter les corps humains à la verticale et garantir la détection nominale par YOLO.
 
 ---
 
@@ -198,6 +202,8 @@ La vidéosurveillance conventionnelle génère un volume massif d'images que les
 * **NFA-AI-03 : Stockage Zéro-Disque & Tampons RAM Circulaires** — Conservation des instantanés vidéo et des clips de preuve (10s) exclusivement en mémoire vive (RAM) via des structures circulaires à taille fixe (`deque maxlen=150`). Garantit la protection contre le débordement mémoire (OOM) et élimine la contention I/O d'écriture sur carte SD.
 * **NFA-AI-04 : Verrou Anti-Contention & Télémétrie de Santé IA** — Protection par verrou d'exclusion mutuelle non-bloquant (`_analyses_lock`) éliminant tout risque d'accumulation de file d'attente. Suivi télémétrique continu du taux de ticks d'analyse ignorés sur fenêtre glissante de 60 secondes, avec alerte système si le taux dépasse 20%.
 * **NFA-AI-05 : Calibrage Statistique du Cadencement (`P95 × 1,3`)** — Définition de l'intervalle de cycle du worker IA basée sur le 95e percentile (P95) de latence d'inférence mesurée à chaud sous tension nominale, augmenté d'une marge de sécurité de 30% pour absorber la variance naturelle d'exécution.
+* **NFA-AI-06 : Synchronisation Automatique de l'Horloge Système PC vers Edge (Raspberry Pi)** — Injection automatique de la date et heure système du PC de supervision (`date -s 'YYYY-MM-DD HH:MM:SS'`) lors du lancement 1-clic pour pallier l'absence de batterie horloge (RTC) matérielle sur les boîtiers Edge et prévenir les décalages d'horodatage.
+* **NFA-AI-07 : Transactions SQLite Isolées & Synchronisation Non Bloquante** — Exécution des requêtes d'historisation `INSERT` dans des blocs transactionnels isolés sans changement de pragma dynamique pendant les transactions (`PRAGMA synchronous`), prévenant tout blocage `OperationalError`.
 
 ---
 
