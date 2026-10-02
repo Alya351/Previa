@@ -1671,9 +1671,16 @@ def analyser(id_camera: str, frame) -> dict:
                 est_suspect = True
                 motif_suspicion = "Accès révoqué / Interdit"
 
-        # Évaluation des vraies anomalies comportementales (s'applique à tous)
+        # Détection explicite de dissimulation du visage (cagoule / masque / visage couvert) :
+        # Si le corps d'une personne est clairement détecté mais que son visage est sciemment masqué/dissimulé
+        visage_dissimule = (face is None and personne.get("score", 0.0) >= 0.35 and items_confirmes.get("chapeau") or False)
+
+        # Évaluation des vraies anomalies comportementales et sécuritaires (s'applique à tous)
         if not est_suspect:
-            if comportement.get("intrusion_zone", {}).get("intrusion"):
+            if face is None and (items_confirmes.get("chapeau") and "noir" in str(items_confirmes)):
+                est_suspect = True
+                motif_suspicion = "Visage dissimulé / Cagoule"
+            elif comportement.get("intrusion_zone", {}).get("intrusion"):
                 est_suspect = True
                 motif_suspicion = "Intrusion en zone interdite"
             elif comportement.get("rodeur", {}).get("rodeur"):
