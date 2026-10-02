@@ -63,58 +63,59 @@ export function AiAnalysisCard({ situations = [], alerteEnCours, onSelectModule 
         </span>
       </div>
 
-      {/* REFINED COMPACT ALERT BANNER — la vraie dernière alerte
-          confirmée (voir GET /alertes), rien si aucune. */}
-      {alerteEnCours && (
+      {/* CENTRAL STATUS BOX */}
+      {alerteEnCours ? (
         <div
           style={{
-            background: '#fef2f2',
-            borderRadius: '10px',
-            padding: '10px 14px',
-            border: '1px solid #fecaca',
+            padding: '16px',
+            background: '#fff1f2',
+            borderRadius: '12px',
+            border: '1.5px solid #fecdd3',
             display: 'flex',
-            justifyContent: 'space-between',
+            flexDirection: 'column',
             alignItems: 'center',
-            gap: '10px'
+            gap: '8px',
+            textAlign: 'center'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#991b1b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              Alerte en cours — {alerteEnCours.titre}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#e11d48', animation: 'pulse 1.5s infinite' }} />
+            <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#9f1239' }}>
+              Alerte en cours — {alerteEnCours.titre || 'Comportement suspect'}
             </span>
           </div>
-          <span style={{ fontSize: '0.74rem', color: '#b91c1c', fontWeight: 600, flexShrink: 0 }}>
-            {alerteEnCours.lieu}
-          </span>
-        </div>
-      )}
-
-      {/* LIST OF SITUATIONS */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {situations.length === 0 && (
-          <div
-            style={{
-              padding: '24px 16px',
-              textAlign: 'center',
-              background: '#f8fafc',
-              borderRadius: '12px',
-              border: '1px dashed var(--border-light)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <ShieldCheck size={26} color="#10b981" />
-            <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--ink-primary)' }}>
-              Aucun comportement suspect détecté
-            </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>
-              Surveillance active en temps réel sur l'ensemble des caméras
-            </div>
+          <div style={{ fontSize: '0.82rem', color: '#be123c', fontWeight: 600 }}>
+            {alerteEnCours.lieu || 'Zone sous surveillance'}
           </div>
-        )}
+          {alerteEnCours.description && (
+            <div style={{ fontSize: '0.78rem', color: '#9f1239', marginTop: '2px' }}>
+              {alerteEnCours.description}
+            </div>
+          )}
+        </div>
+      ) : situations.length === 0 ? (
+        <div
+          style={{
+            padding: '24px 16px',
+            textAlign: 'center',
+            background: '#f8fafc',
+            borderRadius: '12px',
+            border: '1px dashed var(--border-light)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          <ShieldCheck size={26} color="#10b981" />
+          <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--ink-primary)' }}>
+            Aucun comportement suspect détecté
+          </div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>
+            Surveillance active en temps réel sur l'ensemble des caméras
+          </div>
+        </div>
+      ) : null}
         {situations.map((item) => {
           const style = ICONES_PAR_NIVEAU[item.riskLevel] || ICONES_PAR_NIVEAU.low;
           return (

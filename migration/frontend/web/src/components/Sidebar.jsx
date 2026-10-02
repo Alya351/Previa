@@ -29,7 +29,6 @@ export function Sidebar({
     { id: 'reports', label: 'Rapports', icon: FileText },
     ...(showOrganisation ? [
       { id: 'organisation', label: 'Organisation', icon: Building2 },
-      { id: 'configAlerte', label: 'Boîtiers d\'alarme', icon: Router },
     ] : []),
   ];
 
