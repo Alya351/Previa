@@ -1288,7 +1288,24 @@ def analyser(id_camera: str, frame) -> dict:
         and d["score"] >= CONF_RODEUR_ANONYME
     ]
 
-    # Si AUCUNE personne n'est détectée sur l'image, contourner immédiatement tous les modèles lourds
+    # Si YOLO segmentation ne voit pas le corps entier (ex: selfie / visage de très près),
+    # tenter une détection de visage directe avant d'abandonner
+    if not personnes and models.get("face") is not None:
+        visages_directs = detect_faces(models["face"], frame, None)
+        if visages_directs:
+            for vf in visages_directs:
+                b = vf["box"]
+                personnes.append({
+                    "label": "person",
+                    "class_id": 0,
+                    "box": b,
+                    "centroid": ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2),
+                    "mask_poly": None,
+                    "score": vf.get("confidence", 0.5),
+                    "track_id": 1,
+                })
+
+    # Si AUCUNE personne ni aucun visage n'est détecté sur l'image, contourner immédiatement tous les modèles lourds
     if not personnes:
         # Écriture immédiate du rapport vide pour rafraîchir l'interface (< 0.05s)
         rapport_cam.enregistrer_etat(id_camera, "personnesVues", {
