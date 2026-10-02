@@ -55,15 +55,32 @@ def _chemin_image(id_alerte: str) -> Path:
 
 
 def _enregistrer_instantane(id_alerte: str, id_camera: str) -> None:
-    """Copie la dernière image connue de cette caméra (voir
-    derniere_image.lire) vers un fichier durable propre à CETTE alerte.
-    Silencieux si aucune image n'est encore arrivée pour cette caméra
-    (caméra qui vient de démarrer, ou hors-ligne) — pas d'instantané
-    dans ce cas, GET /alertes/{id}/image répondra 404, jamais une image
-    trompeuse."""
+    """Copie la dernière image connue de cette caméra vers un fichier durable propre à CETTE alerte (REQ-ALT-02).
+    Si l'image en mémoire n'est pas encore disponible, tente une capture directe depuis le buffer vidéo ou l'URL RTSP."""
     contenu = derniere_image.lire(id_camera)
-    if contenu is None:
+    
+    # Fallback 1 : Récupérer depuis le buffer circulaire de clips vidéo si la mémoire vive était vide
+    if not contenu or len(contenu) < 500:
+        try:
+            from fonctionnalites.Infrastructure import clips_service
+            contenu = clips_service.obtenir_derniere_trame(id_camera)
+        except Exception:
+            pass
+
+    # Fallback 2 : Capture snapshot RTSP FFmpeg d'urgence
+    if not contenu or len(contenu) < 500:
+        try:
+            from fonctionnalites.cam.camera import rtsp_service, camera_registre
+            cam = camera_registre.trouver_par_id(id_camera)
+            if cam and cam.get("url_flux"):
+                contenu = rtsp_service.capturer_snapshot_unique(cam["url_flux"], timeout_sec=3)
+        except Exception:
+            pass
+
+    if not contenu or len(contenu) < 500:
+        print(f"[alertes] ⚠️ Impossible d'extraire la preuve photo pour l'alerte {id_alerte} (caméra {id_camera})", flush=True)
         return
+
     ALERTES_DIR.mkdir(parents=True, exist_ok=True)
     with open(_chemin_image(id_alerte), "wb") as f:
         f.write(contenu)

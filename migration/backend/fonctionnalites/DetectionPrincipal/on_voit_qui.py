@@ -1270,24 +1270,39 @@ def analyser(id_camera: str, frame) -> dict:
     # objet proche (indice de vol).
     objets_actuels = rapport_cam.lire_etat(id_camera, "vueActuelle").get("objets", {})
 
-    # Chronométrage de la passe parallèle multi-modèles
+    # Chronométrage et architecture en cascade à 2 passes :
+    # PASSE 1 (Ultra-rapide ~0.03s) : Détection brute de présence humaine via YOLO
     _t0 = time.time()
+    tous_candidats_personnes = _run_seg(models["person_seg"], frame, CONF_RODEUR_ANONYME)
+    personnes = [d for d in tous_candidats_personnes if d.get("label") in ("person", "personne") and d["score"] >= CONF_PERSONNE]
 
-    # Exécution simultanée des 4 modèles indépendants sur tous les cœurs CPU / GPU
-    fut_seg = _inference_executor.submit(_run_seg, models["person_seg"], frame, CONF_RODEUR_ANONYME)
+    # Si AUCUNE personne n'est détectée sur l'image, contourner immédiatement tous les modèles lourds
+    if not personnes:
+        # Écriture immédiate du rapport vide pour rafraîchir l'interface (< 0.05s)
+        rapport_cam.ecrire_etat(id_camera, "personnesVues", {
+            "personnes": [],
+            "zones_suspectes": [],
+            "timestamp": now,
+            "duree_analyse": round(time.time() - _t0, 3)
+        })
+        return {
+            "personnes": [],
+            "zones_suspectes": [],
+            "timestamp": now,
+        }
+
+    # PASSE 2 (Déclenchée UNIQUEMENT lorsqu'une présence humaine est confirmée) :
+    # Exécution des modèles spécialisés (Visages, Pose, Vêtements)
     fut_cloth = _inference_executor.submit(_run_seg, models["clothing"], frame, CONF_VETEMENT)
     fut_pose = _inference_executor.submit(_run_pose, models["pose"], frame, CONF_POSE)
     fut_face = _inference_executor.submit(detect_faces, models["face"], frame, None)
 
-    tous_candidats_personnes = fut_seg.result()
     vetements = fut_cloth.result()
     poses = fut_pose.result()
     faces = fut_face.result()
 
     if not faces and poses:
         faces = detect_faces(None, frame, poses=poses)
-
-    personnes = [d for d in tous_candidats_personnes if d.get("label") in ("person", "personne") and d["score"] >= CONF_PERSONNE]
     print(f"[chrono] passe parallèle multi-modèles (person, clothing, pose, face) : {time.time() - _t0:.2f}s", flush=True)
 
     # SegFormer : exécuté uniquement si au moins une personne ou un visage est réellement présent
