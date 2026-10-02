@@ -667,7 +667,7 @@ def _run_seg(model, frame, conf):
         except Exception:
             pass
 
-    return _detect_persons_opencv(frame)
+    return []
 
 
 def _is_valid_human_pose(p_pose: dict) -> bool:
