@@ -107,16 +107,16 @@ const styles = StyleSheet.create({
   },
   badgeIndicator: {
     position: 'absolute',
-    top: -5,
-    right: -8,
-    backgroundColor: PREVIA_COLORS.redAlert, // #DB2323 STRICTEMENT réservé aux badges de notification
+    top: -7,
+    right: -10,
+    backgroundColor: PREVIA_COLORS.redAlert,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: PREVIA_COLORS.nearBlack,
   },
   badgeText: {

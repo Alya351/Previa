@@ -104,31 +104,35 @@ export const HomeScreen = ({
             <TouchableOpacity
               style={[styles.card, isDark && styles.cardDark]}
               onPress={() => onNavigate('direct')}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Caméras, Voir le direct"
+              accessibilityLabel="Caméras, Visionner vos flux en direct"
             >
               <View style={styles.cardHeaderRow}>
                 <View style={[styles.iconCircle, { backgroundColor: '#009FE3' }]}>
                   <IconCamera size={22} color="#FFFFFF" />
                 </View>
                 <View style={styles.cardPillBadge}>
-                  <Text style={styles.cardPillBadgeText}>{totalCameras} actives</Text>
+                  <Text style={styles.cardPillBadgeText}>
+                    {totalCameras} caméra{totalCameras > 1 ? 's' : ''} active{totalCameras > 1 ? 's' : ''}
+                  </Text>
                 </View>
               </View>
               <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
                 Caméras
               </Text>
-              <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>Visionner les flux</Text>
+              <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>
+                Visionner vos flux en direct
+              </Text>
             </TouchableOpacity>
 
             {/* CARTE 2 : ALERTES */}
             <TouchableOpacity
-              style={[styles.card, isDark && styles.cardDark]}
+              style={[styles.card, isDark && styles.cardDark, unreadCount > 0 && styles.cardAlertActive]}
               onPress={() => onNavigate('alerts')}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel={`Alertes, Suivi en temps réel${unreadCount > 0 ? `, ${unreadCount} non lues` : ''}`}
+              accessibilityLabel={`Alertes, Gérer les incidents en cours${unreadCount > 0 ? `, ${unreadCount} non lus` : ''}`}
             >
               <View style={styles.cardHeaderRow}>
                 <View style={[styles.iconCircle, { backgroundColor: unreadCount > 0 ? '#DB2323' : '#014791' }]}>
@@ -137,19 +141,23 @@ export const HomeScreen = ({
                 {unreadCount > 0 ? (
                   <View style={[styles.cardPillBadge, { backgroundColor: 'rgba(219, 35, 35, 0.12)' }]}>
                     <Text style={[styles.cardPillBadgeText, { color: '#DB2323', fontWeight: '800' }]}>
-                      {unreadCount} critiques
+                      {unreadCount} incident{unreadCount > 1 ? 's' : ''} critique{unreadCount > 1 ? 's' : ''}
                     </Text>
                   </View>
                 ) : (
-                  <View style={styles.cardPillBadge}>
-                    <Text style={[styles.cardPillBadgeText, { color: '#10B981' }]}>Calme</Text>
+                  <View style={[styles.cardPillBadge, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                    <Text style={[styles.cardPillBadgeText, { color: '#10B981', fontWeight: '800' }]}>
+                      Calme
+                    </Text>
                   </View>
                 )}
               </View>
               <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
                 Alertes
               </Text>
-              <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>Alertes en cours</Text>
+              <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>
+                Gérer les incidents en cours
+              </Text>
             </TouchableOpacity>
 
             {/* CARTE 3 : APPEL GARDIENNERIE */}
@@ -161,7 +169,7 @@ export const HomeScreen = ({
                   Linking.openURL(`tel:${telClean}`).catch(() => {});
                 }
               }}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel="Contacter la gardiennerie"
             >
@@ -170,14 +178,16 @@ export const HomeScreen = ({
                   <IconPhone size={20} color="#FFFFFF" />
                 </View>
                 <View style={[styles.cardPillBadge, { backgroundColor: 'rgba(5, 150, 105, 0.12)' }]}>
-                  <Text style={[styles.cardPillBadgeText, { color: '#059669', fontWeight: '800' }]}>Direct</Text>
+                  <Text style={[styles.cardPillBadgeText, { color: '#059669', fontWeight: '800' }]}>
+                    Contact direct
+                  </Text>
                 </View>
               </View>
               <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
                 Gardiennerie
               </Text>
               <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>
-                Poste de sécurité
+                Appel direct vers la sécurité
               </Text>
             </TouchableOpacity>
 
@@ -185,22 +195,24 @@ export const HomeScreen = ({
             <TouchableOpacity
               style={[styles.card, isDark && styles.cardDark]}
               onPress={() => setStatsModalOpen(true)}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Journal d'activité"
+              accessibilityLabel="Journal de bord, Historique détaillé"
             >
               <View style={styles.cardHeaderRow}>
                 <View style={[styles.iconCircle, { backgroundColor: '#152E4C' }]}>
                   <IconFileText size={22} color="#FFFFFF" />
                 </View>
                 <View style={styles.cardPillBadge}>
-                  <Text style={styles.cardPillBadgeText}>24h</Text>
+                  <Text style={styles.cardPillBadgeText}>Rapport 24h</Text>
                 </View>
               </View>
               <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
-                Journal
+                Journal de bord
               </Text>
-              <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>Historique du site</Text>
+              <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>
+                Historique détaillé des événements
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -789,6 +801,10 @@ const styles = StyleSheet.create({
   cardDark: {
     backgroundColor: PREVIA_COLORS.darkSurface,
     borderColor: PREVIA_COLORS.darkBorder,
+  },
+  cardAlertActive: {
+    backgroundColor: 'rgba(254, 242, 242, 0.65)',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
   },
   cardGardien: {
     borderColor: 'rgba(5, 150, 105, 0.25)',

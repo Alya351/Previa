@@ -4331,7 +4331,26 @@ function SectionComptes({ comptes = [], onChange }) {
                   {c.est_par_defaut ? ' (Principal)' : ''}
                 </span>
               </td>
-              <td style={{ padding: '8px', textAlign: 'right' }}>
+              <td style={{ padding: '8px', textAlign: 'right', display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                <button
+                  style={{ ...btnSuppr, background: '#f0f9ff', color: '#0284c7', borderColor: '#bae6fd' }}
+                  onClick={async () => {
+                    const nmp = prompt(`Nouveau mot de passe pour ${c.prenom} ${c.nom} :`);
+                    if (nmp && nmp.trim()) {
+                      try {
+                        const chemin = c.role === 'admin' ? `/utilisateurs/admins/${c.id}` : `/utilisateurs/users/${c.id}`;
+                        await appelApiOrg(chemin, { method: 'PUT', body: JSON.stringify({ mot_de_passe: nmp.trim() }) });
+                        alert(`Le mot de passe de ${c.prenom} a bien été réinitialisé !`);
+                        onChange();
+                      } catch (errM) {
+                        alert(`Erreur : ${errM.message}`);
+                      }
+                    }
+                  }}
+                  title="Réinitialiser le mot de passe"
+                >
+                  Réinitialiser Pass
+                </button>
                 {!c.est_par_defaut && <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer ce compte"><Trash2 size={14} /></button>}
               </td>
             </tr>
