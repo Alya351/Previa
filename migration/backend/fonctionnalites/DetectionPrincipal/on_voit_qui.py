@@ -1274,7 +1274,11 @@ def analyser(id_camera: str, frame) -> dict:
     # PASSE 1 (Ultra-rapide ~0.03s) : Détection brute de présence humaine via YOLO
     _t0 = time.time()
     tous_candidats_personnes = _run_seg(models["person_seg"], frame, CONF_RODEUR_ANONYME)
-    personnes = [d for d in tous_candidats_personnes if d.get("label") in ("person", "personne") and d["score"] >= CONF_PERSONNE]
+    personnes = [
+        d for d in tous_candidats_personnes 
+        if (str(d.get("label")).lower() in ("person", "personne", "0") or d.get("class_id") == 0) 
+        and d["score"] >= CONF_RODEUR_ANONYME
+    ]
 
     # Si AUCUNE personne n'est détectée sur l'image, contourner immédiatement tous les modèles lourds
     if not personnes:
