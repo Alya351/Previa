@@ -3462,32 +3462,33 @@ function AlertsView({ alertesReelles = [], camerasParId = {}, onRefresh, onSelec
               <div
                 key={item.id}
                 style={{
-                  background: '#ffffff',
+                  background: isCritical ? '#fff5f5' : '#ffffff',
                   borderRadius: '16px',
-                  padding: '18px 22px',
-                  border: `1px solid ${isCritical ? '#fca5a5' : 'var(--border-light)'}`,
-                  borderLeft: `5px solid ${cardBorder}`,
-                  boxShadow: isCritical ? '0 8px 24px rgba(239, 68, 68, 0.1)' : 'var(--shadow-card)',
+                  padding: '20px 24px',
+                  border: `1.5px solid ${isCritical ? '#fecaca' : '#e2e8f0'}`,
+                  boxShadow: isCritical ? '0 8px 24px rgba(239, 68, 68, 0.08)' : '0 2px 10px rgba(0,0,0,0.03)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '20px',
-                  flexWrap: 'wrap'
+                  flexWrap: 'wrap',
+                  transition: 'all 0.15s ease'
                 }}
               >
-                {/* 1. PHOTO DE LA CAMÉRA */}
+                {/* 1. PHOTO DE LA CAMÉRA AVEC OVERLAY CLEAN */}
                 <div
                   onClick={() => setAlerteInspectee(item)}
                   style={{
-                    width: '130px',
-                    height: '84px',
-                    borderRadius: '10px',
+                    width: '140px',
+                    height: '90px',
+                    borderRadius: '12px',
                     overflow: 'hidden',
                     position: 'relative',
                     flexShrink: 0,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
                     cursor: 'pointer',
+                    border: '1px solid rgba(0,0,0,0.08)'
                   }}
-                  title="Cliquer pour examiner la photo / vidéo"
+                  title="Cliquer pour examiner la capture vidéo"
                 >
                   <img
                     src={item.image}
@@ -3497,160 +3498,135 @@ function AlertsView({ alertesReelles = [], camerasParId = {}, onRefresh, onSelec
                   <div
                     style={{
                       position: 'absolute',
-                      top: '4px',
-                      left: '4px',
-                      background: 'rgba(9, 17, 36, 0.8)',
+                      bottom: '6px',
+                      left: '6px',
+                      background: 'rgba(1, 53, 107, 0.85)',
+                      backdropFilter: 'blur(4px)',
                       color: '#ffffff',
-                      fontSize: '0.65rem',
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: '4px',
+                      fontSize: '0.66rem',
+                      fontWeight: 800,
+                      padding: '3px 8px',
+                      borderRadius: '6px',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '5px'
                     }}
                   >
-                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: isCritical ? '#ef4444' : '#10b981' }} />
-                    DIRECT
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isCritical ? '#ef4444' : '#10b981' }} />
+                    {item.cameraName || 'CAMÉRA'}
                   </div>
                 </div>
 
                 {/* 2. DÉTAILS DE L'ÉVÉNEMENT (AU CENTRE) */}
-                <div style={{ flex: '1 1 340px', cursor: 'pointer' }} onClick={() => setAlerteInspectee(item)}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                <div style={{ flex: '1 1 320px', cursor: 'pointer' }} onClick={() => setAlerteInspectee(item)}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '6px' }}>
                     <span
                       style={{
                         fontSize: '0.74rem',
                         fontWeight: 800,
-                        padding: '3px 8px',
-                        borderRadius: '5px',
-                        background: badgeBg,
-                        color: badgeColor
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        background: isCritical ? '#ef4444' : (isWarning ? '#f59e0b' : '#009FE3'),
+                        color: '#ffffff',
+                        letterSpacing: '0.03em'
                       }}
                     >
-                      {item.dangerLabel}
+                      ⚠️ {item.dangerLabel ? item.dangerLabel.toUpperCase() : 'SUSPECT'}
                     </span>
-                    <h3 style={{ fontSize: '1.02rem', fontWeight: 700, color: 'var(--ink-primary)', margin: 0 }}>
+                    <h3 style={{ fontSize: '1.08rem', fontWeight: 800, color: '#01356B', margin: 0 }}>
                       {item.title}
                     </h3>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '14px', fontSize: '0.8rem', color: 'var(--ink-muted)', marginBottom: '6px' }}>
-                    <span>📍 <strong>{item.cameraName}</strong> ({item.location})</span>
-                    <span>🕒 {item.timeAgo}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '0.8rem', color: '#64748b', marginBottom: '8px', fontWeight: 600 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      📍 <strong>{item.cameraName}</strong> ({item.location})
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#94a3b8' }}>
+                      🕒 {item.timeAgo}
+                    </span>
                   </div>
 
-                  <p style={{ fontSize: '0.85rem', color: 'var(--ink-secondary)', margin: '0 0 10px 0', lineHeight: 1.4 }}>
+                  <p style={{ fontSize: '0.86rem', color: '#334155', margin: '0 0 10px 0', lineHeight: 1.45, fontWeight: 500 }}>
                     {item.description}
                   </p>
 
-                  {/* CE QUE LE SYSTÈME A FAIT AUTOMATIQUEMENT — état réel
-                      de la lampe/sirène physiques (un seul appareil pour
-                      tout le site), affiché seulement sur les alertes
-                      critiques puisque c'est ce qui les déclenche. */}
+                  {/* CE QUE LE SYSTÈME A FAIT AUTOMATIQUEMENT */}
                   {item.critique && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-
-                      {/* LUMIÈRE */}
                       <div
                         style={{
-                          background: etatAlarme.lampe ? '#fef3c7' : '#f1f5f9',
+                          background: etatAlarme.lampe ? '#fef3c7' : '#f8fafc',
                           color: etatAlarme.lampe ? '#92400e' : '#64748b',
                           border: `1px solid ${etatAlarme.lampe ? '#fde68a' : '#e2e8f0'}`,
-                          padding: '4px 9px',
-                          borderRadius: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '8px',
                           fontSize: '0.76rem',
                           fontWeight: 700,
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '5px'
+                          gap: '6px'
                         }}
                       >
-                        <Lightbulb size={13} />
+                        <Lightbulb size={14} />
                         <span>{etatAlarme.lampe ? '💡 Projecteur allumé' : '💡 Éclairage en veille'}</span>
                       </div>
 
-                      {/* ALARME SONORE */}
                       <div
                         style={{
                           background: etatAlarme.sirene ? '#fee2e2' : '#ecfdf5',
                           color: etatAlarme.sirene ? '#dc2626' : '#059669',
                           border: `1px solid ${etatAlarme.sirene ? '#fca5a5' : '#bbf7d0'}`,
-                          padding: '4px 9px',
-                          borderRadius: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '8px',
                           fontSize: '0.76rem',
                           fontWeight: 700,
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '5px'
+                          gap: '6px'
                         }}
                       >
-                        <Volume2 size={13} />
+                        <Volume2 size={14} />
                         <span>{etatAlarme.sirene ? '🚨 Sirène active' : '🔊 Sirène prête'}</span>
                       </div>
-
                     </div>
                   )}
                 </div>
 
-                {/* 3. BOUTONS D'ACTION POUR L'OPÉRATEUR (À DROITE) */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'stretch', flexShrink: 0 }}>
+                {/* 3. BOUTONS D'ACTION ÉPURÉS POUR L'OPÉRATEUR */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'stretch', flexShrink: 0, minWidth: '150px' }}>
                   <button
                     onClick={() => setAlerteInspectee(item)}
                     style={{
-                      background: '#0284c7',
+                      background: 'linear-gradient(135deg, #01356B 0%, #009FE3 100%)',
                       color: '#ffffff',
                       border: 'none',
-                      padding: '8px 16px',
-                      borderRadius: '8px',
+                      padding: '9px 16px',
+                      borderRadius: '10px',
                       fontSize: '0.82rem',
-                      fontWeight: 700,
+                      fontWeight: 800,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '6px',
-                      boxShadow: '0 2px 8px rgba(2,132,199,0.3)',
+                      boxShadow: '0 4px 12px rgba(0, 159, 227, 0.25)',
                     }}
                   >
                     <Eye size={15} />
-                    <span>Voir Photo / Vidéo</span>
+                    <span>Examiner</span>
                   </button>
-
-                  {isCritical && etatAlarme.sirene && (
-                    <button
-                      onClick={handleStopSiren}
-                      style={{
-                        background: '#ef4444',
-                        color: '#ffffff',
-                        border: 'none',
-                        padding: '9px 18px',
-                        borderRadius: '8px',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        boxShadow: '0 2px 8px rgba(239, 68, 68, 0.25)'
-                      }}
-                    >
-                      <VolumeX size={15} />
-                      <span>Arrêter l'Alarme</span>
-                    </button>
-                  )}
 
                   <button
                     onClick={() => handleAcknowledge(item.id)}
                     style={{
-                      background: '#f8fafc',
-                      border: '1px solid var(--border-light)',
-                      color: 'var(--ink-secondary)',
-                      padding: '8px 16px',
-                      borderRadius: '8px',
+                      background: '#ffffff',
+                      border: '1px solid #cbd5e1',
+                      color: '#334155',
+                      padding: '8px 14px',
+                      borderRadius: '10px',
                       fontSize: '0.82rem',
-                      fontWeight: 600,
+                      fontWeight: 700,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -3659,19 +3635,19 @@ function AlertsView({ alertesReelles = [], camerasParId = {}, onRefresh, onSelec
                     }}
                   >
                     <Check size={15} color="#10b981" />
-                    <span>C'est Vérifié</span>
+                    <span>Vérifié</span>
                   </button>
 
                   <button
                     onClick={() => handleDelete(item.id)}
                     style={{
-                      background: '#ffffff',
-                      border: '1px solid #fee2e2',
-                      color: '#ef4444',
-                      padding: '7px 16px',
-                      borderRadius: '8px',
+                      background: '#fff1f2',
+                      border: '1px solid #fecdd3',
+                      color: '#e11d48',
+                      padding: '6px 12px',
+                      borderRadius: '10px',
                       fontSize: '0.78rem',
-                      fontWeight: 600,
+                      fontWeight: 700,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -3684,7 +3660,6 @@ function AlertsView({ alertesReelles = [], camerasParId = {}, onRefresh, onSelec
                     <span>Supprimer</span>
                   </button>
                 </div>
-
               </div>
             );
           })
