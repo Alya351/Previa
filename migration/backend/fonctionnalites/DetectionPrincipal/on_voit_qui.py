@@ -637,8 +637,10 @@ def _run_seg(model, frame, conf):
             detections = []
             for i, box in enumerate(result.boxes):
                 det_box = [round(v, 1) for v in box.xyxy[0].tolist()]
+                cls_id = int(box.cls[0])
                 det = {
-                    "label": result.names[int(box.cls[0])],
+                    "label": result.names[cls_id],
+                    "class_id": cls_id,
                     "box": det_box,
                     "centroid": _box_centroid(det_box),
                     "mask_poly": None,
