@@ -491,52 +491,57 @@ function SectionZones({ cameras, initialCameraId }) {
   const joursNoms = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
   return (
-    <div style={{ background: '#ffffff', borderRadius: '18px', padding: '28px 32px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', marginTop: '24px' }}>
-      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px' }}>
+    <div style={{ background: '#ffffff', borderRadius: '18px', padding: '24px 28px', border: '1px solid var(--border-subtle)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', marginTop: '24px' }}>
+      {/* HEADER SECTION WITH BADGE */}
+      <div style={{ marginBottom: '22px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px' }}>
         <div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--ink-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <MapPin size={21} color="#0284c7" /> Zones Sensibles & Plages Horaires d'Activation
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#01356B', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ display: 'inline-flex', padding: '8px', borderRadius: '10px', background: '#e0f2fe', color: '#009FE3' }}>
+              <MapPin size={20} />
+            </span>
+            Zones Sensibles & Plages Horaires d'Activation
           </h3>
-          <p style={{ fontSize: '0.84rem', color: 'var(--ink-muted)', margin: '4px 0 0 0' }}>
-            Délimitez une zone protégée (ex: réserve, coffre, bureaux) et configurez ses heures de surveillance pour éliminer les alertes intempestives pendant les heures de travail.
+          <p style={{ fontSize: '0.84rem', color: 'var(--ink-muted)', margin: '6px 0 0 0', maxWidth: '680px', lineHeight: 1.4 }}>
+            Délimitez une zone sur l'image et activez la surveillance sur des plages horaires ciblées pour éliminer les fausses alertes pendant les heures de travail.
           </p>
         </div>
 
         {/* Live Status Badge */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '10px',
+          display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '30px',
           background: statutHoraire.actif ? '#ecfdf5' : '#f8fafc',
-          border: statutHoraire.actif ? '1px solid #a7f3d0' : '1px solid var(--border-subtle)',
-          color: statutHoraire.actif ? '#065f46' : 'var(--ink-muted)',
+          border: statutHoraire.actif ? '1px solid #6ee7b7' : '1px solid #e2e8f0',
+          color: statutHoraire.actif ? '#047857' : '#64748b',
           fontSize: '0.82rem', fontWeight: 700,
+          boxShadow: statutHoraire.actif ? '0 2px 8px rgba(16,185,129,0.15)' : 'none'
         }}>
           <span style={{
-            width: '10px', height: '10px', borderRadius: '50%',
+            width: '8px', height: '8px', borderRadius: '50%',
             background: statutHoraire.actif ? '#10b981' : '#94a3b8',
-            boxShadow: statutHoraire.actif ? '0 0 8px #10b981' : 'none',
+            boxShadow: statutHoraire.actif ? '0 0 10px #10b981' : 'none',
           }} />
           {statutHoraire.texte}
         </div>
       </div>
 
-      {/* Camera Selection */}
-      <div style={{ display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1', minWidth: '260px', maxWidth: '380px' }}>
-          <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--ink-secondary)', display: 'block', marginBottom: '4px' }}>
-            Caméra cible
+      {/* TOP CONTROLS: Camera Selection & Zone Name */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '20px', background: '#f8fafc', padding: '16px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+        <div>
+          <label style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#01356B', display: 'block', marginBottom: '6px' }}>
+            📹 Caméra Cible
           </label>
           <select
             value={idCamera}
             onChange={(e) => setIdCamera(e.target.value)}
-            style={{ width: '100%', padding: '9px 14px', borderRadius: '8px', border: '1px solid var(--border-light)', fontSize: '0.88rem', fontWeight: 700, background: '#ffffff', color: 'var(--ink-primary)' }}
+            style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.88rem', fontWeight: 700, background: '#ffffff', color: '#0f172a', outline: 'none', cursor: 'pointer' }}
           >
             {cameras.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.location}</option>)}
           </select>
         </div>
 
-        <div style={{ flex: '1', minWidth: '220px', maxWidth: '340px' }}>
-          <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--ink-secondary)', display: 'block', marginBottom: '4px' }}>
-            Nom de la zone protégée
+        <div>
+          <label style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#01356B', display: 'block', marginBottom: '6px' }}>
+            🏷️ Nom de la zone protégée
           </label>
           <input
             type="text"
@@ -546,7 +551,7 @@ function SectionZones({ cameras, initialCameraId }) {
               setNomZone(e.target.value);
               setEstModifie(true);
             }}
-            style={{ width: '100%', padding: '9px 14px', borderRadius: '8px', border: '1px solid var(--border-light)', fontSize: '0.88rem', color: 'var(--ink-primary)', background: '#f8fafc' }}
+            style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.88rem', color: '#0f172a', background: '#ffffff', outline: 'none', fontWeight: 600 }}
           />
         </div>
       </div>
@@ -619,14 +624,14 @@ function SectionZones({ cameras, initialCameraId }) {
         </div>
 
         {/* Schedule & Activation Controls */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Card: Plage Horaire */}
-          <div style={{ background: '#f8fafc', border: '1px solid var(--border-light)', borderRadius: '12px', padding: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--ink-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Clock size={16} color="#0284c7" /> Plage Horaire d'Activation
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '18px', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>
+              <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#01356B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Clock size={18} color="#009FE3" /> Plage Horaire d'Activation
               </span>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink-secondary)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700, color: '#009FE3', background: '#e0f2fe', padding: '4px 10px', borderRadius: '20px' }}>
                 <input
                   type="checkbox"
                   checked={active24h}
@@ -634,7 +639,7 @@ function SectionZones({ cameras, initialCameraId }) {
                     setActive24h(e.target.checked);
                     setEstModifie(true);
                   }}
-                  style={{ width: '16px', height: '16px', accentColor: '#0284c7' }}
+                  style={{ width: '15px', height: '15px', accentColor: '#009FE3', cursor: 'pointer' }}
                 />
                 Actif 24h/24
               </label>
@@ -785,12 +790,28 @@ function SectionZones({ cameras, initialCameraId }) {
               onClick={enregistrer}
               disabled={enregistrement || points.length < 3}
               style={{
-                ...btnPrimaire,
+                width: '100%',
+                background: (enregistrement || points.length < 3) 
+                  ? '#94a3b8' 
+                  : 'linear-gradient(135deg, #01356B 0%, #009FE3 100%)',
+                border: 'none',
+                color: '#ffffff',
+                padding: '12px 18px',
+                borderRadius: '10px',
+                fontSize: '0.88rem',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: (enregistrement || points.length < 3) 
+                  ? 'none' 
+                  : '0 4px 14px rgba(0, 159, 227, 0.35)',
                 opacity: (enregistrement || points.length < 3) ? 0.6 : 1,
                 cursor: (enregistrement || points.length < 3) ? 'not-allowed' : 'pointer'
               }}
             >
-              <Save size={15} />
+              <Save size={16} />
               <span>{zoneExistante ? 'Enregistrer les modifications' : 'Enregistrer la zone & les plages horaires'}</span>
             </button>
           )}
