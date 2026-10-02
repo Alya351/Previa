@@ -1290,10 +1290,14 @@ def analyser(id_camera: str, frame) -> dict:
     personnes = [d for d in tous_candidats_personnes if d.get("label") in ("person", "personne") and d["score"] >= CONF_PERSONNE]
     print(f"[chrono] passe parallèle multi-modèles (person, clothing, pose, face) : {time.time() - _t0:.2f}s", flush=True)
 
-    # SegFormer : exécuté en direct pour chaque frame où une personne ou un visage est présent
+    # SegFormer : exécuté uniquement si au moins une personne ou un visage est réellement présent
     _t_seg = time.time()
     if (len(personnes) > 0 or len(faces) > 0) and models["clothing_processor"] is not None and models["clothing_model"] is not None:
-        carte_vetements = _segment_clothing(models["clothing_processor"], models["clothing_model"], frame)
+        # Réduction x2 pour accélérer l'analyse de segmentation sur CPU/Raspberry Pi
+        h, w = frame.shape[:2]
+        small_frame = cv2.resize(frame, (w // 2, h // 2), interpolation=cv2.INTER_LINEAR)
+        carte_small = _segment_clothing(models["clothing_processor"], models["clothing_model"], small_frame)
+        carte_vetements = cv2.resize(carte_small, (w, h), interpolation=cv2.INTER_NEAREST)
     else:
         carte_vetements = np.zeros(frame.shape[:2], dtype=np.int64)
     print(f"[chrono] segformer vêtements & accessoires : {time.time() - _t_seg:.2f}s", flush=True)
@@ -1408,10 +1412,18 @@ def analyser(id_camera: str, frame) -> dict:
     # Masque plein cadre de chaque personne, calculé une seule fois — sert
     # à attribuer aussi bien les vêtements YOLO que les accessoires
     # SegFormer par recouvrement de pixels réel (pas par centroïde).
-    masques_personnes = [
-        _polygon_pixel_mask(p["mask_poly"], frame.shape) if p["mask_poly"] is not None else None
-        for p in personnes
-    ]
+    masques_personnes = []
+    for p in personnes:
+        if p.get("mask_poly") is not None:
+            masques_personnes.append(_polygon_pixel_mask(p["mask_poly"], frame.shape))
+        elif p.get("box") is not None:
+            # Fallback masque rectangulaire rapide pour boîte englobante
+            m = np.zeros(frame.shape[:2], dtype=bool)
+            x1, y1, x2, y2 = [int(v) for v in p["box"]]
+            m[max(0, y1):min(frame.shape[0], y2), max(0, x1):min(frame.shape[1], x2)] = True
+            masques_personnes.append(m)
+        else:
+            masques_personnes.append(None)
 
     # Vêtements PRINCIPAUX (YOLO/DeepFashion2, types fins) : chaque
     # instance détectée est attribuée à la personne dont le masque
