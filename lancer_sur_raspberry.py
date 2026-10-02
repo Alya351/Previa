@@ -278,6 +278,13 @@ def executer_sur_pi(host):
     synchroniser_code(ssh)
     synchroniser_modeles(ssh)
 
+    # Synchro de la date et heure du PC vers le Raspberry Pi (anti-décalage horodatage)
+    now_iso = time.strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        executer_commande_distante(ssh, f"date -s '{now_iso}'", sudo=True)
+    except Exception:
+        pass
+
     print("\n[*] [3/3] Demarrage du systeme PREVIA sur le Raspberry Pi...")
     
     # Ouvrir l'interface dans le navigateur après 4 secondes
