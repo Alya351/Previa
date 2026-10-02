@@ -126,13 +126,10 @@ def ajouter_historique(id_camera: str, evenement: dict) -> None:
     payload = json.dumps(evenement, ensure_ascii=False, default=_json_default)
     
     with conn:
-        # synchronous=FULL pour garantir la résistance absolue aux coupures de courant
-        conn.execute("PRAGMA synchronous=FULL;")
         conn.execute("""
             INSERT INTO evenements_historique (camera_id, timestamp, type_evenement, gravite, statut, payload_json)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (id_camera, ts, type_ev, gravite, statut, payload))
-        conn.execute("PRAGMA synchronous=NORMAL;")
 
 
 def lire_historique(id_camera: str, limit: int = 100) -> list[dict]:

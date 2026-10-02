@@ -1279,10 +1279,13 @@ def analyser(id_camera: str, frame) -> dict:
     # Si AUCUNE personne n'est détectée sur l'image, contourner immédiatement tous les modèles lourds
     if not personnes:
         # Écriture immédiate du rapport vide pour rafraîchir l'interface (< 0.05s)
-        rapport_cam.ecrire_etat(id_camera, "personnesVues", {
+        rapport_cam.enregistrer_etat(id_camera, "personnesVues", {
+            "id_camera": id_camera,
             "personnes": [],
+            "objets": objets_actuels,
+            "nombre_personnes": 0,
             "zones_suspectes": [],
-            "timestamp": now,
+            "updated_at": now,
             "duree_analyse": round(time.time() - _t0, 3)
         })
         return {
