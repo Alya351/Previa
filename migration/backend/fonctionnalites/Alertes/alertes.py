@@ -120,6 +120,11 @@ def _est_autorise(pid: str | None) -> bool:
     return False
 
 
+_dernieres_alertes_enregistrees: dict[str, float] = {}
+_lock_alertes = threading.Lock()
+DELAI_ANTI_FLOOD_S = 60.0  # Évite d'envoyer la même alerte en boucle toutes les secondes
+
+
 def enregistrer_alerte(
     type_evenement: str,
     id_camera: str,
@@ -128,17 +133,22 @@ def enregistrer_alerte(
     avis_ia: dict | None,
     now: float | None = None,
 ) -> dict:
-    """Enregistre une alerte confirmée. `pid` peut être None (ex. objet
-    suivi par track_id plutôt que par une identité de personne, ou zone
-    anonyme). `avis_ia` : le second avis du comparateur (voir
-    comparaison_ia.comparer), déjà calculé par l'appelant — persisté ici
-    pour de bon. Lève ValueError si `type_evenement` n'est pas reconnu."""
+    """Enregistre une alerte confirmée avec filtre anti-flood (60s)."""
     if type_evenement not in TYPES_VALIDES:
         raise ValueError(f"type_evenement invalide : {type_evenement!r} (attendu : {TYPES_VALIDES})")
 
     # Un collaborateur autorisé en règle n'est jamais un rôdeur ni un infiltré
     if type_evenement in {"rodeur", "infiltration"} and _est_autorise(pid):
         return {"id": "ignored", "statut": "collaborateur_autorise_ignore"}
+
+    ts = now if now is not None else time.time()
+    cle_anti_flood = f"{id_camera}_{type_evenement}_{pid or 'anonyme'}"
+
+    with _lock_alertes:
+        dernier_envoi = _dernieres_alertes_enregistrees.get(cle_anti_flood, 0.0)
+        if ts - dernier_envoi < DELAI_ANTI_FLOOD_S:
+            return {"id": "ignored", "statut": "anti_flood_ignore"}
+        _dernieres_alertes_enregistrees[cle_anti_flood] = ts
 
     alerte = {
         "id": uuid.uuid4().hex,
@@ -147,7 +157,7 @@ def enregistrer_alerte(
         "pid": pid,
         "description": description,
         "avis_ia": avis_ia,
-        "horodatage": now if now is not None else time.time(),
+        "horodatage": ts,
     }
     ALERTES_DIR.mkdir(parents=True, exist_ok=True)
     with open(_chemin(alerte["id"]), "w", encoding="utf-8") as f:
