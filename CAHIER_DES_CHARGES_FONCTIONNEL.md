@@ -140,11 +140,19 @@ Le système **PREVIA** automatise la détection d'anomalies en temps réel grâc
 
 ---
 
-### 4.8. MODULE 8 : Administration Multi-sites et Affectation des Rôles
-* **REQ-ORG-01 (Arborescence Hiérarchique)** :
+### 4.8. MODULE 8 : Administration Multi-sites et Affectation des Rôles & Sécurité Physico-Matérielle (Sirène)
+* **REQ-ORG-01 (Arborescence Hiérarchique Harmonisée)** :
   * Structuration : Sites → Bâtiments → Pièces → Caméras rattachées.
-* **REQ-ORG-02 (Délégation des Droits Manager)** :
-  * Possibilité pour un Manager d'affecter la supervision de pièces spécifiques de son bâtiment à des agents subordonnés.
+* **REQ-ORG-02 (Délégation de Périmètre Manager)** :
+  * Un Manager peut se voir affecter un ou plusieurs bâtiments. Si un bâtiment n'a aucun responsable désigné, seul l'Administrateur Principal y a accès.
+* **REQ-ORG-03 (Affectation Pièce par Pièce pour Agent / Utilisateur)** :
+  * Un Agent / Utilisateur peut être restreint par son Manager à des pièces spécifiques. Son interface (Web/Mobile) masque automatiquement toutes les caméras et alertes en dehors de ses pièces attribuées.
+* **REQ-IOT-01 (Pilotage Manuel de la Sirène d'Urgence)** :
+  * L'activation de la sirène physique (Relais ESP32 / Arduino) n'est jamais automatique. Elle s'effectue exclusivement par action manuelle de l'opérateur (Admin ou Manager du site) après levée de doute, avec fenêtre de confirmation pop-up.
+* **REQ-IOT-02 (Auto-Extinction de Sécurité & Watchdog Timer)** :
+  * En cas d'activation, la sirène physique intègre une auto-extinction matérielle automatique sous 120 secondes maximum pour prévenir les nuisances sonores ou l'absence de réseau.
+* **REQ-IOT-03 (Journalisation d'Audit de l'Alarme)** :
+  * Chaque déclenchement et coupure de la sirène est obligatoirement consigné dans le journal SQLite immuable avec l'identifiant de l'opérateur, l'heure exacte et l'alerte associée.
 
 ---
 
