@@ -4861,7 +4861,7 @@ export default function Admin() {
 
   // Raccourcis clavier (1-9), étendus à l'onglet Organisation quand présent.
   useEffect(() => {
-    const tabs = ['dashboard', 'cameras', 'personnes', 'objets', 'events', 'alerts', 'reports', ...(estParDefaut ? ['organisation', 'configAlerte'] : [])];
+    const tabs = ['dashboard', 'cameras', 'personnes', 'events', 'alerts', 'reports', 'organisation'];
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const num = parseInt(e.key, 10);
@@ -4954,12 +4954,8 @@ export default function Admin() {
         return <EventsView alertesReelles={alertes} cameras={camerasReelles} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
       case 'alerts':
         return <AlertsView alertesReelles={alertes} camerasParId={camerasParId} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
-      case 'reports':
-        return <ReportsView alertesReelles={alertes} kpis={kpis} />;
       case 'organisation':
-        return estParDefaut ? <OrganisationView /> : <DashboardView onToggleSidebar={toggleSidebar} onSelectTab={setCurrentTab} kpis={kpis} cameras={camerasReelles} situations={situations} alerteEnCours={alerteEnCours} />;
-      case 'configAlerte':
-        return estParDefaut ? <ConfigAlerteView /> : <DashboardView onToggleSidebar={toggleSidebar} onSelectTab={setCurrentTab} kpis={kpis} cameras={camerasReelles} situations={situations} alerteEnCours={alerteEnCours} />;
+        return <OrganisationView />;
       default:
         return (
           <DashboardView
