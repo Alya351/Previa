@@ -206,6 +206,7 @@ CLOTHING_MEMORY_EXPIRY_S = 60  # un vêtement plus revu depuis ce délai est oub
 MEMOIRE_PERSONNE_EXPIRY_S = 3600.0
 
 _memoire_personnes = {}
+_orientations_camera: dict[str, int | None] = {}
 # id -> {"genre_votes": {"female": n, "male": n}, "genre_verrouille": str | None,
 #        "vetements": {(type_fr, couleur_fr): {"count": n, "last_seen": t}},
 #        "last_seen": float}
@@ -1278,8 +1279,11 @@ def analyser(id_camera: str, frame) -> dict:
     # objet proche (indice de vol).
     objets_actuels = rapport_cam.lire_etat(id_camera, "vueActuelle").get("objets", {})
 
-    # Chronométrage et architecture universelle multi-orientations (0°, 90°, 180°, 270°) :
-    # S'adapte à n'importe quelle caméra IP quel que soit son sens de montage physique (endroit, envers, 90° gauche, 90° droite)
+    # Orientation mémorisée pour cette caméra (évite 4 ré-inférences inutiles à chaque frame sur Pi 4)
+    rot_candidat = _orientations_camera.get(id_camera)
+    if rot_candidat is not None:
+        frame = cv2.rotate(frame, rot_candidat)
+
     _t0 = time.time()
     tous_candidats_personnes = _run_seg(models["person_seg"], frame, CONF_RODEUR_ANONYME)
     personnes = [
@@ -1291,8 +1295,8 @@ def analyser(id_camera: str, frame) -> dict:
         and d.get("score", 0.0) >= 0.05
     ]
 
-    # Si 0 personne trouvée dans l'orientation initiale, tester les 3 autres orientations de rotation (90°, 180°, 270°)
-    if not personnes:
+    # Si 0 personne trouvée et aucune orientation verrouillée, tester ponctuellement les 3 autres orientations
+    if not personnes and rot_candidat is None:
         for rot_code in (cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE):
             frame_rot = cv2.rotate(frame, rot_code)
             candidats_rot = _run_seg(models["person_seg"], frame_rot, CONF_RODEUR_ANONYME)
@@ -1305,6 +1309,7 @@ def analyser(id_camera: str, frame) -> dict:
                 frame = frame_rot
                 tous_candidats_personnes = candidats_rot
                 personnes = found_rot
+                _orientations_camera[id_camera] = rot_code
                 break
 
     # Si YOLO segmentation ne voit pas le corps entier (ex: selfie / visage de très près),
