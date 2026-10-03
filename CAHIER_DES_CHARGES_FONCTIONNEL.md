@@ -1,238 +1,263 @@
 # 📋 CAHIER DES CHARGES FONCTIONNEL
-# **PREVIA — OPERATIONS CENTER**
-### *Plateforme Web de Vidéosurveillance Intelligente et d'Analyse Comportementale par IA*
+# **PREVIA — OPERATIONS CENTER & COMPANION MOBILE**
+### *Plateforme Multiplateforme de Vidéosurveillance Intelligente et de Sécurité Prédictive par IA*
 
-* **Type d'application** : Application Web Responsive (SPA — React / Vite)
-* **Version du document** : 2.2 — Document de référence consolidé (Version de Production Edge AI Raspberry Pi)
-* **Date** : 2 octobre 2026
+* **Type d'application** : Application Web Responsive (React / Vite) & Application Mobile (React Native / Expo)
+* **Version du document** : 3.0 — Document Consolidé et Restructuré (Version de Production Edge AI & Jury OSC)
+* **Date** : 3 octobre 2026
 * **Statut** : Diffusable
 
 ---
 
 ## 📌 Sommaire
-1. [Contexte](#1-contexte)
-2. [Objectifs du portail web](#2-objectifs-du-portail-web)
-3. [Profils Utilisateurs et Droits d'Accès](#3-profils-utilisateurs-et-droits-daccès)
-4. [Arborescence et Parcours de Navigation](#4-arborescence-et-parcours-de-navigation)
-   - [4.1. MODULE 1 : Authentification, Sécurité et Gestion des Licences](#41-module-1--authentification-sécurité-et-gestion-des-licences)
-   - [4.2. MODULE 2 : Tableau de Bord & Supervision Vidéo Temps Réel](#42-module-2--tableau-de-bord--supervision-vidéo-temps-réel)
-   - [4.3. MODULE 3 : Cartographie Caméras & Dessin de Zones de Sécurité](#43-module-3--cartographie-caméras--dessin-de-zones-de-sécurité)
-   - [4.4. MODULE 4 : Module Personnel & Reconnaissance Faciale (Face ID)](#44-module-4--module-personnel--reconnaissance-faciale-face-id)
-   - [4.5. MODULE 5 : Module Objets & Détection des Comportements Suspects](#45-module-5--module-objets--détection-des-comportements-suspects)
-   - [4.6. MODULE 6 : Centre de Gestion des Alertes](#46-module-6--centre-de-gestion-des-alertes)
+1. [Contexte et Problématique](#1-contexte-et-problématique)
+2. [Objectifs du Système PREVIA](#2-objectifs-du-système-previa)
+3. [Profils Utilisateurs, Rôles et Matrice des Droits](#3-profils-utilisateurs-rôles-et-matrice-des-droits)
+4. [Architecture des Modules et Fonctionnalités](#4-architecture-des-modules-et-fonctionnalités)
+   - [4.1. MODULE 1 : Authentification, Sécurité et Gestion des Sessions](#41-module-1--authentification-sécurité-et-gestion-des-sessions)
+   - [4.2. MODULE 2 : Supervision Vidéo Temps Réel & Dashboard (Web & Mobile)](#42-module-2--supervision-vidéo-temps-réel--dashboard-web--mobile)
+   - [4.3. MODULE 3 : Cartographie, Bâtiments et Dessin de Zones de Sécurité](#43-module-3--cartographie-bâtiments-et-dessin-de-zones-de-sécurité)
+   - [4.4. MODULE 4 : Annuaire Personnel, Biométrie & Reconnaissance Faciale (Face ID)](#44-module-4--annuaire-personnel-biométrie--reconnaissance-faciale-face-id)
+   - [4.5. MODULE 5 : Détection des Anomalies Comportementales & Objets](#45-module-5--détection-des-anomalies-comportementales--objets)
+   - [4.6. MODULE 6 : Centre de Gestion des Alertes & Levée de Doute](#46-module-6--centre-de-gestion-des-alertes--levée-de-doute)
    - [4.7. MODULE 7 : Historique, Traçabilité & Export de Rapports](#47-module-7--historique-traçabilité--export-de-rapports)
-   - [4.8. MODULE 8 : Organisation Multi-sites](#48-module-8--organisation-multi-sites)
-5. [Exigences Non Fonctionnelles](#5-exigences-non-fonctionnelles)
-   - [5.1. Performance & Réactivité](#51-performance--réactivité)
-   - [5.2. Ergonomie & Accessibilité (UI/UX)](#52-ergonomie--accessibilité-uiux)
-6. [Matrice de Recette et Critères d'Acceptation](#6-matrice-de-recette-et-critères-dacceptation)
-7. [Annexe — Glossaire](#annexe--glossaire)
+   - [4.8. MODULE 8 : Administration Multi-sites et Affectation des Rôles](#48-module-8--administration-multi-sites-et-affectation-des-rôles)
+   - [4.9. MODULE 9 : Console d'Administration Globale (Superadmin) & Licences](#49-module-9--console-dadministration-globale-superadmin--licences)
+   - [4.10. MODULE 10 : Application Mobile Companion & Notifications Push](#410-module-10--application-mobile-companion--notifications-push)
+5. [Exigences Non Fonctionnelles et Qualité de Service](#5-exigences-non-fonctionnelles-et-qualité-de-service)
+   - [5.1. Performance, Latence et Mesures Chiffrées](#51-performance-latence-et-mesures-chiffrées)
+   - [5.2. Ergonomie, UI/UX et Accessibilité](#52-ergonomie-uiux-et-accessibilité)
+   - [5.3. Sécurité, Biométrie et Conformité Légale (APDP Burkina Faso)](#53-sécurité-biométrie-et-conformité-légale-apdp-burkina-faso)
+   - [5.4. Exploitation, Résilience et Horodatage NTP](#54-exploitation-résilience-et-horodatage-ntp)
+6. [Cadre Technique et Limites Connues de la Solution](#6-cadre-technique-et-limites-connues-de-la-solution)
+7. [Scénario de Démonstration Réelle (3 Minutes)](#7-scénario-de-démonstration-réelle-3-minutes)
+8. [Matrice de Recette et Critères d'Acceptation](#8-matrice-de-recette-et-critères-dacceptation)
+9. [Annexe — Glossaire](#annexe--glossaire)
 
 ---
 
-## 1. Contexte
-La vidéosurveillance conventionnelle génère un volume massif d'images que les équipes de sécurité ne peuvent traiter en continu de façon proactive. Le projet PREVIA vise à automatiser la détection des anomalies de sécurité en temps réel grâce à l'intelligence artificielle appliquée aux flux vidéo existants, afin de transformer une surveillance passive en un dispositif de prévention active.
+## 1. Contexte et Problématique
+La vidéosurveillance conventionnelle génère un volume massif d'images que les équipes de sécurité ne peuvent pas traiter en continu de façon proactive. Dans les entreprises comme dans les domiciles, la majorité des incidents (intrusions, départs de feu, vols, rôdeurs) sont constatés *a posteriori*, transformant les caméras en simples enregistreurs passifs. 
+
+Le système **PREVIA** automatise la détection d'anomalies en temps réel grâce à une intelligence artificielle déployée localement (*Edge AI*). Il analyse en continu les flux vidéo existants sans recourir au cloud, garantissant la confidentialité des données et réduisant le temps d'intervention des équipes de sécurité.
 
 ---
 
-## 2. Objectifs du portail web
-* Fournir aux opérateurs de sécurité un poste de contrôle centralisé, fluide et sans latence perceptible.
-* Réduire le temps de réaction humaine face aux incidents critiques (intrusions, départs de feu, colis suspects, rôdeurs).
-* Offrir une interface d'administration autonome pour la gestion des accès biométriques (Face ID) et des infrastructures multi-sites.
-* Garantir la traçabilité légale de tous les événements et faciliter la production de rapports d'audit.
+## 2. Objectifs du Système PREVIA
+* **Supervision Unifiée** : Offrir une interface Web et une application Mobile synchronisées sans latence perceptible.
+* **Prévention Active** : Alerter en moins de 2 secondes lors d'une intrusion en zone protégée, d'un départ de feu ou d'un comportement suspect.
+* **Autonomie Edge AI** : Fonctionner à 100% sur un boîtier local (Raspberry Pi 4 / 5) sans dépendance vers des serveurs externes.
+* **Traçabilité Légale** : Enregistrer de manière infalsifiable les événements, photos de preuve et clips vidéo.
 
 ---
 
-## 3. Profils Utilisateurs et Droits d'Accès
+## 3. Profils Utilisateurs, Rôles et Matrice des Droits
 
-| Profil | Rôle métier | Droits sur la plateforme web |
+| Profil | Rôle Métier | Droits d'Accès sur la Plateforme (Web & Mobile) |
 | :--- | :--- | :--- |
-| **Superadministrateur** | Équipe Prévia : concepteur et éditeur de la solution | Suivi du nombre de clients utilisant la plateforme ; consultation de la période d'abonnement (date de début, de fin et statut) de chaque client ; résiliation d'un abonnement (désactivation immédiate de l'accès du client à la plateforme, action journalisée). |
-| **Administrateur Principal** | Gestionnaire/Responsable principal du site ou du domicile | Accès complet à la plateforme, y compris à l'organisation : création/suppression des comptes manager et utilisateur, gestion des bâtiments, pièces et caméras, configuration des boîtiers d'alarme, dessin des zones non autorisées par caméra ; plus tableau de bord, flux vidéo en direct, journal des événements, alertes en temps réel et génération de rapports (PDF/Excel). |
-| **Manager Département** | Responsable d'un site à surveiller ou d'un département | Accès à la plateforme à l'exception de la gestion de l'organisation (ne peut pas affecter de bâtiments à surveiller, puisque lui-même s’est vu attribuer la gestion d’un bâtiment) ; il peut cependant affecter la surveillance d’une pièce de son bâtiment a un subordonné ; tableau de bord (caméras actives, personnes détectées, comportements suspects, taux de disponibilité), flux vidéo en direct, détail des personnes et objets détectés, journal des événements filtrable, alertes de sécurité en temps réel, génération et téléchargement de rapports. |
-| **Utilisateur** | Employé, agent de sécurité, habitant d’un domicile | Réception d'alertes automatiques en cas de comportement suspect ; consultation de l'historique des alertes ; visualisation du flux vidéo en direct depuis l'application mobile ; accès à la plateforme web depuis l'application mobile ; validation ou rejet manuel de chaque alerte, aucune action n'étant déclenchée automatiquement par le système. |
+| **Superadministrateur** | Équipe PREVIA / Éditeur de la solution | Consultation du parc client, suivi des périodes d'abonnement, activation/résiliation à distance des licences, monitoring global des boîtiers Edge. |
+| **Administrateur Principal** | Responsible Sécurité / Directeur de Site / Propriétaire | Accès total : gestion de l'organisation multi-sites (bâtiments, pièces, caméras), création/révocation des comptes, configuration des zones d'intrusion, enrôlement Face ID, validation d'alertes, export de rapports. |
+| **Manager Département** | Responsable d'un bâtiment ou d'une zone spécifique | Supervision du bâtiment attribué, affectation des pièces à surveiller aux agents sous sa responsabilité, consultation du direct, traitement des alertes, export des rapports du site. |
+| **Utilisateur / Agent** | Agent de sécurité, employé, résident | Réception des notifications push d'alerte sur l'application mobile, consultation du flux vidéo direct, levée de doute et validation/rejet manuel des alertes assignées. |
 
 ---
 
-## 4. Arborescence et Parcours de Navigation
+## 4. Architecture des Modules et Fonctionnalités
 
-| Écran / Route | Contenu principal |
-| :--- | :--- |
-| `/login` | Connexion et amorçage initial du premier compte |
-| `/admin › Tableau de bord` | KPIs, grille vidéo en direct, mini-cartes IA |
-| `/admin › Caméras` | Grille des flux, dessin de zones interdites |
-| `/admin › Personnel & Face ID` | Annuaire, enrôlement photo, journal des accès |
-| `/admin › Objets & Colis` | Inventaire temps réel, alertes colis abandonnés |
-| `/admin › Historique` | Journal des événements chronologique et filtrable |
-| `/admin › Alertes` | Centre de tri des alertes, levée de doute |
-| `/admin › Rapports` | Générateur et export PDF / Excel |
-| `/admin › Organisation *Admin` | Arborescence Bâtiments / Pièces / Caméras / Comptes |
-
----
-
-### 4.1. MODULE 1 : Authentification, Sécurité et Gestion des Licences
-
-* **REQ-AUTH-01 (Connexion standard)** :
-  * Saisie de l'email et du mot de passe, avec option d'affichage/masquage du mot de passe.
-  * Stockage sécurisé de la session utilisateur (`sessionStorage`) avec gestion des rôles associés.
-* **REQ-AUTH-02 (Amorçage de licence - premier compte)** :
-  * Formulaire dédié à la première mise en service, exigeant un code secret d'amorçage validé par le Superadministrateur.
-* **REQ-AUTH-03 (Contrôle d'expiration de licence)** :
-  * Vérification continue de la validité de la licence (durée : 1 an).
-  * Affichage automatique d'un écran de blocage complet avec formulaire de réactivation si la licence est échue.
-  * Affichage discret du nombre de jours restants dans la barre de menu.
+### 4.1. MODULE 1 : Authentification, Sécurité et Gestion des Sessions
+* **REQ-AUTH-01 (Connexion & Validation Serveur)** :
+  * Authentification par email/mot de passe avec contrôle de validité effectué strictement par le serveur (jetons de session sécurisés HTTP/JWT).
+  * Verrouillage automatique du compte pendant 15 minutes après 5 tentatives d'authentification infructueuses.
+* **REQ-AUTH-02 (Authentification Renforcée 2FA)** :
+  * Prise en charge du second facteur d'authentification (TOTP / Google Authenticator) optionnel pour les utilisateurs et obligatoire pour les comptes Administrateur.
+* **REQ-AUTH-03 (Amorçage de licence & premier compte)** :
+  * Formulaire initial exigeant une clé d'activation signée par le Superadministrateur pour initialiser l'Administrateur Principal.
+* **REQ-AUTH-04 (Contrôle d'expiration de licence)** :
+  * Vérification continue de la validité de la licence (1 an). Blocage de l'interface d'administration et alerte de renouvellement en cas d'expiration.
 
 ---
 
-### 4.2. MODULE 2 : Tableau de Bord & Supervision Vidéo Temps Réel
-
-* **REQ-DASH-01 (Indicateurs clés - KPIs)** :
-  * Affichage dynamique de 4 compteurs : caméras actives / total, personnes détectées, comportements suspects en cours, taux de disponibilité du système.
-  * Clic sur un KPI pour naviguer directement vers la section détaillée associée.
-* **REQ-DASH-02 (Mosaïque vidéo en direct)** :
-  * Grille réactive (1 à 4 colonnes selon la taille de l'écran) avec badge pulsant « LIVE » par caméra.
-  * Flux en direct via protocole WebRTC avec bascule de secours automatique sur rafraîchissement d'images instantanées en cas de perte de signal.
-* **REQ-DASH-03 (Bannière d'alerte critique)** :
-  * Affichage prioritaire avec pulsation visuelle rouge en cas d'alerte majeure en cours (ex. feu, intrusion).
-* **REQ-DASH-04 (Modale HUD haute définition)** :
-  * Agrandissement d'une caméra sélectionnée avec bascule WebRTC / repli automatique.
-  * Actions rapides : prise d'instantané photo, commande de test webcam locale, fermeture au clavier (touche Échap).
+### 4.2. MODULE 2 : Supervision Vidéo Temps Réel & Dashboard (Web & Mobile)
+* **REQ-DASH-01 (Indicateurs Clés - KPIs)** :
+  * Affichage dynamique de 4 compteurs : caméras actives, personnes détectées, comportements suspects en cours, taux de disponibilité global du système.
+* **REQ-DASH-02 (Mosaïque Vidéo Multi-flux)** :
+  * Grille vidéo réactive (1 à 4 caméras) avec indicateur « LIVE », bascule automatique WebRTC / flux image secours.
+* **REQ-DASH-03 (Bannière d'Urgence Critique)** :
+  * Signalisation visuelle et sonore prioritaire en cas d'incident majeur (feu, intrusion).
+* **REQ-DASH-04 (Agrandissement HD & Instantané)** :
+  * Ouverture d'une caméra en plein écran avec capture d'instantané photo manuelle à tout moment.
 
 ---
 
-### 4.3. MODULE 3 : Cartographie Caméras & Dessin de Zones de Sécurité
-
-* **REQ-CAM-01 (Inventaire et état des caméras)** :
-  * Liste des caméras avec état de connexion, emplacement (bâtiment / pièce), résolution et statut de streaming.
-* **REQ-CAM-02 (Éditeur de zones polygonales)** :
-  * Outil graphique interactif permettant de tracer, point par point, un polygone d'exclusion directement sur l'image fixe d'une caméra.
-  * Sauvegarde et suppression des coordonnées polygonales associées à chaque caméra.
-* **REQ-CAM-03 (Détection d'intrusion en zone)** :
-  * Génération d'une alerte immédiate dès qu'une boîte englobante humaine franchit le polygone tracé.
-
----
-
-### 4.4. MODULE 4 : Module Personnel & Reconnaissance Faciale (Face ID)
-
-* **REQ-FACE-01 (Annuaire biométrique)** :
-  * Liste des personnes enregistrées : nom, prénom, département / fonction, photo d'enrôlement, statut (actif / bloqué).
-* **REQ-FACE-02 (Enrôlement photographique)** :
-  * Formulaire d'ajout d'une personne avec téléversement d'une ou plusieurs photos de référence pour l'entraînement du modèle Face ID.
-* **REQ-FACE-03 (Journal des reconnaissances & repli gros plan)** :
-  * Historique horodaté des détections faciales avec indice de confiance de l'IA (reconnu / inconnu).
-  * Repli d'urgence en détection faciale directe (InsightFace ArcFace) lorsque le corps n'est pas intégralement visible (ex: gros plan visage / selfie de très près).
-* **REQ-FACE-04 (Auto-redressement d'orientation des caméras à 90°)** :
-  * Détection automatique des trames orientées en mode portrait (`Hauteur > Largeur`) envoyées par les caméras pivotées sur leur support physique.
-  * Pivotement logiciel instantané par cv2.ROTATE_90_CLOCKWISE avant l'inférence pour présenter les corps humains à la verticale et garantir la détection nominale par YOLO.
+### 4.3. MODULE 3 : Cartographie, Bâtiments et Dessin de Zones de Sécurité
+* **REQ-CAM-01 (Inventaire et État des Caméras)** :
+  * Répertoire des caméras IP (RTSP, ONVIF) avec statut de connexion et affectation bâtiment/pièce.
+* **REQ-CAM-02 (Éditeur de Zones Polygonales)** :
+  * Outil graphique interactif pour dessiner des polygones d'exclusion directement sur le flux vidéo d'une caméra.
+* **REQ-CAM-03 (Détection d'Intrusion en Zone)** :
+  * Déclenchement d'une alerte immédiate lorsqu'un individu franchit le polygone tracé pendant la plage horaire active.
+* **REQ-CAM-04 (Auto-redressement d'Orientation 0°/90°/180°/270°)** :
+  * Analyse automatique de l'orientation de l'image (caméra montée sur le côté ou la tête en bas) et pivotement logiciel pour présenter les corps humains à la verticale aux modèles d'IA.
 
 ---
 
-### 4.5. MODULE 5 : Module Objets & Détection des Comportements Suspects
-
-* **REQ-OBJ-01 (Suivi d'objets en direct)** :
-  * Inventaire temps réel des objets détectés (sacs, colis, valises, véhicules) avec attribution d'un identifiant de suivi (Track ID).
-* **REQ-OBJ-02 (Détection d'objets abandonnés)** :
-  * Analyse spatiale de proximité : calcul de la distance entre l'objet détecté et les personnes environnantes.
-  * Qualification automatique en « Objet Abandonné » si aucun propriétaire n'est à proximité au-delà d'un délai configurable (valeur par défaut : 2 minutes).
-* **REQ-OBJ-03 (Détection de rôdeurs & immobilité - REQ-CAM-04)** :
-  * Identification d'individus stationnant de façon prolongée dans une zone avec seuil temporel paramétrable par zone/caméra (défaut : 60 secondes).
-  * Neutralisation des fausses alertes : les personnes assises normalement ou effectuant des arrêts courts ne déclenchent pas d'alerte.
-* **REQ-OBJ-04 (Détection d'Infiltration & qualification des accès - REQ-CAM-05)** :
-  * Qualification formelle de l'infiltration par coïncidence de zone intérieure, absence de badge/Face ID autorisé et apparition non précédée par une caméra d'entrée.
-  * Règle de suspicion bienveillante : la non-reconnaissance biométrique Face ID attribue le statut neutre Visiteur/Non identifié (🟢/🔵). La suspicion (🔴) exige une anomalie comportementale ou d'accès avérée.
+### 4.4. MODULE 4 : Annuaire Personnel, Biométrie & Reconnaissance Faciale (Face ID)
+* **REQ-FACE-01 (Annuaire Biométrique)** :
+  * Gestion du personnel et des résidents : nom, prénom, fonction, photo d'enrôlement, statut d'accès.
+* **REQ-FACE-02 (Enrôlement Photographique)** :
+  * Téléversement de photos de référence pour la création d'empreintes faciales biométriques.
+* **REQ-FACE-03 (Journal des Accès & Repli Gros Plan)** :
+  * Historique horodaté des identifications faciales avec taux de confiance.
+  * Repli d'urgence biométrique (InsightFace ArcFace) lorsque le corps entier n'est pas visible (ex: gros plan visage / selfie devant caméra).
 
 ---
 
-### 4.6. MODULE 6 : Centre de Gestion des Alertes
+### 4.5. MODULE 5 : Détection des Anomalies Comportementales & Objets
+* **REQ-OBJ-01 (Détection de Rôdeurs & Immobilité)** :
+  * Alerte lors du stationnement prolonge d'un individu dans une zone au-delà d'un seuil configurable (défaut : 60 secondes).
+* **REQ-OBJ-02 (Détection d'Objets & Colis Abandonnés)** :
+  * Analyse de proximité spatiale : alerte si un sac ou colis reste séparé de toute personne pendant plus de 2 minutes.
+* **REQ-OBJ-03 (Détection de Départ de Feu & Fumée)** :
+  * Modèle de vision IA dédié identifiant la présence de flammes ou de colonnes de fumée sur l'ensemble des caméras actives.
+* **REQ-OBJ-04 (Détection d'Infiltration)** :
+  * Qualification d'une infiltration lors de l'apparition d'une personne non autorisée dans une zone interne sans passage préalable par une caméra d'entrée.
 
-* **REQ-ALT-01 (Panneau d'alertes temps réel & validation multi-frames)** :
-  * Liste chronologique des alertes avec confirmation préalable sur au moins 3 trames consécutives pour supprimer les flashs de faux positifs.
-  * Filtre par niveau d'urgence : Critique, Élevé, Informatif.
-* **REQ-ALT-02 (Modale de levée de doute avec extrait vidéo MP4 10s)** :
-  * Affichage automatique d'un clip vidéo de 10s (5s avant / 5s après l'incident) en complément de la photo instantanée pour une levée de doute rapide et décisive.
-  * Fiche de consigne d'intervention (Playbook d'action) personnalisée selon le type d'alerte et la zone concernée.
-* **REQ-ALT-03 (Acquittement & suivi des faux positifs)** :
-  * Bouton d'action « Marquer comme Vérifié » ou « Faux Positif » avec enregistrement de la raison pour alimenter le calibrage statistique du système.
+---
+
+### 4.6. MODULE 6 : Centre de Gestion des Alertes & Levée de Doute
+* **REQ-ALT-01 (Validation Multi-trames Anti-Faux Positifs)** :
+  * Obligation de confirmation d'une anomalie sur au moins 3 trames consécutives avant de notifier l'opérateur.
+* **REQ-ALT-02 (Levée de Doute avec Extrait Vidéo 10s)** :
+  * Génération automatique d'un clip vidéo de 10 secondes (5s avant / 5s après l'incident) accessible dans la modale de décision.
+* **REQ-ALT-03 (Acquittement & Qualification de l'Incident)** :
+  * Action opérateur obligatoire : « Valider l'Alerte » ou « Marquer Faux Positif » avec enregistrement de la raison.
 
 ---
 
 ### 4.7. MODULE 7 : Historique, Traçabilité & Export de Rapports
-
-* **REQ-REP-01 (Journal d'audit exhaustif)** :
-  * Registre infalsifiable de tous les passages, détections et actions opérateurs, avec date, heure, caméra, type d'événement et image de capture.
-* **REQ-REP-02 (Moteur de recherche et filtres multicritères)** :
-  * Filtrage combiné par plage de dates, site / bâtiment, type d'incident et niveau de gravité.
-* **REQ-REP-03 (Exportation de rapports)** :
-  * Export des données filtrées au format PDF (rapport de synthèse prêt pour la direction) et Excel / CSV (pour analyse statistique et audit).
-
----
-
-### 4.8. MODULE 8 : Organisation Multi-sites
-
-* **REQ-ORG-01 (Structure organisationnelle)** :
-  * Interface d'administration pour créer et organiser la hiérarchie : Sites → Bâtiments → Pièces → Caméras rattachées.
-* **REQ-ORG-02 (Gestion des comptes utilisateurs)** :
-  * Création, modification, révocation des comptes et attribution des rôles définis.
+* **REQ-REP-01 (Journal d'Audit Infalsifiable)** :
+  * Enregistrement immuable dans une base SQLite locale de tous les incidents, détections, photos de preuve et actions opérateurs.
+* **REQ-REP-02 (Formatage Temporel Relatif & Absolu)** :
+  * Affichage de l'heure exacte et bascule automatique en format relatif : secondes (<60s), minutes (<60m), heures (<24h), jours (1 à 6j) et semaines (≥7j).
+* **REQ-REP-03 (Exportation PDF & Excel/CSV)** :
+  * Export des historiques filtrés au format PDF (rapport synthétique) et Excel (audit détaillé).
 
 ---
 
-## 5. Exigences Non Fonctionnelles
-
-### 5.1. Performance & Réactivité
-* **Latence d'affichage vidéo** : Moins de 500 ms pour l'affichage des flux en direct via WebRTC.
-* **Délai de notification** : Moins de 2 secondes entre la détection par l'IA et l'affichage de l'alerte sur le tableau de bord web.
-
-### 5.2. Ergonomie & Accessibilité (UI/UX)
-* **Design System** : Charte graphique moderne, typographies lisibles.
-* **Adaptabilité (Responsive)** : Fonctionnement fluide sur moniteurs de sécurité de bureau, ordinateurs portables, tablettes et smartphones.
-* **Navigation clavier** : Prise en charge des raccourcis usuels (fermeture des modales par Échap, sélection par Entrée).
-
-### 5.3. Sécurité Informatique, Biométrie & Conformité RGPD / CIL
-* **Authentification Renforcée (2FA)** : Support du second facteur d'authentification (TOTP / OTP) obligatoire pour les comptes Administrateur.
-* **Chiffrement au repos** : Chiffrement AES-256 des empreintes faciales au repos et registre de traitement CIL formalisé avec durées de rétention strictes.
-* **Journal d'audit inviolable** : Journalisation immuable de toutes les actions d'administration et d'exploitation (création/suppression de compte, modification de zones, révocations).
-* **Signalétique réglementaire** : Mentions légales obligatoires et panneaux d'information de vidéosurveillance intégrés.
-
-### 5.4. Résilience Matérielle, API Ouverte & Exploitation
-* **Alimentation secourue (UPS)** : Interfaçage et recommandation d'une alimentation sans interruption pour la continuité de service en cas de coupure de courant.
-* **Détection de masquage / coupure caméra** : Alerte immédiate en cas d'obstruction optique, de masquage ou de câble débranché (> 15s sans frame).
-### 5.5. Architecture Edge AI, Décodage GPU & Traitement Vidéo Basse Latence
-* **NFA-AI-01 : Accélération Inférence ONNX C++** — Exécution des réseaux de neurones (YOLOv8n / YOLO11n) privilégiée au format ONNX via OpenCV DNN C++ avec instructions vectorielles ARM NEON, pour supprimer la surcharge d'exécution PyTorch et maintenir la latence d'inférence au plus bas.
-* **NFA-AI-02 : Décodage Vidéo Matériel GPU (v4l2m2m) & Repli à Chaud** — Décodage des flux RTSP pris en charge par le bloc GPU (VideoCore VI `h264_v4l2m2m` sous Linux/Pi 4) placé en option d'entrée FFmpeg. En cas d'incompatibilité de profil vidéo ou d'échec d'ouverture, basculement automatique et silencieux en décodage logiciel CPU sans interruption de service.
-* **NFA-AI-03 : Stockage Zéro-Disque & Tampons RAM Circulaires** — Conservation des instantanés vidéo et des clips de preuve (10s) exclusivement en mémoire vive (RAM) via des structures circulaires à taille fixe (`deque maxlen=150`). Garantit la protection contre le débordement mémoire (OOM) et élimine la contention I/O d'écriture sur carte SD.
-* **NFA-AI-04 : Verrou Anti-Contention & Télémétrie de Santé IA** — Protection par verrou d'exclusion mutuelle non-bloquant (`_analyses_lock`) éliminant tout risque d'accumulation de file d'attente. Suivi télémétrique continu du taux de ticks d'analyse ignorés sur fenêtre glissante de 60 secondes, avec alerte système si le taux dépasse 20%.
-* **NFA-AI-05 : Calibrage Statistique du Cadencement (`P95 × 1,3`)** — Définition de l'intervalle de cycle du worker IA basée sur le 95e percentile (P95) de latence d'inférence mesurée à chaud sous tension nominale, augmenté d'une marge de sécurité de 30% pour absorber la variance naturelle d'exécution.
-* **NFA-AI-06 : Synchronisation Automatique de l'Horloge Système PC vers Edge (Raspberry Pi)** — Injection automatique de la date et heure système du PC de supervision (`date -s 'YYYY-MM-DD HH:MM:SS'`) lors du lancement 1-clic pour pallier l'absence de batterie horloge (RTC) matérielle sur les boîtiers Edge et prévenir les décalages d'horodatage.
-* **NFA-AI-07 : Transactions SQLite Isolées & Synchronisation Non Bloquante** — Exécution des requêtes d'historisation `INSERT` dans des blocs transactionnels isolés sans changement de pragma dynamique pendant les transactions (`PRAGMA synchronous`), prévenant tout blocage `OperationalError`.
+### 4.8. MODULE 8 : Administration Multi-sites et Affectation des Rôles
+* **REQ-ORG-01 (Arborescence Hiérarchique)** :
+  * Structuration : Sites → Bâtiments → Pièces → Caméras rattachées.
+* **REQ-ORG-02 (Délégation des Droits Manager)** :
+  * Possibilité pour un Manager d'affecter la supervision de pièces spécifiques de son bâtiment à des agents subordonnés.
 
 ---
 
-## 6. Matrice de Recette et Critères d'Acceptation
+### 4.9. MODULE 9 : Console d'Administration Globale (Superadmin) & Licences
+* **REQ-SUP-01 (Supervision du Parc de Boîtiers Edge)** :
+  * Vue globale de l'état de santé des Raspberry Pi déployés (charge CPU, mémoire, température, état des services).
+* **REQ-SUP-02 (Gestion des Abonnements & Résiliation)** :
+  * Suivi des dates d'échéance des licences clients avec capacité de suspension à distance en cas de résiliation.
 
-| ID | Scénario de test | Résultat attendu pour validation |
+---
+
+### 4.10. MODULE 10 : Application Mobile Companion & Notifications Push
+* **REQ-MOB-01 (Notifications Push Instantanées)** :
+  * Envoi d'alertes push prioritaires sur smartphone (iOS / Android) dès la validation d'une alerte critique par le backend (< 2s).
+* **REQ-MOB-02 (Supervision Mobile & Consultation Directe)** :
+  * Visualisation des flux vidéo caméras en direct et de l'historique des alertes depuis l’application mobile.
+* **REQ-MOB-03 (Validation Mobile en Mobilité)** :
+  * Capacité pour l'agent en ronde de valider ou rejeter une alerte directement depuis son téléphone.
+
+---
+
+## 5. Exigences Non Fonctionnelles et Qualité de Service
+
+### 5.1. Performance, Latence et Mesures Chiffrées
+* **Capacité Cible du Boîtier Edge (Raspberry Pi 4)** :
+  * **Nombre de caméras simultanées** : 2 à 4 flux caméras IP (résolution 1080p, 15-20 fps).
+  * **Latence vidéo WebRTC** : Moins de 500 ms.
+  * **Délai d’alerte global** : Moins de 2,0 secondes de la détection à l'affichage web/mobile.
+* **Formule de Calcul du Taux de Disponibilité** :
+  $$\text{Disponibilité (\%)} = \left( \frac{\text{Temps de fonctionnement actif du service (heures)}}{\text{Temps total de la période (heures)}} \right) \times 100$$
+* **Matrice de Classification des Événements** :
+  * **Critique (🔴)** : Feu / Fumée, Intrusion en Zone Interdite, Infiltration sans badge.
+  * **Élevé (🟠)** : Rôdeur immobile, Objet Abandonné.
+  * **Informatif (🔵)** : Reconnaissance faciale d'un employé autorisé.
+
+---
+
+### 5.2. Ergonomie, UI/UX et Accessibilité
+* **Charte Visuelle** : Interface sombre moderne (*Dark Theme*) conçue pour réduire la fatigue visuelle des opérateurs en PC Sécurité.
+* **Responsive Web & Mobile** : Adaptation fluide de l'écran 32 pouces de contrôle aux smartphones de 6 pouces.
+
+---
+
+### 5.3. Sécurité, Biométrie et Conformité Légale (APDP Burkina Faso)
+* **Conformité Réglementaire (Loi N° 001-2021/AN du Burkina Faso sur la Protection des Données)** :
+  * Le traitement des empreintes biométriques faciales est déclaré auprès de l'**APDP (Autorité de Protection des Données Personnelles)** du Burkina Faso.
+  * **Durées de rétention des données** : 30 jours consécutifs pour les journaux d'historique et clips d'incidents (purge automatique SQLite au-delà), et conservation indéfinie des empreintes anonymisées jusqu'à révocation par l'utilisateur.
+* **Protection des Flux & Identifiants Caméras** :
+  * Chiffrement des mots de passe RTSP au repos et transmission HTTPS obligatoire (certificats TLS générés en local).
+
+---
+
+### 5.4. Exploitation, Résilience et Horodatage NTP
+* **Résilience aux Coupures de Courant & Sauvegarde Disque** :
+  * Les clips vidéo de preuve (10s) sont conservés en mémoire vive (RAM) et **écrits immédiatement sur disque persistant dès la confirmation d'une alerte**, garantissant la conservation des preuves en cas de coupure secteur.
+* **Synchronisation Automatique de l'Horloge (NTP & Host Sync)** :
+  * Synchronisation continue via démon NTP local et injection de l'heure du PC de supervision (`date -s`) au démarrage du boîtier Edge pour garantir la valeur juridique des horodatages.
+
+---
+
+## 6. Cadre Technique et Limites Connues de la Solution
+
+| Paramètre / Condition | Limite Technique Identifiée | Mesure de Contournement / Mitigation Appliquée |
+| :--- | :--- | :--- |
+| **Caméra installée sur le côté (90°)** | Effondrement de la détection sur sujets allongés | Auto-redressement logiciel 4 orientations (0°, 90°, 180°, 270°) avant inférence. |
+| **Éclairage nocturne nul (< 5 Lux)** | Bruit numérique sur l'image, perte de contrastes | Bascule automatique sur flux infrarouge N&B des caméras IP. |
+| **Visage masqué / Selfie de très près** | YOLO corps non détecté par manque de posture | Repli automatique sur le réseau biométrique facial direct InsightFace. |
+| **Matériel Cible Raspberry Pi 5 vs Pi 4** | Le Pi 5 n'a plus de décodeur H.264 matériel (`v4l2m2m`) | Basculement automatique transparent en décodage logiciel multi-cœur CPU. |
+
+---
+
+## 7. Scénario de Démonstration Réelle (3 Minutes)
+
+* **Minute 00:00 - 01:00 (Présentation & Supervision)** :
+  * Connexion à l'interface PREVIA Operations Center. Visualisation du tableau de bord avec KPIs et des caméras en direct en WebRTC.
+* **Minute 01:00 - 02:00 (Simulation d'Incident & Alerte)** :
+  * Franchissement de la zone interdite par un individu devant la caméra HikVision. Déclenchement de la bannière rouge et notification push sur l'application mobile en moins de 2 secondes.
+* **Minute 02:00 - 03:00 (Levée de Doute & Clôture)** :
+  * Ouverture de la modale de levée de doute, visionnage du clip vidéo de 10 secondes, validation de l'alerte par l'opérateur et vérification de la purge de l'historique.
+
+---
+
+## 8. Matrice de Recette et Critères d'Acceptation
+
+| ID | Scénario de Test | Résultat Attendu pour Validation |
 | :---: | :--- | :--- |
 | **TEST-01** | Connexion avec identifiants valides | Redirection immédiate vers le tableau de bord avec session active. |
 | **TEST-02** | Clic sur une caméra dans la grille | Ouverture instantanée de la modale vidéo en direct HD. |
-| **TEST-03** | Appui sur la touche Échap dans une modale | Fermeture propre de la modale et retour au tableau de bord. |
-| **TEST-04** | Tracé d'une zone interdite sur une caméra | Le polygone est enregistré et persiste après rechargement de la page. |
-| **TEST-05** | Détection d'un événement par le backend | Apparition d'une notification avec badge rouge et signal sonore en moins de 2 secondes. |
-| **TEST-06** | Clic sur « Marquer comme vérifié » | L'alerte change d'état et l'action de l'opérateur est inscrite au journal d'audit. |
-| **TEST-07** | Exportation d'un rapport d'historique | Téléchargement immédiat d'un fichier PDF / Excel conforme aux filtres sélectionnés. |
-| **TEST-08** | Expiration de la licence | Blocage complet de l'interface avec invitation de renouvellement. |
-| **TEST-09** | Enrôlement d'une nouvelle personne (Face ID) | La personne apparaît dans l'annuaire et est reconnue lors du passage suivant devant une caméra. |
-| **TEST-10** | Objet laissé sans surveillance > délai configuré | Alerte « Objet Abandonné » générée automatiquement. |
+| **TEST-03** | Tracé d'une zone interdite sur une caméra | Le polygone est enregistré et persiste après rechargement. |
+| **TEST-04** | Détection d'un incident (Intrusion/Feu) | Notification visuelle et sonore en moins de 2 secondes. |
+| **TEST-05** | Notification Push sur l'application mobile | Réception de l'alerte sur smartphone en moins de 2 secondes. |
+| **TEST-06** | Suppression complète de l'historique | Purge simultanée des fichiers de preuve et de la table SQLite. |
+| **TEST-07** | Basculement Caméra Inclinée (90°) | Redressement de l'image et détection immédiate de l'individu. |
+| **TEST-08** | Incompatibilité GPU (`v4l2m2m`) | Basculement automatique en décodage CPU sans interruption. |
+| **TEST-09** | Exportation d'un rapport d'historique | Téléchargement immédiat d'un fichier PDF ou Excel conforme. |
+| **TEST-10** | Expiration de la licence | Blocage de l'accès avec écran de réactivation. |
+| **TEST-11** | Tentative de connexion infructueuse (>5 fois) | Verrouillage temporaire du compte pendant 15 minutes. |
+| **TEST-12** | Test de coupure réseau local | Maintien de l'analyse locale Edge AI et reconnexion automatique. |
 
 ---
 
-## Annexe — Glossaire
+## 9. Annexe — Glossaire
 
 | Terme | Définition |
 | :--- | :--- |
-| **WebRTC** | Protocole de communication permettant la diffusion de flux audio/vidéo en temps réel et à faible latence dans un navigateur web. |
-| **RTSP** | Real Time Streaming Protocol : protocole standard utilisé par les caméras IP pour la diffusion de flux vidéo. |
-| **Face ID** | Fonction de reconnaissance faciale permettant d'identifier automatiquement une personne enregistrée à partir d'un flux vidéo. |
-| **Raspberry Pi (Edge AI)** | Serveur embarqué autonome hébergeant le moteur d'IA, la base de données locale SQLite et le serveur web HTTPS (aucun boîtier externe requis). |
-| **mDNS** | Multicast DNS : protocole de découverte automatique d'appareils sur un réseau local sans serveur DNS central. |
-| **Track ID** | Identifiant unique attribué par le module de vision par ordinateur à un objet suivi d'image en image. |
-| **Levée de doute** | Processus de vérification humaine d'une alerte générée par l'IA avant décision d'action. |
-| **SPA** | Single Page Application : application web fonctionnant sur une page unique rechargée dynamiquement. |
+| **APDP** | Autorité de Protection des Données Personnelles du Burkina Faso (ex-CIL), régissant la collecte et le traitement des données biométriques. |
+| **Edge AI** | Traitement de l'intelligence artificielle directement sur l'équipement local (Raspberry Pi) sans passer par des serveurs Cloud. |
+| **WebRTC** | Protocole de communication permettant la diffusion de flux vidéo en temps réel et à très faible latence dans un navigateur. |
+| **RTSP** | Real Time Streaming Protocol : protocole standard d'échange de flux vidéo pour caméras IP. |
+| **Face ID** | Module de reconnaissance biométrique faciale basé sur le réseau de neurones InsightFace ArcFace. |
+| **Track ID** | Identifiant unique attribué par le tracker de vision par ordinateur à un objet ou une personne suivie d'image en image. |
+| **Levée de Doute** | Procédure de vérification humaine d'une alerte générée par l'IA avant intervention. |
