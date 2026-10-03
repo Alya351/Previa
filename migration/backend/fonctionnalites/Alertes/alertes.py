@@ -206,7 +206,7 @@ def lister_alertes(id_camera: str | None = None, pid: str | None = None) -> list
 
 
 def supprimer_alerte(id_alerte: str) -> bool:
-    """Supprime une alerte ainsi que son image et son extrait vidéo éventuel."""
+    """Supprime une alerte ainsi que son image, son extrait vidéo et son entrée SQLite."""
     fichier_json = _chemin(id_alerte)
     fichier_img = _chemin_image(id_alerte)
     fichier_clip = ALERTES_DIR / f"{id_alerte}.mp4"
@@ -218,11 +218,20 @@ def supprimer_alerte(id_alerte: str) -> bool:
         fichier_img.unlink(missing_ok=True)
     if fichier_clip.exists():
         fichier_clip.unlink(missing_ok=True)
+
+    try:
+        from fonctionnalites.Infrastructure.sqlite_db import get_connection
+        conn = get_connection()
+        with conn:
+            conn.execute("DELETE FROM evenements_historique WHERE payload_json LIKE ?", (f'%"{id_alerte}"%',))
+    except Exception:
+        pass
+
     return supprime
 
 
 def supprimer_toutes_alertes() -> int:
-    """Supprime l'ensemble des alertes, images et clips archivés."""
+    """Supprime l'ensemble des alertes, images, clips archivés ET la table SQLite evenements_historique."""
     ALERTES_DIR.mkdir(parents=True, exist_ok=True)
     count = 0
     for f in list(ALERTES_DIR.glob("*")):
@@ -230,5 +239,14 @@ def supprimer_toutes_alertes() -> int:
             if f.suffix == ".json":
                 count += 1
             f.unlink(missing_ok=True)
+
+    try:
+        from fonctionnalites.Infrastructure.sqlite_db import get_connection
+        conn = get_connection()
+        with conn:
+            conn.execute("DELETE FROM evenements_historique;")
+    except Exception:
+        pass
+
     return count
 

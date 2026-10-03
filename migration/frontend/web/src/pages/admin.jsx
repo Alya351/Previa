@@ -845,7 +845,11 @@ function ilYA(horodatage) {
   if (s < 5) return "à l'instant";
   if (s < 60) return `il y a ${s}s`;
   if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
-  return `il y a ${Math.round(s / 3600)} h`;
+  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
+  const j = Math.round(s / 86400);
+  if (j < 7) return `il y a ${j} j`;
+  const sem = Math.round(j / 7);
+  return `il y a ${sem} sem`;
 }
 
 // ============================================================================
@@ -2990,7 +2994,11 @@ function ilYAAlertes(horodatage) {
   if (s < 5) return "à l'instant";
   if (s < 60) return `il y a ${s}s`;
   if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
-  return `il y a ${Math.round(s / 3600)} h`;
+  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
+  const j = Math.round(s / 86400);
+  if (j < 7) return `il y a ${j} j`;
+  const sem = Math.round(j / 7);
+  return `il y a ${sem} sem`;
 }
 
 const LABEL_TYPE_ALERTES = {
