@@ -180,9 +180,9 @@ Le système **PREVIA** automatise la détection d'anomalies en temps réel grâc
 * **Formule de Calcul du Taux de Disponibilité** :
   $$\text{Disponibilité (\%)} = \left( \frac{\text{Temps de fonctionnement actif du service (heures)}}{\text{Temps total de la période (heures)}} \right) \times 100$$
 * **Matrice de Classification des Événements** :
-  * **Critique (🔴)** : Feu / Fumée, Intrusion en Zone Interdite, Infiltration sans badge.
-  * **Élevé (🟠)** : Rôdeur immobile, Objet Abandonné.
-  * **Informatif (🔵)** : Reconnaissance faciale d'un employé autorisé.
+  * **Critique (🔴)** : Intrusion en Zone Polygonale Interdite, Infiltration non autorisée.
+  * **Élevé (🟠)** : Rôdeur immobile (immobilité suspecte > 60s).
+  * **Informatif (🔵)** : Reconnaissance faciale (Employé Autorisé 🟢 / Visiteur Non Identifié 🔵).
 
 ---
 
@@ -194,8 +194,8 @@ Le système **PREVIA** automatise la détection d'anomalies en temps réel grâc
 
 ### 5.3. Sécurité, Biométrie et Conformité Légale (APDP Burkina Faso)
 * **Conformité Réglementaire (Loi N° 001-2021/AN du Burkina Faso sur la Protection des Données)** :
-  * Le traitement des empreintes biométriques faciales est déclaré auprès de l'**APDP (Autorité de Protection des Données Personnelles)** du Burkina Faso.
-  * **Durées de rétention des données** : 30 jours consécutifs pour les journaux d'historique et clips d'incidents (purge automatique SQLite au-delà), et conservation indéfinie des empreintes anonymisées jusqu'à révocation par l'utilisateur.
+  * Le traitement des données biométriques faciales respecte les principes de proportionnalité et de transparence préconisés par l'**APDP (Autorité de Protection des Données Personnelles)** du Burkina Faso.
+  * **Durées de rétention des données** : Paramétrable (30 jours par défaut) pour les journaux d'historique et clips d'incidents (purge automatique SQLite au-delà), et conservation des empreintes jusqu'à révocation explicite par l'administrateur.
 * **Protection des Flux & Identifiants Caméras** :
   * Chiffrement des mots de passe RTSP au repos et transmission HTTPS obligatoire (certificats TLS générés en local).
 
@@ -213,21 +213,22 @@ Le système **PREVIA** automatise la détection d'anomalies en temps réel grâc
 
 | Paramètre / Condition | Limite Technique Identifiée | Mesure de Contournement / Mitigation Appliquée |
 | :--- | :--- | :--- |
-| **Caméra installée sur le côté (90°)** | Effondrement de la détection sur sujets allongés | Auto-redressement logiciel 4 orientations (0°, 90°, 180°, 270°) avant inférence. |
+| **Caméra installée sur le côté (90° / 270°)** | Effondrement de la détection sur sujets allongés | Auto-redressement logiciel au premier passage humain et mémorisation d'orientation par caméra (réinitialisable en administration). |
 | **Éclairage nocturne nul (< 5 Lux)** | Bruit numérique sur l'image, perte de contrastes | Bascule automatique sur flux infrarouge N&B des caméras IP. |
 | **Visage masqué / Selfie de très près** | YOLO corps non détecté par manque de posture | Repli automatique sur le réseau biométrique facial direct InsightFace. |
 | **Matériel Cible Raspberry Pi 5 vs Pi 4** | Le Pi 5 n'a plus de décodeur H.264 matériel (`v4l2m2m`) | Basculement automatique transparent en décodage logiciel multi-cœur CPU. |
+| **Alerte SMS hors-ligne (sans Internet)** | API web externe (ex: Twilio) inopérante sans réseau | Option d'interfaçage avec un modem GSM USB physique connecté directement au Pi. |
 
 ---
 
 ## 7. Scénario de Démonstration Réelle (3 Minutes)
 
 * **Minute 00:00 - 01:00 (Présentation & Supervision)** :
-  * Connexion à l'interface PREVIA Operations Center. Visualisation du tableau de bord avec KPIs et des caméras en direct en WebRTC.
-* **Minute 01:00 - 02:00 (Simulation d'Incident & Alerte)** :
-  * Franchissement de la zone interdite par un individu devant la caméra HikVision. Déclenchement de la bannière rouge et notification push sur l'application mobile en moins de 2 secondes.
-* **Minute 02:00 - 03:00 (Levée de Doute & Clôture)** :
-  * Ouverture de la modale de levée de doute, visionnage du clip vidéo de 10 secondes, validation de l'alerte par l'opérateur et vérification de la purge de l'historique.
+  * Connexion à l'interface PREVIA Operations Center. Visualisation du tableau de bord avec KPIs et des caméras en direct en WebRTC / MJPEG.
+* **Minute 01:00 - 02:00 (Intrusion en Zone Polygonale)** :
+  * Franchissement d'une zone polygonale de sécurité tracée sur le flux vidéo. Déclenchement de la bannière rouge (Critique 🔴) et notification mobile.
+* **Minute 02:00 - 03:00 (Rôdage & Qualification Face ID)** :
+  * Immobilité prolongée (> 60s) en zone sensible (Alerte Élevée 🟠). Demonstration Face ID : passage d'un membre enrôlé (**🟢 Autorisé**) puis d'un profil non enregistré (**🔵 Visiteur**), démontrant la règle éthique *Inconnu $\neq$ Suspect*.
 
 ---
 
@@ -237,11 +238,11 @@ Le système **PREVIA** automatise la détection d'anomalies en temps réel grâc
 | :---: | :--- | :--- |
 | **TEST-01** | Connexion avec identifiants valides | Redirection immédiate vers le tableau de bord avec session active. |
 | **TEST-02** | Clic sur une caméra dans la grille | Ouverture instantanée de la modale vidéo en direct HD. |
-| **TEST-03** | Tracé d'une zone interdite sur une caméra | Le polygone est enregistré et persiste après rechargement. |
-| **TEST-04** | Détection d'un incident (Intrusion/Feu) | Notification visuelle et sonore en moins de 2 secondes. |
+| **TEST-03** | Tracé d'une zone polygonale interdite | Le polygone est enregistré et persiste après rechargement. |
+| **TEST-04** | Détection d'une intrusion en zone polygonale | Notification visuelle et sonore en moins de 2 secondes. |
 | **TEST-05** | Notification Push sur l'application mobile | Réception de l'alerte sur smartphone en moins de 2 secondes. |
 | **TEST-06** | Suppression complète de l'historique | Purge simultanée des fichiers de preuve et de la table SQLite. |
-| **TEST-07** | Basculement Caméra Inclinée (90°) | Redressement de l'image et détection immédiate de l'individu. |
+| **TEST-07** | Basculement Caméra Inclinée (90°) | Redressement de l'image, détection et mémorisation de l'orientation. |
 | **TEST-08** | Incompatibilité GPU (`v4l2m2m`) | Basculement automatique en décodage CPU sans interruption. |
 | **TEST-09** | Exportation d'un rapport d'historique | Téléchargement immédiat d'un fichier PDF ou Excel conforme. |
 | **TEST-10** | Expiration de la licence | Blocage de l'accès avec écran de réactivation. |
