@@ -1278,8 +1278,8 @@ def analyser(id_camera: str, frame) -> dict:
     # objet proche (indice de vol).
     objets_actuels = rapport_cam.lire_etat(id_camera, "vueActuelle").get("objets", {})
 
-    # Chronométrage et architecture en cascade à 2 passes :
-    # PASSE 1 (Ultra-rapide ~0.03s) : Détection brute de présence humaine via YOLO
+    # Chronométrage et architecture universelle multi-orientations (0°, 90°, 180°, 270°) :
+    # S'adapte à n'importe quelle caméra IP quel que soit son sens de montage physique (endroit, envers, 90° gauche, 90° droite)
     _t0 = time.time()
     tous_candidats_personnes = _run_seg(models["person_seg"], frame, CONF_RODEUR_ANONYME)
     personnes = [
@@ -1290,6 +1290,22 @@ def analyser(id_camera: str, frame) -> dict:
         ) 
         and d.get("score", 0.0) >= 0.05
     ]
+
+    # Si 0 personne trouvée dans l'orientation initiale, tester les 3 autres orientations de rotation (90°, 180°, 270°)
+    if not personnes:
+        for rot_code in (cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE):
+            frame_rot = cv2.rotate(frame, rot_code)
+            candidats_rot = _run_seg(models["person_seg"], frame_rot, CONF_RODEUR_ANONYME)
+            found_rot = [
+                d for d in candidats_rot 
+                if (str(d.get("label")).lower() in ("person", "personne", "human", "0") or d.get("class_id") in (0, None)) 
+                and d.get("score", 0.0) >= 0.05
+            ]
+            if found_rot:
+                frame = frame_rot
+                tous_candidats_personnes = candidats_rot
+                personnes = found_rot
+                break
 
     # Si YOLO segmentation ne voit pas le corps entier (ex: selfie / visage de très près),
     # tenter une détection de visage directe avant d'abandonner
