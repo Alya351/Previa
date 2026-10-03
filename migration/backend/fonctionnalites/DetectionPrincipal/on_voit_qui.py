@@ -655,8 +655,8 @@ def _run_seg(model, frame, conf):
                 detections.append(det)
             if detections:
                 return detections
-        except Exception:
-            pass
+        except Exception as _e_seg:
+            print(f"[on_voit_qui] Erreur _run_seg predict: {_e_seg}", flush=True)
 
     onnx_net = _get_onnx_yolo()
     if onnx_net is not None:
@@ -1284,8 +1284,11 @@ def analyser(id_camera: str, frame) -> dict:
     tous_candidats_personnes = _run_seg(models["person_seg"], frame, CONF_RODEUR_ANONYME)
     personnes = [
         d for d in tous_candidats_personnes 
-        if (str(d.get("label")).lower() in ("person", "personne", "0") or d.get("class_id") == 0) 
-        and d["score"] >= CONF_RODEUR_ANONYME
+        if (
+            str(d.get("label")).lower() in ("person", "personne", "human", "0") 
+            or d.get("class_id") in (0, None)
+        ) 
+        and d.get("score", 0.0) >= 0.05
     ]
 
     # Si YOLO segmentation ne voit pas le corps entier (ex: selfie / visage de très près),
