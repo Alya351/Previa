@@ -112,14 +112,10 @@ Le système **PREVIA** automatise la détection d'anomalies en temps réel grâc
 
 ---
 
-### 4.5. MODULE 5 : Détection des Anomalies Comportementales & Objets
+### 4.5. MODULE 5 : Détection des Anomalies Comportementales
 * **REQ-OBJ-01 (Détection de Rôdeurs & Immobilité)** :
-  * Alerte lors du stationnement prolonge d'un individu dans une zone au-delà d'un seuil configurable (défaut : 60 secondes).
-* **REQ-OBJ-02 (Détection d'Objets & Colis Abandonnés)** :
-  * Analyse de proximité spatiale : alerte si un sac ou colis reste séparé de toute personne pendant plus de 2 minutes.
-* **REQ-OBJ-03 (Détection de Départ de Feu & Fumée)** :
-  * Modèle de vision IA dédié identifiant la présence de flammes ou de colonnes de fumée sur l'ensemble des caméras actives.
-* **REQ-OBJ-04 (Détection d'Infiltration)** :
+  * Alerte lors du stationnement prolongé d'un individu dans une zone au-delà d'un seuil configurable (défaut : 60 secondes).
+* **REQ-OBJ-02 (Détection d'Infiltration)** :
   * Qualification d'une infiltration lors de l'apparition d'une personne non autorisée dans une zone interne sans passage préalable par une caméra d'entrée.
 
 ---
@@ -182,7 +178,8 @@ Le système **PREVIA** automatise la détection d'anomalies en temps réel grâc
 * **Matrice de Classification des Événements** :
   * **Critique (🔴)** : Intrusion en Zone Polygonale Interdite, Infiltration non autorisée.
   * **Élevé (🟠)** : Rôdeur immobile (immobilité suspecte > 60s).
-  * **Informatif (🔵)** : Reconnaissance faciale (Employé Autorisé 🟢 / Visiteur Non Identifié 🔵).
+  * **Informatif (🔵)** : Passage détecté / Journalisation des présences.
+  * **Statuts Biométriques (Face ID)** : Personne Autorisée (🟢 Vert) vs Visiteur Non Identifié (🔘 Gris Neutre).
 
 ---
 
