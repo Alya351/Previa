@@ -307,15 +307,16 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
         tenter_hw = verifier_support_v4l2m2m()
 
         try:
+            transport_opt = "tcp"
             while not evt_arret.is_set():
-                # Tentative 1 : FFmpeg CLI (Haute performance + Transport TCP anti-grisés + Zero Latency)
+                # Tentative 1 : FFmpeg CLI (Haute performance + Transport anti-grisés + Zero Latency)
                 if ffmpeg:
                     hw_opts = ["-c:v", "h264_v4l2m2m"] if tenter_hw else []
                     cmd = [
                         ffmpeg,
                         "-hide_banner",
                         "-loglevel", "warning",
-                        "-rtsp_transport", "tcp",
+                        "-rtsp_transport", transport_opt,
                         "-stimeout", "3000000",
                         "-probesize", "32768",
                         "-analyzeduration", "0",
@@ -372,9 +373,11 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                             except Exception:
                                 pass
 
-                        if not reussi and tenter_hw:
-                            print(f"[rtsp_service] ⚠️ HW decoder v4l2m2m inactif ou incompatible pour {id_camera} — repli automatique en décodage logiciel CPU.", flush=True)
-                            tenter_hw = False
+                        if not reussi:
+                            transport_opt = "udp" if transport_opt == "tcp" else "tcp"
+                            if tenter_hw:
+                                print(f"[rtsp_service] ⚠️ HW decoder v4l2m2m inactif ou incompatible pour {id_camera} — repli automatique en décodage logiciel CPU.", flush=True)
+                                tenter_hw = False
                             continue
 
                         if reussi and not evt_arret.is_set():
