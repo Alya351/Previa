@@ -141,9 +141,7 @@ flowchart TD
 ### 5.3. Cœur d'Intelligence Artificielle & Détections
 * **SF-IA-01 (Détection de Rôdage)** : Calcul du temps passé par une personne dans une zone sans mouvement justifié ([rodeur.py](file:///c:/Users/alyak/OneDrive/Desktop/ODC/Previa/tech-impact/migration/backend/fonctionnalites/ComportementsSupects/rodeur.py)).
 * **REQ-CAM-04 (Seuil d'immobilité & rôdage paramétrable par zone/caméra)** : Le seuil d'immobilité/rôdage est paramétrable par zone ou caméra (valeur par défaut : 60 secondes). Les postures assises normales ou arrêts courts ne déclenchent pas d'alerte.
-* **REQ-CAM-05 (Absence de suspicion systématique sur non-reconnaissance Face ID)** : La non-reconnaissance biométrique Face ID (ex: visiteur, livreur, nouvel employé) attribue un statut neutre Visiteur/Non identifié (🟢/🔵). La suspicion (🔴) est exclusivement déclenchée par des anomalies comportementales avérées (intrusion en zone sensible, rôdage prolongé confirmé, incendie).
-* **SF-IA-02 (Détection d'Objets Abandonnés)** : Détection d'objets mobiles (sac, valise, colis) isolés sans personne à proximité (< 15% diagonale) pendant plus de 2 minutes ([abandonne.py](file:///c:/Users/alyak/OneDrive/Desktop/ODC/Previa/tech-impact/migration/backend/fonctionnalites/ComportementsSupects/abandonne.py)).
-* **SF-IA-03 (Détection Feu & Fumée)** : Détection optique précoce de flammes ou de fumées en moins de 3 secondes ([feu_fume.py](file:///c:/Users/alyak/OneDrive/Desktop/ODC/Previa/tech-impact/migration/backend/fonctionnalites/ComportementsSupects/feu_fume.py)).
+* **REQ-CAM-05 (Absence de suspicion systématique sur non-reconnaissance Face ID)** : La non-reconnaissance biométrique Face ID (ex: visiteur, livreur, nouvel employé) attribue un statut neutre Visiteur/Non identifié (🟢/🔵). La suspicion (🔴) est exclusivement déclenchée par des anomalies comportementales avérées (intrusion en zone sensible, rôdage prolongé confirmé).
 * **SF-IA-04 (Franchissement de Zone)** : Détection d'intrusion instantanée sur polygone tracé ([detectionEnZone.py](file:///c:/Users/alyak/OneDrive/Desktop/ODC/Previa/tech-impact/migration/backend/fonctionnalites/zoneCam/detectionEnZone.py)).
 
 ### 5.4. Couche IoT & Réaction Physique (ESP32)
@@ -200,7 +198,10 @@ flowchart TD
 
 | Priorité | Périmètre Fonctionnel PREVIA |
 | :--- | :--- |
-| **Must have (Indispensable)** | • Analyse vidéo temps réel multi-caméras.<br>• Détections : Rôdage, Objets abandonnés, Feux, Zones interdites.<br>• Face ID pour autorisations de présence.<br>• Traitement 100% local (zéro cloud tiers).<br>• Gestion des licences d'amorçage. |
+| **Must have (Indispensable)** | • Analyse vidéo temps réel multi-caméras.<br>• Détections : Rôdage, Intrusion en zone interdite.<br>• Face ID pour autorisations de présence.<br>• Traitement 100% local (zéro cloud tiers).<br>• Gestion des licences d'amorçage. |
+| **Should have (Important)** | • Tableau de bord KPIs avec accès direct.<br>• Tracé interactif de zones polygonales.<br>• Journal d'audit et export PDF officiel. |
+| **Could have (Optionnel)** | • Application mobile dédiée agents de terrain.<br>• Assistant de synthèse vocale pour état du bâtiment. |
+| **Won't have (Exclu)** | • Identification de personnes à des fins judiciaires.<br>• Action automatique critique sans validation humaine préalable. |
 | **Should have (Important)** | • Tableau de bord KPIs avec accès direct.<br>• Tracé interactif de zones polygonales.<br>• Journal d'audit et export PDF officiel. |
 | **Could have (Optionnel)** | • Application mobile dédiée agents de terrain.<br>• Assistant de synthèse vocale pour état du bâtiment. |
 | **Won't have (Exclu)** | • Identification de personnes à des fins judiciaires.<br>• Action automatique critique sans validation humaine préalable. |

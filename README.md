@@ -6,7 +6,7 @@
 [![React Native](https://img.shields.io/badge/Mobile-React%20Native%20%2F%20Expo-000000.svg)](https://expo.dev/)
 [![Hardware](https://img.shields.io/badge/Hardware-Raspberry%20Pi%204%20%2F%205-red.svg)](https://www.raspberrypi.com/)
 
-**PREVIA** est une plateforme autonome de vidéosurveillance intelligente et d'analyse comportementale par IA. Elle transforme les caméras IP existantes en un dispositif de prévention active : détection en temps réel d'intrusions, de rôdages, d'objets abandonnés, de départs de feu et reconnaissance faciale biométrique (Face ID) avec notifications mobiles et sirène physique d'urgence.
+**PREVIA** est une plateforme autonome de vidéosurveillance intelligente et d'analyse comportementale par IA. Elle transforme les caméras IP existantes en un dispositif de prévention active : détection en temps réel d'intrusions en zone interdite, de rôdages suspects et reconnaissance faciale biométrique (Face ID) avec notifications mobiles et sirène physique d'urgence.
 
 ---
 
@@ -15,7 +15,7 @@
 - 🧠 **Détection IA Multi-Modèles & Accélération ONNX** :
   - **Détection & Suivi d'objets** (`YOLOv8n` / `YOLO11n-seg` au format ONNX via OpenCV DNN).
   - **Identification des personnes** (ReID d'apparence, genre, pose et caractéristiques vestimentaires).
-  - **Détection comportementale** : Rôdage prolongé en zone sensible, objets abandonnés, départ de feu/fumée, accès non autorisés.
+  - **Détection comportementale** : Rôdage prolongé en zone sensible, intrusions et accès non autorisés.
 - ⚡ **Stream Vidéo Zéro-Latence & Capture Découplée** :
   - Capture continue RTSP / HTTP universelle alimentant un buffer de taille 1 en mémoire vive (RAM).
   - Worker IA autonome découplé à cadence optimale pour ne jamais ralentir le flux vidéo direct.

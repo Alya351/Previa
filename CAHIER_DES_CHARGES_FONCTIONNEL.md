@@ -37,7 +37,7 @@
 ---
 
 ## 1. Contexte et Problématique
-La vidéosurveillance conventionnelle génère un volume massif d'images que les équipes de sécurité ne peuvent pas traiter en continu de façon proactive. Dans les entreprises comme dans les domiciles, la majorité des incidents (intrusions, départs de feu, vols, rôdeurs) sont constatés *a posteriori*, transformant les caméras en simples enregistreurs passifs. 
+La vidéosurveillance conventionnelle génère un volume massif d'images que les équipes de sécurité ne peuvent pas traiter en continu de façon proactive. Dans les entreprises comme dans les domiciles, la majorité des incidents (intrusions, vols, rôdeurs) sont constatés *a posteriori*, transformant les caméras en simples enregistreurs passifs. 
 
 Le système **PREVIA** automatise la détection d'anomalies en temps réel grâce à une intelligence artificielle déployée localement (*Edge AI*). Il analyse en continu les flux vidéo existants sans recourir au cloud, garantissant la confidentialité des données et réduisant le temps d'intervention des équipes de sécurité.
 
@@ -45,7 +45,7 @@ Le système **PREVIA** automatise la détection d'anomalies en temps réel grâc
 
 ## 2. Objectifs du Système PREVIA
 * **Supervision Unifiée** : Offrir une interface Web et une application Mobile synchronisées sans latence perceptible.
-* **Prévention Active** : Alerter en moins de 2 secondes lors d'une intrusion en zone protégée, d'un départ de feu ou d'un comportement suspect.
+* **Prévention Active** : Alerter en moins de 2 secondes lors d'une intrusion en zone protégée ou d'un comportement suspect (rôdage prolongé).
 * **Autonomie Edge AI** : Fonctionner à 100% sur un boîtier local (Raspberry Pi 4 / 5) sans dépendance vers des serveurs externes.
 * **Traçabilité Légale** : Enregistrer de manière infalsifiable les événements, photos de preuve et clips vidéo.
 
@@ -83,7 +83,7 @@ Le système **PREVIA** automatise la détection d'anomalies en temps réel grâc
 * **REQ-DASH-02 (Mosaïque Vidéo Multi-flux)** :
   * Grille vidéo réactive (1 à 4 caméras) avec indicateur « LIVE », bascule automatique WebRTC / flux image secours.
 * **REQ-DASH-03 (Bannière d'Urgence Critique)** :
-  * Signalisation visuelle et sonore prioritaire en cas d'incident majeur (feu, intrusion).
+  * Signalisation visuelle et sonore prioritaire en cas d'incident majeur (intrusion, rôdage suspect).
 * **REQ-DASH-04 (Agrandissement HD & Instantané)** :
   * Ouverture d'une caméra en plein écran avec capture d'instantané photo manuelle à tout moment.
 
