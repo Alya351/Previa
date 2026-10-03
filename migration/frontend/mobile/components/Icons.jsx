@@ -169,26 +169,5 @@ export const IconFlame = ({ size = 20, color = '#EF4444' }) => (
   </Svg>
 );
 
-// Mascotte pingouin autorisée en illustration d'état vide ("Aucune alerte pour le moment")
-export const IconPenguinMascot = ({ width = 120, height = 110 }) => (
-  <Svg width={width} height={height} viewBox="0 0 200 180" fill="none" accessibilityRole="image" accessibilityLabel="Mascotte Previa">
-    <Path
-      d="M100,180 C80,180 70,160 70,120 C70,90 75,70 85,50 C90,40 95,25 105,20 C115,15 130,18 138,28 C144,36 145,48 140,65 C148,80 152,110 150,140 C148,165 135,180 100,180 Z"
-      fill="#014791"
-    />
-    <Path
-      d="M100,180 C85,180 82,150 85,120 C88,95 95,75 105,65 C115,55 125,60 128,75 C132,95 135,140 130,170 C125,180 110,180 100,180 Z"
-      fill="#FFFFFF"
-    />
-    <Path
-      d="M105,35 C112,30 125,32 132,40 C138,48 138,58 132,65 C122,72 110,68 105,58 C100,48 100,40 105,35 Z"
-      fill="#FFFFFF"
-    />
-    <Path d="M136,44 C139,44 142,46 142,48 C142,50 139,52 136,52 C133,52 133,44 136,44 Z" fill="#F59E0B" />
-    <Path d="M118,36 C124,34 128,38 128,44 C128,50 122,52 116,48 C112,44 114,38 118,36 Z" fill="#014791" />
-    <Circle cx="122" cy="42" r="3.5" fill="#FFFFFF" />
-    <Circle cx="123" cy="41" r="1.5" fill="#111316" />
-    <Path d="M96,28 C92,24 94,18 98,18 C103,18 106,24 104,30 Z" fill="#014791" />
-  </Svg>
-);
+
 

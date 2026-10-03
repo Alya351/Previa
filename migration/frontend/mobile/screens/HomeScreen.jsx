@@ -84,6 +84,98 @@ export const HomeScreen = ({
           </View>
         )}
 
+        {/* APERÇU VIDÉO DIRECT RAPIDE */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            DIRECT VIDÉO
+          </Text>
+          <TouchableOpacity
+            onPress={() => onNavigate('direct')}
+            activeOpacity={0.7}
+            style={styles.sectionLinkBtn}
+          >
+            <Text style={styles.sectionLinkText}>Voir tout</Text>
+            <IconChevronRight size={14} color={PREVIA_COLORS.bluePrimary} />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.livePeekCard, isDark && styles.livePeekCardDark]}
+          onPress={() => onNavigate('direct')}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Accéder au flux direct de la caméra ${nomCamPrincipale}`}
+        >
+          <View style={styles.livePeekViewport}>
+            {imageApercu ? (
+              <Image
+                source={{ uri: imageApercu }}
+                style={styles.livePeekImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.livePeekPlaceholder}>
+                <Image
+                  source={require('../assets/logo_previa_transparent.png')}
+                  style={styles.placeholderLogo}
+                  resizeMode="contain"
+                />
+                <Text style={styles.placeholderText}>Caméra prête</Text>
+              </View>
+            )}
+
+            {/* OVERLAY CAMÉRA */}
+            <View style={styles.liveOverlayTop}>
+              {imageApercu ? (
+                <View style={styles.livePulsePill}>
+                  <View style={styles.livePulseDot} />
+                  <Text style={styles.livePulseText}>EN DIRECT</Text>
+                </View>
+              ) : (
+                <View style={[styles.livePulsePill, { backgroundColor: 'rgba(100, 116, 139, 0.85)' }]}>
+                  <Text style={styles.livePulseText}>EN VEILLE</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.liveOverlayBottom}>
+              <View style={styles.liveCamInfo}>
+                <Text style={styles.liveCamTitle}>{nomCamPrincipale}</Text>
+                <Text style={styles.liveCamSubtitle}>{imageApercu ? 'En direct' : 'Standby'}</Text>
+              </View>
+              <View style={styles.livePlayButton}>
+                <IconPlay size={14} color="#FFFFFF" />
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        {/* BOUTON D'URGENCE : CONTACT D'URGENCE */}
+        <TouchableOpacity
+          style={styles.callGuardsBanner}
+          onPress={() => {
+            const telClean = (numeroGardiennerie || '').replace(/\s+/g, '');
+            if (telClean) {
+              Linking.openURL(`tel:${telClean}`).catch(() => {});
+            }
+          }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Contacter le contact d'urgence"
+        >
+          <View style={styles.callGuardsLeft}>
+            <View style={styles.callGuardsIconCircle}>
+              <IconPhone size={22} color="#FFFFFF" />
+            </View>
+            <View style={styles.callGuardsTexts}>
+              <Text style={styles.callGuardsTitle}>Contact d'urgence</Text>
+            </View>
+          </View>
+          <View style={styles.callGuardsPill}>
+            <Text style={styles.callGuardsPillText}>APPELER</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* ACCÈS RAPIDE */}
         <View style={styles.sectionHeaderRow}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
@@ -160,7 +252,7 @@ export const HomeScreen = ({
               </Text>
             </TouchableOpacity>
 
-            {/* CARTE 3 : APPEL GARDIENNERIE */}
+            {/* CARTE 3 : APPEL CONTACT D'URGENCE */}
             <TouchableOpacity
               style={[styles.card, isDark && styles.cardDark, styles.cardGardien]}
               onPress={() => {
@@ -171,7 +263,7 @@ export const HomeScreen = ({
               }}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Contacter la gardiennerie"
+              accessibilityLabel="Contacter le contact d'urgence"
             >
               <View style={styles.cardHeaderRow}>
                 <View style={[styles.iconCircle, { backgroundColor: '#059669' }]}>
@@ -184,10 +276,10 @@ export const HomeScreen = ({
                 </View>
               </View>
               <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
-                Gardiennerie
+                Contact Urgence
               </Text>
               <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>
-                Appel direct vers la sécurité
+                Appel direct configuré
               </Text>
             </TouchableOpacity>
 
@@ -290,9 +382,9 @@ export const HomeScreen = ({
           onPress={() => onNavigate('direct')}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Lancer la ronde vidéo des caméras"
+          accessibilityLabel="Voir toutes les caméras en direct"
         >
-          <Text style={styles.primaryCtaText}>Lancer la ronde</Text>
+          <Text style={styles.primaryCtaText}>Voir les caméras en direct</Text>
           <IconChevronRight size={18} color="#FFFFFF" />
         </TouchableOpacity>
       </ScrollView>
@@ -321,7 +413,7 @@ export const HomeScreen = ({
             </View>
 
             <Text style={[styles.modalBodyText, isDark && styles.modalBodyTextDark]}>
-              Toutes les détections automatiques et rondes sont enregistrées en temps réel.
+              Toutes les détections automatiques de sécurité sont enregistrées en temps réel.
             </Text>
 
             <View style={styles.modalHighlightBox}>

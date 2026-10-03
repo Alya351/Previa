@@ -107,8 +107,8 @@ const styles = StyleSheet.create({
   },
   badgeIndicator: {
     position: 'absolute',
-    top: -7,
-    right: -10,
+    top: -5,
+    right: -8,
     backgroundColor: PREVIA_COLORS.redAlert,
     minWidth: 18,
     height: 18,
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: PREVIA_COLORS.nearBlack,
   },
   badgeText: {

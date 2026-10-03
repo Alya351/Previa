@@ -52,10 +52,10 @@ export const ModalNumeroGardiennerie = ({
             </View>
             <View style={styles.headerTexts}>
               <Text style={[styles.title, isDark && styles.titleDark]}>
-                Gardiennerie
+                Contact d'urgence
               </Text>
               <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>
-                Ligne directe du poste de sécurité
+                Ligne directe paramétrable (sécurité, proches)
               </Text>
             </View>
             <TouchableOpacity

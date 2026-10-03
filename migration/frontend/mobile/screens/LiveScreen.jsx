@@ -174,10 +174,10 @@ export const LiveScreen = ({
             }}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel={`Contacter la gardiennerie au ${numeroGardiennerie || ''}`}
+            accessibilityLabel={`Contacter le contact d'urgence au ${numeroGardiennerie || ''}`}
           >
             <IconPhone size={20} color="#FFFFFF" />
-            <Text style={styles.callGuardsButtonText}>Contacter la Gardiennerie</Text>
+            <Text style={styles.callGuardsButtonText}>Contact d'urgence</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

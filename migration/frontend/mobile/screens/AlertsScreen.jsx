@@ -13,7 +13,7 @@ import {
 import { PREVIA_COLORS, PREVIA_RADIUS, PREVIA_TOUCH_TARGET } from '../theme';
 import { AppHeader } from '../components/AppHeader';
 import { AlertItemSkeleton } from '../components/SkeletonLoader';
-import { IconCheck, IconX, IconChevronRight, IconArrowLeft, IconPenguinMascot, IconPhone } from '../components/Icons';
+import { IconCheck, IconX, IconChevronRight, IconArrowLeft, IconPhone } from '../components/Icons';
 import { urlImageAlerte } from '../api';
 
 export const AlertsScreen = ({
@@ -148,9 +148,8 @@ export const AlertsScreen = ({
               <AlertItemSkeleton />
             </View>
           ) : filteredAlerts.length === 0 ? (
-            /* ÉTAT VIDE : Illustration légère pingouin + texte neutre (Section 5.3) */
+            /* ÉTAT VIDE : Texte neutre et propre */
             <View style={styles.emptyContainer}>
-              <IconPenguinMascot width={130} height={120} />
               <Text style={[styles.emptyTitle, isDark && styles.emptyTitleDark]}>
                 Aucune alerte
               </Text>
@@ -279,12 +278,12 @@ export const AlertsScreen = ({
                     Consigne :
                   </Text>
                   <Text style={[styles.aiGuidanceBody, isDark && styles.aiGuidanceBodyDark]}>
-                    Vérifier le secteur. En cas de doute, contacter la gardiennerie.
+                    Vérifier le secteur. En cas de doute, joindre le contact d'urgence.
                   </Text>
                 </View>
               </View>
 
-              {/* BOUTON D'APPEL DIRECT GARDIENNERIE */}
+              {/* BOUTON D'APPEL DIRECT CONTACT D'URGENCE */}
               <TouchableOpacity
                 style={styles.btnCallGuardsModal}
                 onPress={() => {
@@ -295,10 +294,10 @@ export const AlertsScreen = ({
                 }}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel={`Contacter la gardiennerie au ${numeroGardiennerie || ''}`}
+                accessibilityLabel={`Contacter le contact d'urgence au ${numeroGardiennerie || ''}`}
               >
                 <IconPhone size={20} color="#FFFFFF" />
-                <Text style={styles.btnCallGuardsModalText}>Contacter la Gardiennerie</Text>
+                <Text style={styles.btnCallGuardsModalText}>Contact d'urgence</Text>
               </TouchableOpacity>
 
               {/* VALIDATION AU POUCE (SF-MOB-03) : DEUX BOUTONS LARGES ET BIEN SÉPARÉS */}

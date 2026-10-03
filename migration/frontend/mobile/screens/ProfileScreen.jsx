@@ -162,15 +162,15 @@ export const ProfileScreen = ({
           </View>
         </View>
 
-        {/* CONTACT D'URGENCE : GARDIENNERIE */}
+        {/* CONTACT D'URGENCE */}
         <View style={[styles.sectionCard, isDark && styles.cardDark]}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            GARDIENNERIE
+            CONTACT D'URGENCE
           </Text>
           <View style={styles.emergencyContactRow}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.settingTitle, isDark && styles.textLight]}>
-                Poste de Gardiennerie
+                Numéro d'urgence principal
               </Text>
               <Text style={[styles.settingDesc, isDark && styles.textSecondaryDark]}>
                 {numeroGardiennerie || 'Numéro non renseigné'}
@@ -183,7 +183,7 @@ export const ProfileScreen = ({
                   onPress={onOpenEditNumero}
                   activeOpacity={0.8}
                   accessibilityRole="button"
-                  accessibilityLabel="Modifier le numéro de la gardiennerie"
+                  accessibilityLabel="Modifier le numéro de contact d'urgence"
                 >
                   <IconEdit size={14} color={isDark ? '#E5E7EB' : PREVIA_COLORS.navyText} />
                   <Text style={[styles.editSmallBtnText, isDark && styles.textLight]}>Modifier</Text>
@@ -201,7 +201,7 @@ export const ProfileScreen = ({
                 }}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel="Appeler le poste de gardiennerie"
+                accessibilityLabel="Appeler le contact d'urgence"
               >
                 <IconPhone size={14} color="#FFFFFF" />
                 <Text style={styles.callSmallBtnText}>Appeler</Text>
