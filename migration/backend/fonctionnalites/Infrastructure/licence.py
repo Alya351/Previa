@@ -85,9 +85,10 @@ def activer(code: str) -> dict:
     if not resultat.get("active"):
         raise CodeInvalide("Ce code a été désactivé.")
     maintenant = time.time()
+    code_expire_le = resultat.get("code_expire_le") or (maintenant + 365 * 86400)
     donnees = {
         "code": code,
-        "code_expire_le": resultat.get("code_expire_le"),
+        "code_expire_le": code_expire_le,
         "active": True,
         "active_le": maintenant,
         "verifie_le": maintenant,
