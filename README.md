@@ -27,9 +27,9 @@
 - 🖥️ **Tableau de Bord Web (React + Vite)** :
   - Vue multi-caméras interactive avec overlays de détection en temps réel.
   - Gestion des bâtiments, des caméras IP et des permissions administrateurs/opérateurs.
-- 🚨 **Réponse Automatique & Sécurité Physico-Matérielle** :
-  - Activation de sirène physique (Arduino / ESP32) avec auto-extinction de sécurité sous 120s max.
-  - Enregistrement automatique de clips vidéo de preuve d'incident (`.mp4`).
+- 🚨 **Réponse & Preuves d'Incident** :
+  - Signalisation visuelle et sonore d'urgence sur le dashboard Web & l'application mobile.
+  - Enregistrement automatique de clips vidéo de preuve d'incident (`.mp4` de 10s).
 
 ---
 

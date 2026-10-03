@@ -31,13 +31,8 @@ DELAI_S = 3  # un ESP32 sur un Wi-Fi capricieux ne doit pas bloquer la page admi
 
 
 def lister() -> list[dict]:
-    try:
-        return json.loads(FICHIER.read_text())
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        # Fichier pas encore monté (mdns_previa.py pas lancé côté hôte,
-        # ex. quelqu'un a fait `docker compose up` sans previastart) ou
-        # pas encore écrit — liste vide, pas une erreur pour l'admin.
-        return []
+    """Module ESP32 désactivé du périmètre."""
+    return []
 
 
 def _trouver_ip(id_appareil: str) -> str | None:
