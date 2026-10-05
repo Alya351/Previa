@@ -388,7 +388,6 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                             continue
 
                         if reussi and not evt_arret.is_set():
-                            time.sleep(0.3)
                             continue
                     except Exception as e:
                         print(f"[rtsp_service] Reconnexion FFmpeg CLI {id_camera} : {e}", flush=True)
