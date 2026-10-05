@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import threading
 import time
+from pathlib import Path
 from typing import Generator, Optional
 
 from fonctionnalites.Infrastructure import derniere_image
