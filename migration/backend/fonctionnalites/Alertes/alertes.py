@@ -267,3 +267,75 @@ def supprimer_toutes_alertes() -> int:
 
     return count
 
+
+JOURNAL_ACTIONS_PATH = Path(__file__).resolve().parent.parent.parent.parent / "db" / "journal_actions.json"
+
+
+def journaliser_action(action: str, details: str, auteur: str = "Opérateur local") -> dict:
+    """Enregistre un événement dans le journal d'audit de sécurité."""
+    JOURNAL_ACTIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    entrees = []
+    if JOURNAL_ACTIONS_PATH.exists():
+        try:
+            with open(JOURNAL_ACTIONS_PATH, "r", encoding="utf-8") as f:
+                entrees = json.load(f)
+        except Exception:
+            entrees = []
+
+    nouvelle_entree = {
+        "id": uuid.uuid4().hex[:8],
+        "horodatage": time.time(),
+        "action": action,
+        "details": details,
+        "auteur": auteur,
+    }
+    entrees.insert(0, nouvelle_entree)
+    entrees = entrees[:500]  # Garde les 500 dernières actions
+
+    with open(JOURNAL_ACTIONS_PATH, "w", encoding="utf-8") as f:
+        json.dump(entrees, f, ensure_ascii=False, indent=2)
+
+    return nouvelle_entree
+
+
+def lister_journal_actions() -> list[dict]:
+    """Renvoie l'historique complet des actions d'audit."""
+    if not JOURNAL_ACTIONS_PATH.exists():
+        return []
+    try:
+        with open(JOURNAL_ACTIONS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def traiter_alerte(id_alerte: str, traitement: str, motif: str | None = None, auteur: str = "Opérateur local") -> dict | None:
+    """Qualifie une alerte ('confirmee' ou 'erreur') avec un motif et l'enregistre dans l'historique et le journal d'audit."""
+    fichier = _chemin(id_alerte)
+    if not fichier.exists():
+        return None
+
+    try:
+        with open(fichier, "r", encoding="utf-8") as f:
+            alerte = json.load(f)
+
+        alerte["statut_traitement"] = traitement  # 'confirmee' ou 'erreur'
+        alerte["motif_traitement"] = motif or "Aucune précision"
+        alerte["traitee_par"] = auteur
+        alerte["horodatage_traitement"] = time.time()
+
+        with open(fichier, "w", encoding="utf-8") as f:
+            json.dump(alerte, f, ensure_ascii=False, indent=2)
+
+        # Journaliser l'action
+        libelle_action = "Intrusion/Danger confirmé" if traitement == "confirmee" else "Alerte classée Erreur"
+        journaliser_action(
+            action=libelle_action,
+            details=f"Alerte {id_alerte[:6]} ({alerte.get('type_evenement')}) — Motif: {motif or 'Non renseigné'}",
+            auteur=auteur
+        )
+        return alerte
+    except Exception:
+        return None
+
+

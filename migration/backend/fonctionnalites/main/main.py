@@ -1283,6 +1283,71 @@ def supprimer_toutes_alertes():
     return {"statut": "succes", "nombre_supprimees": nb}
 
 
+class TraitementAlerteSchema(BaseModel):
+    traitement: str  # 'confirmee' ou 'erreur'
+    motif: str | None = None
+    auteur: str | None = "Opérateur"
+
+
+@app.post(
+    "/alertes/{id_alerte}/traiter",
+    tags=["Alertes"],
+    summary="Qualifier/Traiter une alerte avec motif",
+    description="Permet à l'opérateur de qualifier une alerte comme 'confirmee' ou 'erreur' avec justification."
+)
+def traiter_alerte_route(id_alerte: str, me: TraitementAlerteSchema):
+    if me.traitement not in {"confirmee", "erreur"}:
+        raise HTTPException(400, "Le champ 'traitement' doit être 'confirmee' ou 'erreur'.")
+    res = alertes_module.traiter_alerte(id_alerte, me.traitement, me.motif, me.auteur or "Opérateur")
+    if not res:
+        raise HTTPException(404, "Alerte introuvable.")
+    return {"statut": "succes", "alerte": res}
+
+
+@app.get(
+    "/journal-actions",
+    tags=["Audit & Journal"],
+    summary="Consulter le journal des actions d'audit",
+    description="Affiche la liste chronologique des actions effectuées sur le système (validations d'alertes, sirène, etc.)."
+)
+def journal_actions():
+    return alertes_module.lister_journal_actions()
+
+
+@app.get(
+    "/export/alertes/csv",
+    tags=["Export & Rapports"],
+    summary="Exporter les alertes au format CSV",
+    description="Génère un fichier CSV téléchargeable récapitulant les alertes et leurs traitements."
+)
+def exporter_alertes_csv():
+    import io
+    import csv
+
+    alertes = alertes_module.lister_alertes()
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(["ID Alerte", "Date & Heure", "Type d'événement", "Caméra", "Personne ID", "Statut Traitement", "Motif / Commentaire", "Opérateur"])
+
+    for a in alertes:
+        dt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(a.get("horodatage", time.time())))
+        writer.writerow([
+            a.get("id", ""),
+            dt,
+            a.get("type_evenement", ""),
+            a.get("id_camera", ""),
+            a.get("pid", "Non identifié"),
+            a.get("statut_traitement", "En attente"),
+            a.get("motif_traitement", ""),
+            a.get("traitee_par", "")
+        ])
+
+    response = Response(content=output.getvalue(), media_type="text/csv; charset=utf-8")
+    response.headers["Content-Disposition"] = 'attachment; filename="rapport_alertes_previa.csv"'
+    return response
+
+
+
 
 # ========================================================================
 # Alarme physique (lampe + sirène) — voir Infrastructure/alarme_physique.py

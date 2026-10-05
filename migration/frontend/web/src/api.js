@@ -293,4 +293,21 @@ export function supprimerToutesAlertes() {
   return fetch(`${API_BASE}/alertes`, { method: 'DELETE' }).then(jsonOuErreur);
 }
 
+export function traiterAlerte(idAlerte, traitement, motif = "", auteur = "Opérateur") {
+  return fetch(`${API_BASE}/alertes/${idAlerte}/traiter`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ traitement, motif, auteur }),
+  }).then(jsonOuErreur);
+}
+
+export function obtenirJournalActions() {
+  return fetch(`${API_BASE}/journal-actions`).then(jsonOuErreur);
+}
+
+export function ObtenirUrlExportCSV() {
+  return `${API_BASE}/export/alertes/csv`;
+}
+
+
 
