@@ -313,6 +313,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
 
         tenter_hw = verifier_support_v4l2m2m()
 
+        url_a_utiliser = url_norm
         try:
             transport_opt = "tcp"
             while not evt_arret.is_set():
@@ -327,7 +328,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         "-stimeout", "3000000",
                         "-probesize", "32768",
                         "-analyzeduration", "0",
-                        "-i", url_norm,
+                        "-i", url_a_utiliser,
                         "-an",
                         "-vf", "scale='min(854,iw)':-2,format=yuv420p",
                         "-f", "mjpeg",
@@ -381,6 +382,8 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                                 pass
 
                         if not reussi:
+                            # Tester l'URL brute exacte de l'utilisateur si l'URL normalisée a échoué
+                            url_a_utiliser = url_flux.strip() if url_a_utiliser == url_norm else url_norm
                             transport_opt = "udp" if transport_opt == "tcp" else "tcp"
                             if tenter_hw:
                                 print(f"[rtsp_service] ⚠️ HW decoder v4l2m2m inactif ou incompatible pour {id_camera} — repli automatique en décodage logiciel CPU.", flush=True)
