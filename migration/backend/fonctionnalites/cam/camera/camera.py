@@ -57,7 +57,7 @@ def creer_camera(num: str, piece_id: str, est_entree: bool = False, url_flux: st
     if piece.trouver_par_id(piece_id) is None:
         raise ValueError(f"Aucune pièce avec l'id {piece_id}")
 
-    url_propre = normaliser_url_rtsp(url_flux) if url_flux else None
+    url_propre = url_flux.strip() if url_flux else None
     camera = {
         "id": uuid.uuid4().hex,
         "num": num.strip() if isinstance(num, str) else num,
@@ -77,8 +77,6 @@ def modifier_camera(
 ) -> dict | None:
     """Lève ValueError si la nouvelle `piece_id` ne correspond à aucune
     pièce existante."""
-    from fonctionnalites.cam.camera.rtsp_service import normaliser_url_rtsp
-
     c = trouver_par_id(id_camera)
     if c is None:
         return None
@@ -91,7 +89,7 @@ def modifier_camera(
     if est_entree is not None:
         c["est_entree"] = bool(est_entree)
     if url_flux is not None:
-        c["url_flux"] = normaliser_url_rtsp(url_flux) if url_flux else None
+        c["url_flux"] = url_flux.strip() if url_flux else None
     with open(_chemin(id_camera), "w", encoding="utf-8") as f:
         json.dump(c, f, ensure_ascii=False, indent=2)
     return c
