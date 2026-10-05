@@ -4659,7 +4659,7 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
                   📺 Flux Vidéo en Direct — {cameraFluxEnDirect.num}
                 </h4>
                 <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--ink-muted)', fontFamily: 'monospace' }}>
-                  {cameraFluxEnDirect.url_flux}
+                  {cameraFluxEnDirect.url_flux ? cameraFluxEnDirect.url_flux.replace(/(rtsp:\/\/[^:]+:)[^@]+(@.+)/i, '$1••••••••$2') : ''}
                 </p>
               </div>
               <button

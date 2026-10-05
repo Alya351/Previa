@@ -61,34 +61,41 @@ def verifier_support_v4l2m2m() -> bool:
     return any(os.path.exists(f"/dev/video{i}") for i in range(10, 25))
 
 
+_opt_timeout_cache = {}
+
+
+def _option_timeout_rtsp(ffmpeg: str) -> str:
+    """Détermine dynamiquement si l'option FFmpeg est -stimeout (FFmpeg 4.x/Raspberry Pi) ou -timeout (FFmpeg 5.x+/PC)."""
+    if ffmpeg not in _opt_timeout_cache:
+        try:
+            out = subprocess.run([ffmpeg, "-hide_banner", "-h", "demuxer=rtsp"], capture_output=True, text=True, timeout=5).stdout
+            _opt_timeout_cache[ffmpeg] = "-stimeout" if "stimeout" in out else "-timeout"
+        except Exception:
+            _opt_timeout_cache[ffmpeg] = "-timeout"
+    return _opt_timeout_cache[ffmpeg]
+
+
 def normaliser_url_rtsp(url: str) -> str:
-    """Normalise l'URL RTSP (nettoyage des doubles @@ et encodage des caractères spéciaux dans le mot de passe comme le '@')."""
+    """Normalise l'URL RTSP en séparant par le DERNIER @ (pour conserver les @ dans les mots de passe et les encoder en %40)."""
     if not url or not isinstance(url, str):
         return ""
     u = url.strip()
     if not u.lower().startswith("rtsp://"):
         return u
 
-    # 1. Nettoyage des @@ accidentels créés par la concaténation de mots de passe se terminant par '@'
-    while "@@" in u:
-        u = u.replace("@@", "@")
-
-    # 2. Si des identifiants (user:pass@) sont présents avant l'IP/hôtes
-    if "@" in u:
+    import urllib.parse
+    try:
         scheme, reste = u.split("://", 1)
-        # L'hôte et le port sont TOUJOURS dans la dernière partie après le dernier '@'
-        parties = reste.rsplit("@", 1)
-        auth = parties[0]
-        hote_et_chemin = parties[1]
-        if ":" in auth:
-            user, password = auth.split(":", 1)
-            import urllib.parse
-            # Dé-encoder d'abord pour éviter de décupler le %40 (%2540)
-            password_brut = urllib.parse.unquote(password)
-            password_enc = urllib.parse.quote(password_brut, safe="")
-            return f"{scheme}://{user}:{password_enc}@{hote_et_chemin}"
-
-    return u
+        autorite, sep, chemin = reste.partition("/")
+        auth, arobase, hote = autorite.rpartition("@")  # Le DERNIER @ sépare l'hôte/IP de l'authentification
+        if not arobase or ":" not in auth:
+            return u
+        user, password = auth.split(":", 1)
+        user_enc = urllib.parse.quote(urllib.parse.unquote(user), safe="")
+        pwd_enc = urllib.parse.quote(urllib.parse.unquote(password), safe="")
+        return f"{scheme}://{user_enc}:{pwd_enc}@{hote}{sep}{chemin}"
+    except Exception:
+        return u
 
 
 def tester_connexion_rtsp(url_flux: str, timeout_sec: int = 5) -> dict:
@@ -317,17 +324,18 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
         try:
             transport_opt = "tcp"
             while not evt_arret.is_set():
-                # Tentative 1 : FFmpeg CLI (Haute performance + Transport anti-grisés + Zero Latency)
                 if ffmpeg:
                     hw_opts = ["-c:v", "h264_v4l2m2m"] if tenter_hw else []
+                    opt_timeout = _option_timeout_rtsp(ffmpeg)
                     cmd = [
                         ffmpeg,
                         "-hide_banner",
                         "-loglevel", "warning",
                         "-rtsp_transport", transport_opt,
-                        "-stimeout", "3000000",
+                        opt_timeout, "3000000",
                         "-probesize", "32768",
                         "-analyzeduration", "0",
+                    ] + hw_opts + [
                         "-i", url_a_utiliser,
                         "-an",
                         "-vf", "scale='min(854,iw)':-2,format=yuv420p",
@@ -388,6 +396,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                             if tenter_hw:
                                 print(f"[rtsp_service] ⚠️ HW decoder v4l2m2m inactif ou incompatible pour {id_camera} — repli automatique en décodage logiciel CPU.", flush=True)
                                 tenter_hw = False
+                            time.sleep(1.0)
                             continue
 
                         if reussi and not evt_arret.is_set():
