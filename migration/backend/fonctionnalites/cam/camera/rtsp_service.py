@@ -337,11 +337,11 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         opt_timeout, "3000000",
                         "-probesize", "32768",
                         "-analyzeduration", "0",
-                    ] + hw_opts + [
                         "-i", url_a_utiliser,
                         "-an",
-                        "-vf", "scale='min(854,iw)':-2,format=yuv420p",
-                        "-f", "mjpeg",
+                        "-vf", "scale=854:-1",
+                        "-f", "image2pipe",
+                        "-vcodec", "mjpeg",
                         "-q:v", "5",
                         "-r", "20",
                         "-"
@@ -350,7 +350,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         proc = subprocess.Popen(
                             cmd,
                             stdout=subprocess.PIPE,
-                            stderr=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE,
                             bufsize=65536
                         )
                         _processus_ffmpeg[id_camera] = proc
@@ -392,6 +392,12 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                                 pass
 
                         if not reussi:
+                            try:
+                                err_out = proc.stderr.read(2048).decode(errors="ignore") if proc.stderr else ""
+                                if err_out:
+                                    print(f"[rtsp_service] ⚠️ Erreur FFmpeg pour {id_camera} : {err_out.strip()}", flush=True)
+                            except Exception:
+                                pass
                             # Tester l'URL brute exacte de l'utilisateur si l'URL normalisée a échoué
                             url_a_utiliser = url_flux.strip() if url_a_utiliser == url_norm else url_norm
                             transport_opt = "udp" if transport_opt == "tcp" else "tcp"
