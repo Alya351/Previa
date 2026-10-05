@@ -33,13 +33,20 @@ _derniere_analyse_ts = {}
 
 
 def trouver_ffmpeg() -> Optional[str]:
-    """Localise l'exécutable ffmpeg sur le système."""
+    """Localise l'exécutable ffmpeg sur le système (priorité au dossier local du projet, puis PATH système)."""
+    # 1. Vérifier dans le projet sous outils/ffmpeg/bin/ (pour exécution portable autonome sans installation)
+    racine_projet = Path(__file__).resolve().parent.parent.parent.parent.parent
+    local_ffmpeg = racine_projet / "outils" / "ffmpeg" / "bin" / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+    if local_ffmpeg.exists():
+        return str(local_ffmpeg)
+
+    # 2. Recherche dans le PATH système
     dans_path = shutil.which("ffmpeg")
     if dans_path:
         return dans_path
 
+    # 3. Chemins standards Windows
     chemins_connus = [
-        r"C:\Users\alyak\.vscode\extensions\kilocode.kilo-code-7.5.15-win32-x64\bin\ffmpeg.exe",
         r"C:\ffmpeg\bin\ffmpeg.exe",
         r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
         r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
@@ -47,12 +54,7 @@ def trouver_ffmpeg() -> Optional[str]:
     for c in chemins_connus:
         if os.path.exists(c):
             return c
-
-    base_ext = os.path.expanduser(r"~\.vscode\extensions")
-    if os.path.isdir(base_ext):
-        for root, _, files in os.walk(base_ext):
-            if "ffmpeg.exe" in files:
-                return os.path.join(root, "ffmpeg.exe")
+    return None
 
 def verifier_support_v4l2m2m() -> bool:
     """Vérifie si les nœuds matériels V4L2 M2M du Raspberry Pi (/dev/video10...25) existent sous Linux."""
