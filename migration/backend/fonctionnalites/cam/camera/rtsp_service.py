@@ -107,66 +107,42 @@ def tester_connexion_rtsp(url_flux: str, timeout_sec: int = 5) -> dict:
         return {"ok": False, "erreur": "URL de la caméra vide"}
 
     ffmpeg = trouver_ffmpeg()
-    url_norm = normaliser_url_rtsp(url_flux)
+    url_brute = url_flux.strip()
+    url_norm = normaliser_url_rtsp(url_brute)
 
-    # 1. Option universelle avec FFmpeg (Essai avec URL normalisée puis URL brute en fallback)
-    urls_a_tester = [url_norm]
-    if url_flux.strip() != url_norm:
-        urls_a_tester.append(url_flux.strip())
+    # Tester dans l'ordre : URL brute (avec identifiants direct), puis URL normalisée
+    urls_a_tester = [url_brute]
+    if url_norm != url_brute:
+        urls_a_tester.append(url_norm)
 
     err_msg = ""
     if ffmpeg:
         for u in urls_a_tester:
-            cmd_base = [ffmpeg, "-hide_banner", "-loglevel", "error"]
-            if u.lower().startswith("rtsp://"):
-                cmd = cmd_base + [
-                    "-fflags", "nobuffer",
-                    "-flags", "low_delay",
-                    "-rtsp_transport", "tcp",
-                    "-timeout", "3000000",
+            # Pour RTSP, tester d'abord sans forcer tcp (laisser FFmpeg négocier) puis avec TCP et UDP
+            transports = ["auto", "tcp", "udp"] if u.lower().startswith("rtsp://") else ["auto"]
+            for transport in transports:
+                cmd = [ffmpeg, "-hide_banner", "-loglevel", "error"]
+                if transport != "auto":
+                    cmd.extend(["-rtsp_transport", transport])
+                cmd.extend([
+                    "-timeout", "5000000",
                     "-i", u,
                     "-vframes", "1",
                     "-an",
                     "-f", "image2pipe",
                     "-vcodec", "mjpeg",
                     "-"
-                ]
-            else:
-                cmd = cmd_base + [
-                    "-timeout", "3000000",
-                    "-i", u,
-                    "-vframes", "1",
-                    "-an",
-                    "-f", "image2pipe",
-                    "-vcodec", "mjpeg",
-                    "-"
-                ]
+                ])
 
-            try:
-                proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_sec)
-                if proc.returncode == 0 and len(proc.stdout) > 500:
-                    return {"ok": True, "taille_image": len(proc.stdout)}
+                try:
+                    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_sec)
+                    if proc.returncode == 0 and len(proc.stdout) > 300:
+                        return {"ok": True, "taille_image": len(proc.stdout)}
+                    err_msg = proc.stderr.decode("utf-8", errors="ignore")[-250:]
+                except Exception as exc:
+                    err_msg = f"Erreur capture FFmpeg : {exc}"
 
-                # Fallback UDP si TCP échoue
-                if u.lower().startswith("rtsp://"):
-                    cmd_udp = cmd_base + [
-                        "-rtsp_transport", "udp",
-                        "-timeout", "3000000",
-                        "-i", u,
-                        "-vframes", "1",
-                        "-an",
-                        "-f", "image2pipe",
-                        "-vcodec", "mjpeg",
-                        "-"
-                    ]
-                    proc_udp = subprocess.run(cmd_udp, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_sec)
-                    if proc_udp.returncode == 0 and len(proc_udp.stdout) > 500:
-                        return {"ok": True, "taille_image": len(proc_udp.stdout)}
-                err_msg = proc.stderr.decode("utf-8", errors="ignore")[-250:]
-            except Exception as exc:
-                err_msg = f"Erreur capture FFmpeg : {exc}"
-
-    # 2. Fallback universel OpenCV
+    # 2. Fallback universel OpenCV (avec et sans préfixe)
     try:
         import cv2
         for u in urls_a_tester:
@@ -181,7 +157,12 @@ def tester_connexion_rtsp(url_flux: str, timeout_sec: int = 5) -> dict:
     except Exception as exc:
         err_msg = f"OpenCV : {exc}"
 
-    return {"ok": False, "erreur": f"Impossible de lire le flux (FFmpeg & OpenCV) : {err_msg or 'Caméra injoignable (vérifiez identifiants et mot de passe)'}"}
+    # Si le test échoue mais que l'URL semble valide, on renvoie une mise en garde pour permettre l'enregistrement manuel
+    return {
+        "ok": False,
+        "erreur": f"Lecture initiale difficile ({err_msg or 'Accès restreint par la caméra/téléphone'}). Vérifiez qu'aucun autre client n'est connecté à la caméra."
+    }
+
 
 
 
