@@ -1255,9 +1255,18 @@ def analyser(id_camera: str, frame) -> dict:
     précédents (par personne, identité globale — voir docstring du
     module), et écrit le résultat confirmé dans le rapport DE CETTE
     CAMÉRA (voir rapport_cam.py, clé "personnesVues")."""
-    # Auto-redressement de l'image (si la caméra est montée verticalement à 90°, h > w)
-    # YOLO v8/v11 est entraîné sur des humains debout ; une personne couchée sur le côté à 90°
-    # voit son score de confiance s'effondrer.
+    # Adaptateur thermique pour préserver le Raspberry Pi 4 de la surchauffe
+    from fonctionnalites.Infrastructure import gestion_thermique
+    profil_th = gestion_thermique.obtenir_profil_thermique()
+    max_dim = profil_th.get("max_dim_px", 640)
+
+    if frame is not None:
+        h, w = frame.shape[:2]
+        if max(h, w) > max_dim:
+            echelle = max_dim / float(max(h, w))
+            nw, nh = int(w * echelle), int(h * echelle)
+            frame = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_AREA)
+
     if frame is not None and frame.shape[0] > frame.shape[1]:
         frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 

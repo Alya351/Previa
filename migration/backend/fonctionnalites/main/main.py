@@ -43,7 +43,7 @@ from fonctionnalites.cam.batiment import batiment
 from fonctionnalites.cam.camera import camera, rtsp_service
 from fonctionnalites.cam.pieces import piece
 from fonctionnalites.ComportementsSupects import profil_suspect
-from fonctionnalites.Infrastructure import alarme_physique, clips_service, derniere_image, esp_decouverte, licence, rapport_cam, reboot, signalisation_webrtc
+from fonctionnalites.Infrastructure import alarme_physique, clips_service, derniere_image, esp_decouverte, gestion_thermique, licence, rapport_cam, reboot, signalisation_webrtc
 from fonctionnalites.zoneCam import enregitre as zone_module
 from fonctionnalites.Infrastructure.local_store import db
 from fonctionnalites.users import admin, compte, defaultAdmin, user
@@ -1346,6 +1346,16 @@ class DemandeComparateur(BaseModel):
 # ------------------------------------------------------------------------
 class DemandeCodeLicence(BaseModel):
     code: str
+
+
+@app.get(
+    "/systeme/thermique",
+    tags=["Système"],
+    summary="État thermique et régime anti-surchauffe du processeur Edge AI",
+    description="Renvoie la température CPU, le régime thermique (NOMINAL, ECO_TIEDE, PROTECTION_SURCHAUFFE) et la cadence d'inférence recommandée.",
+)
+def obtenir_etat_thermique():
+    return gestion_thermique.obtenir_profil_thermique()
 
 
 @app.get(

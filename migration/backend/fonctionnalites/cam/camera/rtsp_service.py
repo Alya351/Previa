@@ -62,24 +62,32 @@ def verifier_support_v4l2m2m() -> bool:
 
 
 def normaliser_url_rtsp(url: str) -> str:
-    """Normalise l'URL RTSP (nettoyage et encodage des caractères spéciaux dans le mot de passe comme le '@')."""
-    if not url:
+    """Normalise l'URL RTSP (nettoyage des doubles @@ et encodage des caractères spéciaux dans le mot de passe comme le '@')."""
+    if not url or not isinstance(url, str):
         return ""
     u = url.strip()
-    # Si le mot de passe contient un @ avant le hôte (ex: rtsp://user:pass@word@host:554/...)
-    # On isole la partie auth 'rtsp://user:pass@host'
-    if u.startswith("rtsp://") and u.count("@") > 1:
+    if not u.lower().startswith("rtsp://"):
+        return u
+
+    # 1. Nettoyage des @@ accidentels créés par la concaténation de mots de passe se terminant par '@'
+    while "@@" in u:
+        u = u.replace("@@", "@")
+
+    # 2. Si des identifiants (user:pass@) sont présents avant l'IP/hôtes
+    if "@" in u:
         scheme, reste = u.split("://", 1)
-        parties_at = reste.split("@")
-        hote_et_chemin = parties_at[-1]
-        auth = "@".join(parties_at[:-1])
+        # L'hôte et le port sont TOUJOURS dans la dernière partie après le dernier '@'
+        parties = reste.rsplit("@", 1)
+        auth = parties[0]
+        hote_et_chemin = parties[1]
         if ":" in auth:
             user, password = auth.split(":", 1)
             import urllib.parse
-            # Dé-encoder d'abord pour éviter de re-sur-encoder %40 en %2540
+            # Dé-encoder d'abord pour éviter de décupler le %40 (%2540)
             password_brut = urllib.parse.unquote(password)
             password_enc = urllib.parse.quote(password_brut, safe="")
             return f"{scheme}://{user}:{password_enc}@{hote_et_chemin}"
+
     return u
 
 
@@ -89,82 +97,81 @@ def tester_connexion_rtsp(url_flux: str, timeout_sec: int = 5) -> dict:
         return {"ok": False, "erreur": "URL de la caméra vide"}
 
     ffmpeg = trouver_ffmpeg()
-    url = normaliser_url_rtsp(url_flux)
+    url_norm = normaliser_url_rtsp(url_flux)
 
-    # 1. Option universelle avec FFmpeg
+    # 1. Option universelle avec FFmpeg (Essai avec URL normalisée puis URL brute en fallback)
+    urls_a_tester = [url_norm]
+    if url_flux.strip() != url_norm:
+        urls_a_tester.append(url_flux.strip())
+
+    err_msg = ""
     if ffmpeg:
-        # Construction des options selon le protocole (RTSP vs HTTP/MJPEG/RTMP)
-        cmd_base = [ffmpeg, "-hide_banner", "-loglevel", "error"]
-        
-        if url.lower().startswith("rtsp://"):
-            # Essai 1 : RTSP sur TCP (recommandé pour la stabilité et éviter le décalage)
-            cmd = cmd_base + [
-                "-fflags", "nobuffer",
-                "-flags", "low_delay",
-                "-rtsp_transport", "tcp",
-                "-timeout", "3000000",
-                "-i", url,
-                "-vframes", "1",
-                "-an",
-                "-f", "image2pipe",
-                "-vcodec", "mjpeg",
-                "-"
-            ]
-        else:
-            # Flux HTTP, HTTPS, MJPEG ou Webcams IP
-            cmd = cmd_base + [
-                "-timeout", "3000000",
-                "-i", url,
-                "-vframes", "1",
-                "-an",
-                "-f", "image2pipe",
-                "-vcodec", "mjpeg",
-                "-"
-            ]
-
-        try:
-            proc = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=timeout_sec
-            )
-            if proc.returncode == 0 and len(proc.stdout) > 500:
-                return {"ok": True, "taille_image": len(proc.stdout)}
-
-            # Essai 2 (Fallback RTSP UDP si le constructeur de la caméra impose UDP)
-            if url.lower().startswith("rtsp://"):
-                cmd_udp = cmd_base + [
-                    "-rtsp_transport", "udp",
+        for u in urls_a_tester:
+            cmd_base = [ffmpeg, "-hide_banner", "-loglevel", "error"]
+            if u.lower().startswith("rtsp://"):
+                cmd = cmd_base + [
+                    "-fflags", "nobuffer",
+                    "-flags", "low_delay",
+                    "-rtsp_transport", "tcp",
                     "-timeout", "3000000",
-                    "-i", url,
+                    "-i", u,
                     "-vframes", "1",
                     "-an",
                     "-f", "image2pipe",
                     "-vcodec", "mjpeg",
                     "-"
                 ]
-                proc_udp = subprocess.run(cmd_udp, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_sec)
-                if proc_udp.returncode == 0 and len(proc_udp.stdout) > 500:
-                    return {"ok": True, "taille_image": len(proc_udp.stdout)}
+            else:
+                cmd = cmd_base + [
+                    "-timeout", "3000000",
+                    "-i", u,
+                    "-vframes", "1",
+                    "-an",
+                    "-f", "image2pipe",
+                    "-vcodec", "mjpeg",
+                    "-"
+                ]
 
-            err_msg = proc.stderr.decode("utf-8", errors="ignore")[-250:]
-        except Exception:
-            err_msg = "FFmpeg indisponible ou timeout"
+            try:
+                proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_sec)
+                if proc.returncode == 0 and len(proc.stdout) > 500:
+                    return {"ok": True, "taille_image": len(proc.stdout)}
+
+                # Fallback UDP si TCP échoue
+                if u.lower().startswith("rtsp://"):
+                    cmd_udp = cmd_base + [
+                        "-rtsp_transport", "udp",
+                        "-timeout", "3000000",
+                        "-i", u,
+                        "-vframes", "1",
+                        "-an",
+                        "-f", "image2pipe",
+                        "-vcodec", "mjpeg",
+                        "-"
+                    ]
+                    proc_udp = subprocess.run(cmd_udp, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_sec)
+                    if proc_udp.returncode == 0 and len(proc_udp.stdout) > 500:
+                        return {"ok": True, "taille_image": len(proc_udp.stdout)}
+                err_msg = proc.stderr.decode("utf-8", errors="ignore")[-250:]
+            except Exception as exc:
+                err_msg = f"Erreur capture FFmpeg : {exc}"
 
     # 2. Fallback universel OpenCV
     try:
         import cv2
-        cap = cv2.VideoCapture(url)
-        if cap.isOpened():
-            ret, frame = cap.read()
+        for u in urls_a_tester:
+            cap = cv2.VideoCapture(u)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                cap.release()
+                if ret and frame is not None:
+                    _, buf = cv2.imencode('.jpg', frame)
+                    return {"ok": True, "taille_image": len(buf), "methode": "opencv"}
             cap.release()
-            if ret and frame is not None:
-                _, buf = cv2.imencode('.jpg', frame)
-                return {"ok": True, "taille_image": len(buf)}
-        return {"ok": False, "erreur": f"Impossible de lire le flux (FFmpeg & OpenCV) : {err_msg or 'Caméra injoignable'}"}
-    except Exception as e:
-        return {"ok": False, "erreur": str(e)}
+    except Exception as exc:
+        err_msg = f"OpenCV : {exc}"
+
+    return {"ok": False, "erreur": f"Impossible de lire le flux (FFmpeg & OpenCV) : {err_msg or 'Caméra injoignable (vérifiez identifiants et mot de passe)'}"}
 
 
 
