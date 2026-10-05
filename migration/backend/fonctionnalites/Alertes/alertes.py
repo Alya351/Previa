@@ -227,6 +227,10 @@ def supprimer_alerte(id_alerte: str) -> bool:
     except Exception:
         pass
 
+    # Réinitialiser la mémoire anti-flood pour permettre une vraie suppression sans résurgence immédiate
+    with _lock_alertes:
+        _dernieres_alertes_enregistrees.clear()
+
     return supprime
 
 
@@ -245,6 +249,19 @@ def supprimer_toutes_alertes() -> int:
         conn = get_connection()
         with conn:
             conn.execute("DELETE FROM evenements_historique;")
+    except Exception:
+        pass
+
+    # Réinitialiser complètement l'état de détection actif pour éviter le retour des alertes
+    with _lock_alertes:
+        _dernieres_alertes_enregistrees.clear()
+
+    try:
+        from fonctionnalites.ComportementsSupects import rodeur, infiltre
+        if hasattr(rodeur, "_suivi_rodeurs"):
+            rodeur._suivi_rodeurs.clear()
+        if hasattr(infiltre, "_suivi_infiltres"):
+            infiltre._suivi_infiltres.clear()
     except Exception:
         pass
 
