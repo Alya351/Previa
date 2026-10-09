@@ -94,11 +94,15 @@ def normaliser_url_rtsp(url: str) -> str:
         if not arobase or ":" not in auth:
             return u
         user, password = auth.split(":", 1)
-        user_enc = urllib.parse.quote(urllib.parse.unquote(user), safe="")
-        pwd_enc = urllib.parse.quote(urllib.parse.unquote(password), safe="")
+        # Dé-encoder d'abord au cas où l'utilisateur l'a collé avec %40 ou s'il était déjà encodé
+        user_dec = urllib.parse.unquote(user)
+        password_dec = urllib.parse.unquote(password)
+        user_enc = urllib.parse.quote(user_dec, safe="")
+        pwd_enc = urllib.parse.quote(password_dec, safe="")
         return f"{scheme}://{user_enc}:{pwd_enc}@{hote}{sep}{chemin}"
     except Exception:
         return u
+
 
 
 def tester_connexion_rtsp(url_flux: str, timeout_sec: int = 5) -> dict:
@@ -157,11 +161,13 @@ def tester_connexion_rtsp(url_flux: str, timeout_sec: int = 5) -> dict:
     except Exception as exc:
         err_msg = f"OpenCV : {exc}"
 
-    # Si le test échoue mais que l'URL semble valide, on renvoie une mise en garde pour permettre l'enregistrement manuel
+    # Si le test ponctuel échoue (ex: serveur mobile qui verrouille jusqu'au stream continu), autoriser l'enregistrement
     return {
-        "ok": False,
-        "erreur": f"Lecture initiale difficile ({err_msg or 'Accès restreint par la caméra/téléphone'}). Vérifiez qu'aucun autre client n'est connecté à la caméra."
+        "ok": True,
+        "taille_image": 0,
+        "avertissement": f"Flux enregistré. Note : {err_msg or 'Accès restreint pendant le test ponctuel, le streaming continu prend le relais'}"
     }
+
 
 
 
@@ -316,9 +322,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         "-hide_banner",
                         "-loglevel", "warning",
                         "-rtsp_transport", transport_opt,
-                        opt_timeout, "3000000",
-                        "-probesize", "32768",
-                        "-analyzeduration", "0",
+                        opt_timeout, "5000000",
                         "-i", url_a_utiliser,
                         "-an",
                         "-vf", "scale=854:-1",
@@ -328,6 +332,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         "-r", "20",
                         "-"
                     ]
+
                     try:
                         proc = subprocess.Popen(
                             cmd,
@@ -496,4 +501,6 @@ def generer_flux_mjpeg(id_camera: str, url_flux: str) -> Generator[bytes, None, 
             if inactif_compteur % 600 == 0:
                 if url_flux and url_flux.strip():
                     demarrer_worker_camera(id_camera, url_flux)
+
+
 
