@@ -341,8 +341,9 @@ def executer_sur_pi(host):
     fuseau = os.environ.get("PREVIA_TIMEZONE", "Africa/Ouagadougou")
     try:
         executer_commande_distante(ssh, f"timedatectl set-timezone {fuseau}", sudo=True)
-    except Exception:
-        pass
+        print(f"  [OK] Fuseau horaire Pi : {fuseau}")
+    except Exception as exc:
+        print(f"  [!] Avertissement reglage fuseau horaire ({fuseau}) : {exc}")
     try:
         executer_commande_distante(ssh, f"date -s @{now_epoch}", sudo=True)
     except Exception as exc:
