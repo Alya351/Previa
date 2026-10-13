@@ -1,11 +1,26 @@
 import os
+import sys
 
-sd_path = "D:\\"
-print("=== CONFIGURATION AUTOMATIQUE UNIVERSELLE PREVIA DE LA CARTE SD ===")
+def trouver_lecteur_sd():
+    # Détection dynamique des lettres de lecteur sous Windows (A: à Z:)
+    for lettre in ["D:", "E:", "F:", "G:", "H:", "I:", "J:", "K:", "L:", "M:", "N:"]:
+        d = f"{lettre}\\"
+        if os.path.exists(os.path.join(d, "cmdline.txt")) or os.path.exists(os.path.join(d, "config.txt")) or os.path.exists(os.path.join(d, "issue.txt")):
+            return d
+    # Si non trouvé, retourner D:\ par défaut si présent, sinon le premier lecteur amovible existant
+    for lettre in ["D:", "E:", "F:", "G:", "H:"]:
+        if os.path.exists(f"{lettre}\\"):
+            return f"{lettre}\\"
+    return "D:\\"
 
-# 1. Ecriture du user-data cloud-init
-user_data_path = os.path.join(sd_path, "user-data")
-with open(user_data_path, "w", encoding="utf-8") as f:
+sd_path = trouver_lecteur_sd()
+print(f"=== CONFIGURATION AUTOMATIQUE UNIVERSELLE PREVIA DE LA CARTE SD ({sd_path}) ===")
+
+if not os.path.exists(sd_path):
+    print(f"\n[!] ERREUR : Le lecteur de carte SD ({sd_path}) est introuvable.")
+    print("    Veuillez insérer la carte SD de votre Raspberry Pi et réessayer.")
+    sys.exit(1)
+
     f.write("#cloud-config\n")
     f.write("hostname: previa\n")
     f.write("manage_etc_hosts: true\n")

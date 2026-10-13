@@ -85,7 +85,7 @@ export function AiAnalysisCard({ situations = [], alerteEnCours, onSelectModule 
             </span>
           </div>
           <div style={{ fontSize: '0.82rem', color: '#be123c', fontWeight: 600 }}>
-            {alerteEnCours.lieu || 'Zone sous surveillance'}
+            📍 {alerteEnCours.lieu || 'Zone sous surveillance'}
           </div>
           {alerteEnCours.description && (
             <div style={{ fontSize: '0.78rem', color: '#9f1239', marginTop: '2px' }}>
@@ -116,83 +116,86 @@ export function AiAnalysisCard({ situations = [], alerteEnCours, onSelectModule 
           </div>
         </div>
       ) : null}
-        {situations.map((item) => {
-          const style = ICONES_PAR_NIVEAU[item.riskLevel] || ICONES_PAR_NIVEAU.low;
-          return (
-          <div 
-            key={item.id} 
-            onClick={() => onSelectModule && onSelectModule(item.id)}
-            style={{
-              background: '#ffffff',
-              borderRadius: '10px',
-              padding: '12px 14px',
-              border: '1px solid var(--border-light)',
-              cursor: 'pointer',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '12px',
-              transition: 'all 0.15s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#f8fafc';
-              e.currentTarget.style.borderColor = '#cbd5e1';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#ffffff';
-              e.currentTarget.style.borderColor = 'var(--border-light)';
-            }}
-            title="Cliquer pour voir les détails de cette situation"
-          >
-            {/* LEFT: ICON + TEXT */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
-              <div
+
+      {situations.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {situations.map((item) => {
+            const style = ICONES_PAR_NIVEAU[item.riskLevel] || ICONES_PAR_NIVEAU.low;
+            return (
+              <div 
+                key={item.id} 
+                onClick={() => onSelectModule && onSelectModule(item.id)}
                 style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '8px',
-                  background: style.iconBg,
-                  color: style.iconColor,
+                  background: '#ffffff',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  border: '1px solid var(--border-light)',
+                  cursor: 'pointer',
                   display: 'flex',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
+                  gap: '12px',
+                  transition: 'all 0.15s ease'
                 }}
-              >
-                {style.icon}
-              </div>
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--ink-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {item.title}
-                </div>
-                <div style={{ fontSize: '0.76rem', color: 'var(--ink-muted)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {item.subtitle}
-                </div>
-              </div>
-            </div>
-
-            {/* RIGHT: BADGE + CHEVRON */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-              <span
-                style={{
-                  fontSize: '0.7rem',
-                  fontWeight: 700,
-                  background: style.badgeBg,
-                  color: style.badgeColor,
-                  padding: '3px 8px',
-                  borderRadius: '5px'
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#f8fafc';
+                  e.currentTarget.style.borderColor = '#cbd5e1';
                 }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#ffffff';
+                  e.currentTarget.style.borderColor = 'var(--border-light)';
+                }}
+                title="Cliquer pour voir les détails de cette situation"
               >
-                {LABEL_PAR_NIVEAU[item.riskLevel] || 'Normal'}
-              </span>
-              <ChevronRight size={16} color="var(--ink-muted)" />
-            </div>
+                {/* LEFT: ICON + TEXT */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '8px',
+                      background: style.iconBg,
+                      color: style.iconColor,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}
+                  >
+                    {style.icon}
+                  </div>
 
-          </div>
-          );
-        })}
-      </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--ink-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {item.title}
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: 'var(--ink-muted)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {item.subtitle}
+                    </div>
+                  </div>
+                </div>
+
+                {/* RIGHT: BADGE + CHEVRON */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      background: style.badgeBg,
+                      color: style.badgeColor,
+                      padding: '3px 8px',
+                      borderRadius: '5px'
+                    }}
+                  >
+                    {LABEL_PAR_NIVEAU[item.riskLevel] || 'Normal'}
+                  </span>
+                  <ChevronRight size={16} color="var(--ink-muted)" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

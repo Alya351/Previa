@@ -21,50 +21,52 @@ export function DetectionOverlay({ detections = [], width = 640, height = 480 })
       }}
     >
       {detections.map((det, idx) => {
-        // Priorité à la boîte du visage, sinon boîte du corps
-        const box = det.box_visage || det.box_corps;
+        // Priorité à la boîte normalisée directe, sinon boîte visage, sinon corps
+        const box = det.box_normalisee || det.box_visage || det.box_corps;
         if (!box || box.length < 4) return null;
 
         const [x1, y1, x2, y2] = box;
         let leftPercent, topPercent, wPercent, hPercent;
 
         // 1. Si les coordonnées sont déjà normalisées entre 0 et 1 (ex. 0.15, 0.45)
-        if (x2 <= 1.0 && y2 <= 1.0) {
-          leftPercent = x1 * 100;
-          topPercent = y1 * 100;
-          wPercent = (x2 - x1) * 100;
-          hPercent = (y2 - y1) * 100;
+        if (x2 <= 1.0 && y2 <= 1.0 && x1 >= 0 && y1 >= 0) {
+          leftPercent = Math.max(0, Math.min(95, x1 * 100));
+          topPercent = Math.max(0, Math.min(95, y1 * 100));
+          wPercent = Math.max(2, Math.min(100 - leftPercent, (x2 - x1) * 100));
+          hPercent = Math.max(2, Math.min(100 - topPercent, (y2 - y1) * 100));
         } else {
-          // 2. Coordonnées absolues en pixels : auto-détection de la résolution réelle (1920x1080, 1280x720 ou 640x480)
-          const maxFrameWidth = Math.max(width || 640, x2, x1, 1920);
-          const maxFrameHeight = Math.max(height || 480, y2, y1, 1080);
+          // 2. Coordonnées absolues en pixels : résolution de capture exacte ou détection automatique
+          const resW = det.resolution?.[0] || (x2 > 1280 ? 1920 : x2 > 640 ? 1280 : (width || 640));
+          const resH = det.resolution?.[1] || (y2 > 720 ? 1080 : y2 > 480 ? 720 : (height || 480));
 
-          // Si les coordonnées rentrent dans 1920x1080 mais dépassent 640x480
-          const realW = (x2 > 640 || width > 640) ? maxFrameWidth : (width || 640);
-          const realH = (y2 > 480 || height > 480) ? maxFrameHeight : (height || 480);
-
-          leftPercent = Math.max(0, Math.min(92, (x1 / realW) * 100));
-          topPercent = Math.max(0, Math.min(92, (y1 / realH) * 100));
-          wPercent = Math.max(3, Math.min(100 - leftPercent, ((x2 - x1) / realW) * 100));
-          hPercent = Math.max(3, Math.min(100 - topPercent, ((y2 - y1) / realH) * 100));
+          leftPercent = Math.max(0, Math.min(92, (x1 / resW) * 100));
+          topPercent = Math.max(0, Math.min(92, (y1 / resH) * 100));
+          wPercent = Math.max(3, Math.min(100 - leftPercent, ((x2 - x1) / resW) * 100));
+          hPercent = Math.max(3, Math.min(100 - topPercent, ((y2 - y1) / resH) * 100));
         }
 
-        // RÈGLE DE SÉCURITÉ HUD :
-        // VERT = Personne autorisée (collaborateur identifié par Face ID / statut connu / non suspect)
-        // ROUGE = Personne suspecte (anomalie comportementale, intrusion zone, rôdage, non autorisée)
-        const isAuthorized = Boolean(det.nom) || det.statut === 'connu' || det.statut === 'vient_d_etre_confirme' || det.est_suspect === false;
-        const isSuspect = det.est_suspect === true || (det.riskPct !== undefined && det.riskPct >= 60) || (!isAuthorized && (det.intrusionZoneActive || det.rodageClass === 'danger' || det.infiltrationClass === 'danger'));
+        // RÈGLE DE SÉCURITÉ HUD PREVIA :
+        // 1. ROUGE = Personne suspecte (anomalie comportementale, intrusion zone, rôdage prolongé, visage dissimulé)
+        // 2. VERT  = Collaborateur identifié (reconnu par Face ID, personnel de l'entreprise)
+        // 3. BLEU  = Visiteur normal (personne non enregistrée mais circulant normalement sans anomalie)
+        const isEmployee = Boolean(det.nom) || det.statut === 'connu' || det.statut === 'vient_d_etre_confirme';
+        const isSuspect = det.est_suspect === true || (det.riskPct !== undefined && det.riskPct >= 60) || (!isEmployee && (det.intrusionZoneActive || det.rodageClass === 'danger' || det.infiltrationClass === 'danger'));
+        const isVisitor = !isSuspect && !isEmployee;
 
-        const color = isSuspect ? '#ef4444' : '#10b981';
-        const bgColor = isSuspect ? 'rgba(239, 68, 68, 0.20)' : 'rgba(16, 185, 129, 0.20)';
-        const borderColor = isSuspect ? '#ef4444' : '#10b981';
+        const color = isSuspect ? '#ef4444' : isVisitor ? '#0284c7' : '#10b981';
+        const bgColor = isSuspect ? 'rgba(239, 68, 68, 0.20)' : isVisitor ? 'rgba(2, 132, 199, 0.18)' : 'rgba(16, 185, 129, 0.20)';
+        const borderColor = isSuspect ? '#ef4444' : isVisitor ? '#0284c7' : '#10b981';
         const shadow = isSuspect
           ? '0 0 18px rgba(239, 68, 68, 0.8), inset 0 0 10px rgba(239, 68, 68, 0.35)'
+          : isVisitor
+          ? '0 0 16px rgba(2, 132, 199, 0.7), inset 0 0 8px rgba(2, 132, 199, 0.25)'
           : '0 0 18px rgba(16, 185, 129, 0.8), inset 0 0 10px rgba(16, 185, 129, 0.3)';
 
         const labelTexte = isSuspect
           ? (det.motif_suspicion ? `🚨 ${det.motif_suspicion.toUpperCase()}` : '🚨 INDIVIDU SUSPECT')
-          : (det.nom ? `✅ ${det.nom} (${det.matricule || 'AUTORISÉ'})` : '✅ PERSONNEL AUTORISÉ');
+          : isVisitor
+          ? '👤 VISITEUR (NORMAL)'
+          : (det.nom ? `✅ ${det.nom} (${det.matricule || 'COLLABORATEUR'})` : '✅ COLLABORATEUR AUTORISÉ');
 
         return (
           <div
@@ -91,7 +93,7 @@ export function DetectionOverlay({ detections = [], width = 640, height = 480 })
                 position: 'absolute',
                 top: '-26px',
                 left: '-2px',
-                background: isSuspect ? '#ef4444' : '#10b981',
+                background: isSuspect ? '#ef4444' : isVisitor ? '#0284c7' : '#10b981',
                 color: '#ffffff',
                 fontSize: '0.68rem',
                 fontWeight: 800,

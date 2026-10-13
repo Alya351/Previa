@@ -54,11 +54,28 @@ def _charger_arbre() -> dict:
     row = conn.execute("SELECT value_json FROM kv_store WHERE key='root_tree'").fetchone()
     if row and row["value_json"]:
         try:
-            _arbre_cache = json.loads(row["value_json"])
-            return _arbre_cache
+            val = json.loads(row["value_json"])
+            if isinstance(val, dict) and val:
+                _arbre_cache = val
+                return _arbre_cache
         except Exception:
-            _arbre_cache = {}
-            return {}
+            pass
+
+    # S'il n'y a pas encore de 'root_tree' garni dans kv_store, charger depuis db.json
+    from pathlib import Path
+    db_json_path = Path(__file__).resolve().parent.parent.parent.parent / "db" / "db.json"
+    if db_json_path.exists():
+        try:
+            with open(db_json_path, "r", encoding="utf-8") as f:
+                donnees_migration = json.load(f)
+                if isinstance(donnees_migration, dict) and donnees_migration:
+                    _arbre_cache = donnees_migration
+                    _sauvegarder_arbre(donnees_migration)
+                    print(f"[local_store] Auto-migration reussie de db.json ({len(donnees_migration)} clés principales) vers kv_store SQLite !", flush=True)
+                    return _arbre_cache
+        except Exception as exc:
+            print(f"[local_store] Erreur lecture auto-migration db.json : {exc}", flush=True)
+
     _arbre_cache = {}
     return _arbre_cache
 

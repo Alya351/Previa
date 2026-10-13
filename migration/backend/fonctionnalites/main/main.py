@@ -44,24 +44,37 @@ from fonctionnalites.cam.camera import camera, rtsp_service
 from fonctionnalites.cam.pieces import piece
 from fonctionnalites.ComportementsSupects import profil_suspect
 from fonctionnalites.Infrastructure import alarme_physique, clips_service, derniere_image, esp_decouverte, gestion_thermique, licence, rapport_cam, reboot, signalisation_webrtc
+from fonctionnalites.VueEnsemble import vue_ensemble as vue_ensemble_module
 from fonctionnalites.zoneCam import enregitre as zone_module
 from fonctionnalites.Infrastructure.local_store import db
 from fonctionnalites.users import admin, compte, defaultAdmin, user
-from fonctionnalites.VueEnsemble import vue_ensemble as vue_ensemble_module
+from fonctionnalites.Infrastructure import sqlite_db, etat_persistant, generer_certificat
 
-# Importés ici, une seule fois au démarrage (thread principal, avant
-# toute requête) — importer un module lourd (torch/transformers/YOLO...)
-# depuis deux threads en même temps au premier appel peut planter (déjà
-# vu dans l'ancien backend/main.py) ; les importer tôt, séquentiellement,
-# évite le problème.
+# 1. Initialisation instantanée de la base de données SQLite embarquée (0ms)
+try:
+    sqlite_db.get_connection()
+    print("[sqlite_db] Base de donnees embarquee SQLite (previa.db) READY au demarrage", flush=True)
+except Exception as _e_db:
+    print(f"[sqlite_db] Erreur initialisation DB : {_e_db}", flush=True)
+
+# Désactiver le check de version réseau Albumentations en mode 100% hors-ligne Edge
+os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
+
+# Importés ici, une seule fois au démarrage
 from fonctionnalites.DetectionPrincipal.on_voit_quoi import analyser as analyser_quoi
 from fonctionnalites.DetectionPrincipal.on_voit_qui import analyser as analyser_qui, _get_models
 
-# Préchargement synchrone des modèles IA pour que 'on_voit_qui' soit immédiatement prêt
-try:
-    _get_models()
-except Exception as _e_init:
-    print(f"[main] avertissement préchargement modèles : {_e_init}", flush=True)
+# Préchargement asynchrone des modèles IA pour démarrer l'API et l'interface Web instantanément (0ms)
+def _charger_modeles_arrière_plan():
+    try:
+        _get_models()
+        print("[main] 🧠 Modèles IA préchargés avec succès en arrière-plan.", flush=True)
+    except Exception as _e_init:
+        print(f"[main] Avertissement préchargement modèles : {_e_init}", flush=True)
+
+import threading
+threading.Thread(target=_charger_modeles_arrière_plan, daemon=True).start()
+
 
 
 from fonctionnalites.Infrastructure import etat_persistant, generer_certificat
@@ -743,14 +756,20 @@ def supprimer_piece(id_piece: str):
 # ========================================================================
 @app.on_event("startup")
 def demarrer_services_arriere_plan():
-    """Démarre l'analyse IA automatique pour toutes les caméras physiques/RTSP enregistrées."""
+    """Démarre l'analyse IA automatique pour toutes les caméras physiques/RTSP enregistrées et confirme SQLite."""
     try:
+        from fonctionnalites.Infrastructure import sqlite_db
+        conn = sqlite_db.get_connection()
+        nb_tables = conn.execute("SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table'").fetchone()["cnt"]
+        print(f"[sqlite_db] Base de donnees embarquee SQLite (previa.db) ACTIVE & INITIALISEE ({nb_tables} tables)", flush=True)
+
         toutes_cams = camera.lister_cameras()
         for c in toutes_cams:
             if c.get("url_flux"):
                 rtsp_service.demarrer_worker_camera(c["id"], c["url_flux"])
     except Exception as exc:
         print(f"[main] Erreur démarrage workers caméras: {exc}", flush=True)
+
 
 
 @app.post(

@@ -17,7 +17,7 @@ KEY_FILE = HERE.parent.parent / "backend" / "certs" / "key.pem"
 ROUTES_BACKEND = {
     "alarme", "alertes", "batiments", "cameras", "docs", "openapi.json",
     "personnel", "pieces", "profils", "redoc", "static-docs", "systeme",
-    "utilisateurs", "vue-ensemble", "ws", "stream"
+    "utilisateurs", "vue-ensemble", "ws", "stream", "journal-actions"
 }
 
 ssl_ctx = ssl.create_default_context()
@@ -28,6 +28,12 @@ class PreviaWebHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(DIST_DIR), **kwargs)
 
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        super().end_headers()
+
     def is_backend_route(self, path: str) -> bool:
         first_segment = path.lstrip("/").split("/")[0].split("?")[0]
         return first_segment in ROUTES_BACKEND
@@ -35,6 +41,7 @@ class PreviaWebHandler(http.server.SimpleHTTPRequestHandler):
     def proxy_to_backend(self, method: str):
         target_url = f"https://127.0.0.1:8012{self.path}"
         headers = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "content-length")}
+
         
         body = None
         content_length = int(self.headers.get("Content-Length", 0))
@@ -118,9 +125,10 @@ def main():
         server_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         server_ctx.load_cert_chain(certfile=str(CERT_FILE), keyfile=str(KEY_FILE))
         server.socket = server_ctx.wrap_socket(server.socket, server_side=True)
-        print(f"🔒 Serveur Web HTTPS multithread actif sur https://0.0.0.0:{port}", flush=True)
+        print(f"[main] Serveur Web HTTPS multithread actif sur https://0.0.0.0:{port}", flush=True)
     else:
-        print(f"🌐 Serveur Web HTTP multithread actif sur http://0.0.0.0:{port}", flush=True)
+        print(f"[main] Serveur Web HTTP multithread actif sur http://0.0.0.0:{port}", flush=True)
+
     
     server.serve_forever()
 

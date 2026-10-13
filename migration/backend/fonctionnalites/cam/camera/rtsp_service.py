@@ -114,6 +114,27 @@ def tester_connexion_rtsp(url_flux: str, timeout_sec: int = 5) -> dict:
     url_brute = url_flux.strip()
     url_norm = normaliser_url_rtsp(url_brute)
 
+    # 0. Pré-vérification réseau rapide (1.5s) : évite le blocage 30s et l'erreur 'Failed to fetch' si la caméra est hors réseau
+    import socket
+    try:
+        scheme, reste = url_brute.split("://", 1)
+        autorite = reste.split("/", 1)[0]
+        _, _, hote_port = autorite.rpartition("@")
+        hote_port = hote_port or autorite
+        hote = hote_port.split(":", 1)[0]
+        port = int(hote_port.split(":", 1)[1]) if ":" in hote_port else (554 if scheme.lower() == "rtsp" else 80)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1.5)
+        res_sock = sock.connect_ex((hote, port))
+        sock.close()
+        if res_sock != 0:
+            return {
+                "ok": False,
+                "erreur": f"Caméra injoignable sur le réseau ({hote}:{port}). Vérifiez l'adresse IP et que la caméra est bien connectée."
+            }
+    except Exception:
+        pass
+
     # Tester dans l'ordre : URL brute (avec identifiants direct), puis URL normalisée
     urls_a_tester = [url_brute]
     if url_norm != url_brute:
@@ -379,19 +400,23 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                                 pass
 
                         if not reussi:
+                            err_msg = ""
                             try:
                                 err_out = proc.stderr.read(2048).decode(errors="ignore") if proc.stderr else ""
-                                if err_out:
-                                    print(f"[rtsp_service] ⚠️ Erreur FFmpeg pour {id_camera} : {err_out.strip()}", flush=True)
+                                err_msg = err_out.strip()
+                                if err_msg:
+                                    print(f"[rtsp_service] ⚠️ Erreur FFmpeg pour {id_camera} : {err_msg}", flush=True)
                             except Exception:
                                 pass
-                            # Tester l'URL brute exacte de l'utilisateur si l'URL normalisée a échoué
-                            url_a_utiliser = url_flux.strip() if url_a_utiliser == url_norm else url_norm
+                            # Alterner entre URL brute et URL normalisée
+                            url_brute = url_flux.strip()
+                            url_a_utiliser = url_norm if url_a_utiliser == url_brute else url_brute
                             transport_opt = "udp" if transport_opt == "tcp" else "tcp"
                             if tenter_hw:
                                 print(f"[rtsp_service] ⚠️ HW decoder v4l2m2m inactif ou incompatible pour {id_camera} — repli automatique en décodage logiciel CPU.", flush=True)
                                 tenter_hw = False
-                            time.sleep(1.0)
+                            # Pause de 5.0s en cas d'erreur de connexion/authentification pour libérer le CPU du Pi
+                            time.sleep(5.0)
                             continue
 
                         if reussi and not evt_arret.is_set():
@@ -400,6 +425,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         print(f"[rtsp_service] Reconnexion FFmpeg CLI {id_camera} : {e}", flush=True)
                         if tenter_hw:
                             tenter_hw = False
+                        time.sleep(5.0)
 
                 # Tentative 2 : Fallback OpenCV cv2.VideoCapture (Compatibilité maximale tous protocoles, Qualité HD 90%)
                 if evt_arret.is_set():

@@ -22,7 +22,8 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
   const clipUrl = urlClipAlerte(id);
   const isCrit = alerte.critique || ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(alerte.type_evenement || alerte.rawType);
   const typeLabel = alerte.type || alerte.title || 'Incident de sécurité';
-  const cameraLabel = alerte.cam || alerte.cameraName || `Caméra #${alerte.id_camera || '—'}`;
+  const rawCam = alerte.cam || alerte.cameraName || alerte.num || '';
+  const cameraLabel = (rawCam && !/^[a-f0-9]{8,36}$/i.test(String(rawCam).trim())) ? rawCam : 'Caméra 1';
   const desc = alerte.desc || alerte.description || '';
   const dateStr = alerte.date ? `${alerte.date} à ${alerte.time}` : (alerte.timeAgo || (alerte.horodatage ? new Date(alerte.horodatage * 1000).toLocaleString('fr-FR') : 'à l\'instant'));
 

@@ -1782,12 +1782,25 @@ def analyser(id_camera: str, frame) -> dict:
                 est_suspect = True
                 motif_suspicion = "Infiltration sans passage entrée"
 
+        frame_h, frame_w = frame.shape[:2]
+        bx_corps = personne["box"]
+        bx_visage = face["box"] if face is not None else None
+        bx_actif = bx_visage or bx_corps
+        box_norm = [
+            round(float(bx_actif[0]) / max(1, frame_w), 4),
+            round(float(bx_actif[1]) / max(1, frame_h), 4),
+            round(float(bx_actif[2]) / max(1, frame_w), 4),
+            round(float(bx_actif[3]) / max(1, frame_h), 4),
+        ] if bx_actif and len(bx_actif) == 4 and frame_w > 0 and frame_h > 0 else None
+
         profils.append({
             "id": pid,
             "statut": identite["statut"],
             "visage_detecte": face is not None,
-            "box_visage": face["box"] if face is not None else None,
-            "box_corps": personne["box"],
+            "box_visage": bx_visage,
+            "box_corps": bx_corps,
+            "box_normalisee": box_norm,
+            "resolution": [frame_w, frame_h],
             "est_suspect": est_suspect,
             "nom": nom_collaborateur,
             "matricule": matricule_collaborateur,

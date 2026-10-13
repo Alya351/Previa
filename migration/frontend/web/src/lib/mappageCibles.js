@@ -140,6 +140,8 @@ export function mapPersonneApi(p, idx, camCtx) {
     activite: p.action?.posture?.activite || 'inconnue',
     box_visage: p.box_visage || null,
     box_corps: p.box_corps || null,
+    box_normalisee: p.box_normalisee || null,
+    resolution: p.resolution || null,
     est_suspect: p.est_suspect !== undefined ? p.est_suspect : (riskPct >= 60 || statut.cls === 'warn'),
     nom: p.nom || null,
     matricule: p.matricule || null,
@@ -220,7 +222,8 @@ export function mapFeuFumeeAlerte(a, camCtx) {
 export function construireFicheDetail(item) {
   if (!item) return null;
   const lieu = `${item.camCtx?.batiment || '?'} / ${item.camCtx?.piece || '?'}`;
-  const camera = `${item.camCtx?.num || item.camCtx?.id_camera || '?'}`;
+  const rawCam = item.camCtx?.num || item.camCtx?.id_camera || '';
+  const camera = (rawCam && !/^[a-f0-9]{8,36}$/i.test(String(rawCam).trim())) ? rawCam : 'Caméra 1';
   const image = item.camCtx?.id_camera ? `/cameras/${item.camCtx.id_camera}/image` : '';
   const isUrgent = item.riskLevel === 'high';
   const status = isUrgent ? 'Danger Immédiat' : item.riskLevel === 'med' ? 'À surveiller' : 'Normal';

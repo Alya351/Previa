@@ -38,6 +38,13 @@ def get_connection() -> sqlite3.Connection:
         _migrer_anciens_historiques(_conn)
     return _conn
 
+# Initialisation immédiate au premier import pour garantir la disponibilité instantanée
+try:
+    get_connection()
+except Exception:
+    pass
+
+
 
 def _initialiser_tables(conn: sqlite3.Connection):
     with conn:

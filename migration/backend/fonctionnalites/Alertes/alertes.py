@@ -195,7 +195,22 @@ def lister_alertes(id_camera: str | None = None, pid: str | None = None) -> list
     for fichier in ALERTES_DIR.glob("*.json"):
         try:
             with open(fichier, encoding="utf-8") as f:
-                alertes.append(json.load(f))
+                al = json.load(f)
+                if isinstance(al, dict):
+                    # Nettoyage systématique des termes techniques bruts
+                    raw_type = str(al.get("type_evenement", "")).lower()
+                    if raw_type in ("intrusion_zone", "intrusion"):
+                        al["type_evenement"] = "intrusion_zone"
+                    elif raw_type in ("feu_fumee", "feu", "fumee"):
+                        al["type_evenement"] = "feu_fumee"
+                    
+                    desc = str(al.get("description", ""))
+                    # Remplacer les UUIDs bruts et les codes système dans la description
+                    import re
+                    desc = re.sub(r'intrusion_zone', 'Intrusion en Zone de Sécurité', desc, flags=re.IGNORECASE)
+                    desc = re.sub(r'\b[a-f0-9]{32}\b', lambda m: f"Caméra #{m.group(0)[:6]}", desc)
+                    al["description"] = desc
+                    alertes.append(al)
         except Exception:
             pass
     if id_camera is not None:

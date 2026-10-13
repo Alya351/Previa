@@ -91,12 +91,12 @@ def test_ssh_candidate(host):
             client = paramiko.SSHClient()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             try:
-                client.connect(host, username=USERNAME, password=PASSWORD, timeout=1.5, disabled_algorithms={'pubkeys': ['rsa-sha2-512', 'rsa-sha2-256']})
+                client.connect(host, username=USERNAME, password=PASSWORD, timeout=2.0, disabled_algorithms={'pubkeys': ['rsa-sha2-512', 'rsa-sha2-256']})
                 client.close()
                 return host
             except Exception:
                 try:
-                    client.connect(host, username=USERNAME, password=PASSWORD, timeout=1.5)
+                    client.connect(host, username=USERNAME, password=PASSWORD, timeout=2.0)
                     client.close()
                     return host
                 except Exception:
@@ -113,7 +113,7 @@ def detecter_raspberry(max_tentatives=3):
             print("\n[*] Recherche automatique du Raspberry Pi sur le réseau actif...")
 
         # 1. Résolution dynamique mDNS et IPs Hotspot Wi-Fi PREVIA-CAM
-        direct_candidates = ["previa.local", "raspberrypi.local", "192.168.11.2", "192.168.11.233", "192.168.1.2", "192.168.137.233", "192.168.4.1", "169.254.180.233"]
+        direct_candidates = ["previa.local", "raspberrypi.local", "192.168.11.2", "192.168.11.233", "192.168.137.233", "192.168.4.1", "169.254.180.233"]
         for host in direct_candidates:
             res = test_ssh_candidate(host)
             if res:
@@ -196,9 +196,10 @@ def synchroniser_code(ssh):
         f.write(data)
     sftp.close()
 
-    # Extraction et redémarrage propre
+    # Extraction et redémarrage propre (conservation des caméras configurées)
     commande_extraction = (
-        "mkdir -p ~/tech-impact && "
+        "mkdir -p ~/tech-impact/migration/db/cam/cameras && "
+        "rm -f $HOME/tech-impact/migration/db/profils/*.json && "
         "for path in migration/backend migration/frontend/web/dist "
         "migration/frontend/web/src docker; do "
         "[ ! -e \"$HOME/tech-impact/$path\" ] || chmod -R u+rwX \"$HOME/tech-impact/$path\" || true; "
@@ -273,7 +274,10 @@ def executer_sur_pi(host):
     try:
         ssh.connect(host, username=USERNAME, password=PASSWORD, timeout=10, disabled_algorithms={'pubkeys': ['rsa-sha2-512', 'rsa-sha2-256']})
     except Exception:
-        ssh.connect(host, username=USERNAME, password=PASSWORD, timeout=10)
+        try:
+            ssh.connect(host, username=USERNAME, password=PASSWORD, timeout=10, disabled_algorithms={'hostkeys': ['rsa-sha2-512', 'rsa-sha2-256']})
+        except Exception:
+            ssh.connect(host, username=USERNAME, password=PASSWORD, timeout=10)
 
     synchroniser_code(ssh)
     synchroniser_modeles(ssh)

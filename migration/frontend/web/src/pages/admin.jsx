@@ -219,7 +219,7 @@ function DashboardView({
           <div>
             <div style={{ fontSize: '0.92rem', fontWeight: 800, color: alerteEnCours ? '#991b1b' : '#166534' }}>
               {alerteEnCours
-                ? `🚨 ALERTE CRITIQUE EN COURS : ${alerteEnCours.titre.toUpperCase()} (${alerteEnCours.lieu})`
+                ? `🚨 ALERTE CRITIQUE EN COURS : ${alerteEnCours.titre} — ${alerteEnCours.lieu}`
                 : '🟢 SYSTÈME DE SÉCURITÉ ARMÉ — Surveillance active 24h/24'
               }
             </div>
@@ -839,17 +839,57 @@ const btnPrimaire = {
   boxShadow: '0 2px 8px rgba(2,132,199,0.3)',
 };
 
-function ilYA(horodatage) {
-  if (!horodatage) return 'jamais';
-  const s = Math.max(0, Math.round(Date.now() / 1000 - horodatage));
-  if (s < 5) return "à l'instant";
-  if (s < 60) return `il y a ${s}s`;
-  if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
-  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
-  const j = Math.round(s / 86400);
+function formaterTempsRelatif(horodatage, fallback = "à l'instant") {
+  if (!horodatage || (typeof horodatage !== 'number' && isNaN(Number(horodatage)))) {
+    return fallback;
+  }
+  let ts = Number(horodatage);
+  if (ts <= 0) return fallback;
+  // Convertir en secondes si timestamp en millisecondes (> 100 milliards)
+  if (ts > 1e11) {
+    ts = Math.floor(ts / 1000);
+  }
+  // Si le timestamp est manifestement corrompu ou antérieur à 2024
+  if (ts < 1704067200) {
+    return 'antérieur';
+  }
+
+  const maintenant = Math.floor(Date.now() / 1000);
+  const diffSec = Math.max(0, maintenant - ts);
+
+  if (diffSec < 10) return "à l'instant";
+  if (diffSec < 60) return `il y a ${diffSec}s`;
+
+  const min = Math.floor(diffSec / 60);
+  if (min < 60) return `il y a ${min} min`;
+
+  const h = Math.floor(diffSec / 3600);
+  if (h < 24) return `il y a ${h} h`; // RÈGLE STRICTE : L'heure ne dépasse JAMAIS 24h !
+
+  const j = Math.floor(diffSec / 86400);
+  if (j === 1) return 'hier';
   if (j < 7) return `il y a ${j} j`;
-  const sem = Math.round(j / 7);
-  return `il y a ${sem} sem`;
+
+  const sem = Math.floor(j / 7);
+  if (sem < 4) return `il y a ${sem} sem`;
+
+  const mois = Math.floor(j / 30.5);
+  if (mois < 12) return `il y a ${mois} mois`;
+
+  const annees = Math.floor(j / 365);
+  return `il y a ${annees} an${annees > 1 ? 's' : ''}`;
+}
+
+function ilYA(horodatage) {
+  return formaterTempsRelatif(horodatage, 'jamais');
+}
+
+function heureLocale(horodatage) {
+  if (!horodatage) return '--:--';
+  let ts = Number(horodatage);
+  if (isNaN(ts) || ts <= 0) return '--:--';
+  if (ts < 1e11) ts = ts * 1000;
+  return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 // ============================================================================
@@ -1888,7 +1928,7 @@ function CiblesView({ titre, sousTitre, items = [], type }) {
                 </div>
 
                 <div style={{ fontSize: '0.76rem', color: 'var(--ink-muted)' }}>
-                  📍 {[item.camCtx?.batiment, item.camCtx?.piece, item.camCtx?.num || item.camCtx?.id_camera].filter(Boolean).join(' / ')}
+                  📍 {[item.camCtx?.batiment, item.camCtx?.piece, (item.camCtx?.num && !/^[a-f0-9]{8,36}$/i.test(item.camCtx.num)) ? item.camCtx.num : 'Caméra 1'].filter(Boolean).join(' / ')}
                 </div>
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -1956,7 +1996,7 @@ function CiblesView({ titre, sousTitre, items = [], type }) {
                     <td style={{ padding: '10px 14px' }}><span style={{ fontWeight: 800, color: rs.couleur }}>{item.riskPct}%</span></td>
                     <td style={{ padding: '10px 14px', color: 'var(--ink-secondary)' }}>{item.isObject ? `${item.zone} · ${item.immobileDuree}` : `${item.rodage} · ${item.regard}`}</td>
                     <td style={{ padding: '10px 14px', color: 'var(--ink-secondary)' }}>{avis ? `${avis.label} (${Math.round((item.avisIA.confiance || 0) * 100)}%)` : '—'}</td>
-                    <td style={{ padding: '10px 14px', color: 'var(--ink-secondary)' }}>{item.camCtx?.num || item.camCtx?.id_camera || '?'}</td>
+                    <td style={{ padding: '10px 14px', color: 'var(--ink-secondary)' }}>{(item.camCtx?.num && !/^[a-f0-9]{8,36}$/i.test(item.camCtx.num)) ? item.camCtx.num : 'Caméra 1'}</td>
                     <td style={{ padding: '10px 14px' }}>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button onClick={() => setSuivi(estSuivi ? null : item.id)} title="Suivre" style={iconBtn(estSuivi)}><Target size={14} /></button>
@@ -2047,7 +2087,7 @@ function AnalyticsView({ alertesReelles = [], nombreCameras = 0 }) {
                 <div key={a.id} style={{ padding: '12px 14px', background: '#f8fafc', borderRadius: '10px', borderLeft: `4px solid ${couleurNiveau(a.type_evenement)}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--ink-primary)' }}>{a.description}</div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>{a.num || a.id_camera} : {a.piece || '?'}</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>{(a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra 1'} : {a.piece || 'Zone'}</div>
                   </div>
                   <span style={{ fontSize: '0.75rem', color: couleurNiveau(a.type_evenement), fontWeight: 700 }}>
                     {a.horodatage ? new Date(a.horodatage * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
@@ -2074,11 +2114,6 @@ const LABEL_TYPE_EVENEMENTS = {
   infiltration: 'Infiltration',
   intrusion_zone: 'Zone non autorisée',
 };
-
-function heureLocale(horodatage) {
-  if (!horodatage) return '--:--:--';
-  return new Date(horodatage * 1000).toLocaleTimeString('fr-FR');
-}
 
 // `alertesReelles` : branché sur GET /alertes (voir Admin() plus bas) —
 // remplace les 6 lignes fictives d'origine. "Prolongé" = type le plus
@@ -2123,38 +2158,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
     return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
   }, [cameras, alertesReelles]);
 
-  const sourceAlertes = alertesReelles.length > 0 ? alertesReelles : [
-    {
-      id: 'alt-demo-01',
-      type_evenement: 'intrusion_zone',
-      description: 'Intrusion détectée en zone sécurisée hors horaires autorisés (Cour Arrière).',
-      horodatage: Math.floor(Date.now() / 1000) - 120,
-      num: 'Caméra 01',
-      id_camera: 'cam-01',
-      batiment: 'Bâtiment Principal',
-      piece: 'Zone Restreinte',
-    },
-    {
-      id: 'alt-demo-02',
-      type_evenement: 'rodeur',
-      description: 'Comportement suspect prolongé devant la baie vitrée du rez-de-chaussée.',
-      horodatage: Math.floor(Date.now() / 1000) - 900,
-      num: 'Caméra 02',
-      id_camera: 'cam-02',
-      batiment: 'Bâtiment A',
-      piece: 'Entrée Sud',
-    },
-    {
-      id: 'alt-demo-03',
-      type_evenement: 'infiltration',
-      description: 'Tentative de franchissement non autorisé détectée sur le périmètre.',
-      horodatage: Math.floor(Date.now() / 1000) - 3600,
-      num: 'Caméra 03',
-      id_camera: 'cam-03',
-      batiment: 'Entrepôt',
-      piece: 'Porte Quai',
-    },
-  ];
+  const sourceAlertes = alertesReelles;
 
   const events = useMemo(() => {
     return sourceAlertes
@@ -2168,7 +2172,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
           date: new Date(a.horodatage ? a.horodatage * 1000 : Date.now()).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }),
           type: LABEL_TYPE_EVENEMENTS[a.type_evenement] || a.type_evenement,
           rawType: a.type_evenement,
-          cam: `${a.num || a.id_camera} · ${[a.batiment, a.piece].filter(Boolean).join(' / ') || 'Zone Principale'}`,
+          cam: `${(a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra 1'} · ${[a.batiment, a.piece].filter(Boolean).join(' / ') || 'Zone Principale'}`,
           camId: String(a.id_camera || ''),
           desc: a.description || '',
           level: critique ? 'Critique' : 'Suspect',
@@ -2989,16 +2993,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
 // ============================================================================
 
 function ilYAAlertes(horodatage) {
-  if (!horodatage) return 'à l\'instant';
-  const s = Math.max(0, Math.round(Date.now() / 1000 - horodatage));
-  if (s < 5) return "à l'instant";
-  if (s < 60) return `il y a ${s}s`;
-  if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
-  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
-  const j = Math.round(s / 86400);
-  if (j < 7) return `il y a ${j} j`;
-  const sem = Math.round(j / 7);
-  return `il y a ${sem} sem`;
+  return formaterTempsRelatif(horodatage, "à l'instant");
 }
 
 const LABEL_TYPE_ALERTES = {
@@ -3010,59 +3005,34 @@ const LABEL_TYPE_ALERTES = {
   intrusion_zone: 'Intrusion en zone non autorisée',
 };
 
-// `alertesReelles`, `camerasParId` : branchés sur GET /alertes (voir
-// Admin() plus bas) — remplace les 4 alertes fictives d'origine. Le
-// dangerLevel dérive du type d'événement (feu_fumee/intrusion_zone/
-// infiltration = critical, le reste = warning) — on n'a pas de siège/
-// lumière physiques réels ici, donc sirenActive/lightsActive restent à
-// false (pas de fausse affirmation qu'un équipement s'est allumé).
-function AlertsView({ alertesReelles = [], camerasParId = {}, onRefresh, onSelectTab }) {
-  const sourceAlertes = alertesReelles.length > 0 ? alertesReelles : [
-    {
-      id: 'alt-demo-01',
-      type_evenement: 'intrusion_zone',
-      description: 'Intrusion détectée en zone sécurisée hors horaires autorisés (Cour Arrière).',
-      horodatage: Math.floor(Date.now() / 1000) - 120,
-      num: 'Caméra 01',
-      id_camera: 'cam-01',
-      batiment: 'Bâtiment Principal',
-      piece: 'Zone Restreinte',
-    },
-    {
-      id: 'alt-demo-02',
-      type_evenement: 'rodeur',
-      description: 'Comportement suspect prolongé devant la baie vitrée du rez-de-chaussée.',
-      horodatage: Math.floor(Date.now() / 1000) - 900,
-      num: 'Caméra 02',
-      id_camera: 'cam-02',
-      batiment: 'Bâtiment A',
-      piece: 'Entrée Sud',
-    },
-    {
-      id: 'alt-demo-03',
-      type_evenement: 'infiltration',
-      description: 'Tentative de franchissement non autorisé détectée sur le périmètre.',
-      horodatage: Math.floor(Date.now() / 1000) - 3600,
-      num: 'Caméra 03',
-      id_camera: 'cam-03',
-      batiment: 'Entrepôt',
-      piece: 'Porte Quai',
-    },
-  ];
+function AlertsView({ alertesReelles = [], cameras = [], camerasParId = {}, onRefresh, onSelectTab }) {
+  const sourceAlertes = alertesReelles;
 
   const alertsReelles = sourceAlertes.map((a) => {
     const critique = ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(a.type_evenement);
+    const idCam = String(a.id_camera || a.camId || a.id || '').trim();
+    const camTrouvee = (cameras || []).find((c) => String(c.id || c.id_camera || '').trim() === idCam);
+    let camNom = 'Caméra 1';
+    let loc = 'Zone de Surveillance';
+    if (camTrouvee) {
+      camNom = (camTrouvee.num && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.num)) ? camTrouvee.num : (camTrouvee.name && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.name)) ? camTrouvee.name : 'Caméra 1';
+      loc = [camTrouvee.batiment || camTrouvee.location, camTrouvee.piece].filter(Boolean).join(' · ') || 'Zone de Surveillance';
+    } else {
+      const rawNom = a.num || a.nom || a.name || '';
+      camNom = (rawNom && !/^[a-f0-9]{8,36}$/i.test(String(rawNom).trim())) ? rawNom : 'Caméra 1';
+      loc = [a.batiment, a.piece].filter(Boolean).join(' · ') || 'Zone de Surveillance';
+    }
     return {
       id: a.id,
       title: LABEL_TYPE_ALERTES[a.type_evenement] || a.type_evenement,
       dangerLevel: critique ? 'critical' : 'warning',
       dangerLabel: critique ? 'Danger Immédiat' : 'À surveiller',
-      cameraName: `${a.num || a.id_camera}`,
+      cameraName: camNom,
       id_camera: a.id_camera,
-      location: [a.batiment, a.piece].filter(Boolean).join(' / ') || 'Emplacement inconnu',
+      location: loc,
       image: camerasParId[a.id_camera] || '',
       imageUrl: urlImageAlerte(a.id),
-      timeAgo: ilYAAlertes(a.horodatage),
+      timeAgo: formaterTempsRelatif(a.horodatage),
       horodatage: a.horodatage,
       description: a.description,
       critique,
@@ -3550,8 +3520,8 @@ function AlertsView({ alertesReelles = [], camerasParId = {}, onRefresh, onSelec
                     <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       📍 <strong>{item.cameraName}</strong> ({item.location})
                     </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#94a3b8' }}>
-                      🕒 {item.timeAgo}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '0.82rem' }}>
+                      🕒 <strong style={{ color: '#0f172a' }}>{heureLocale(item.horodatage)}</strong> {item.timeAgo && item.timeAgo !== 'jamais' && <span style={{ color: '#0284c7', fontWeight: 600 }}>({item.timeAgo})</span>}
                     </span>
                   </div>
 
@@ -4565,8 +4535,6 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
         </div>
       </div>
 
-      </div>
-
       <form onSubmit={creer} style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '18px' }}>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
           <select style={{ ...champ, fontWeight: 700 }} value={typeCamera} onChange={(e) => setTypeCamera(e.target.value)}>
@@ -4901,15 +4869,54 @@ export default function Admin() {
   const situations = cibles.slice(0, 4).map((item) => ({
     id: item.id,
     title: item.isObject ? item.label : (item.nom ? `${item.nom} (Collaborateur)` : titreSituationPersonne(item)),
-    subtitle: `${item.camCtx?.batiment || '?'} · ${item.camCtx?.piece || '?'} · ${item.camCtx?.num || item.camCtx?.id_camera || '?'}`,
+    subtitle: `${item.camCtx?.batiment || 'Bâtiment'} · ${item.camCtx?.piece || 'Pièce'} · ${(item.camCtx?.num && !/^[a-f0-9]{8,36}$/i.test(item.camCtx.num)) ? item.camCtx.num : 'Caméra 1'}`,
     riskLevel: item.riskLevel,
     _item: item,
   }));
 
-  const derniereAlerte = alertes[0];
-  const alerteEnCours = derniereAlerte ? {
-    titre: derniereAlerte.type_evenement,
-    lieu: [derniereAlerte.batiment, derniereAlerte.piece, derniereAlerte.num || derniereAlerte.id_camera].filter(Boolean).join(' / '),
+  const TITRES_EVENEMENT_FR = {
+    intrusion_zone: 'Intrusion en Zone de Sécurité',
+    feu_fumee: 'Détection de Feu / Fumée',
+    infiltration: 'Infiltration Suspecte',
+    rodage: 'Rôdage Suspect',
+    rodeur: 'Rôdage Suspect',
+    abandonne: 'Objet Abandonné',
+    objet_suspect: 'Colis / Objet Suspect',
+    vol: "Disparition d'Objet",
+  };
+
+  const formaterTitreEv = (t) => {
+    if (!t) return 'Alerte de Sécurité';
+    const key = String(t).toLowerCase();
+    return TITRES_EVENEMENT_FR[key] || (key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '));
+  };
+
+  const formaterLabelCam = (a) => {
+    if (!a) return 'Zone sous surveillance';
+    const idCam = String(a.id_camera || a.camId || a.id || '').trim();
+    const camTrouvee = (camerasReelles || []).find((c) => String(c.id || c.id_camera || '').trim() === idCam);
+    if (camTrouvee) {
+      const bat = camTrouvee.batiment || camTrouvee.location || '';
+      const pie = camTrouvee.piece || '';
+      const nom = (camTrouvee.num && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.num)) ? camTrouvee.num : (camTrouvee.name && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.name)) ? camTrouvee.name : 'Caméra 1';
+      return [bat, pie, nom].filter(Boolean).join(' · ');
+    }
+    const bat = a.batiment || '';
+    const pie = a.piece || '';
+    const nom = (a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra 1';
+    return [bat, pie, nom].filter(Boolean).join(' · ') || 'Zone sous surveillance';
+  };
+
+  const derniereAlerteCritique = alertes.find(
+    (a) =>
+      ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(String(a.type_evenement || '').toLowerCase()) &&
+      a.horodatage &&
+      (Date.now() / 1000 - a.horodatage) <= 120
+  );
+
+  const alerteEnCours = derniereAlerteCritique ? {
+    titre: formaterTitreEv(derniereAlerteCritique.type_evenement),
+    lieu: formaterLabelCam(derniereAlerteCritique),
   } : null;
 
   const alertesPrioritaires = personnes.filter((p) => p.riskPct >= 70).length + objets.filter((o) => o.riskPct >= 70).length;
@@ -4928,7 +4935,7 @@ export default function Admin() {
     id: a.id,
     title: a.description,
     time: a.horodatage ? new Date(a.horodatage * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '',
-    cam: a.num || a.id_camera,
+    cam: (a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra 1',
     type: ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(a.type_evenement) ? 'critical' : 'warning',
   }));
 
@@ -4953,7 +4960,7 @@ export default function Admin() {
       case 'events':
         return <EventsView alertesReelles={alertes} cameras={camerasReelles} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
       case 'alerts':
-        return <AlertsView alertesReelles={alertes} camerasParId={camerasParId} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
+        return <AlertsView alertesReelles={alertes} cameras={camerasReelles} camerasParId={camerasParId} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
       case 'organisation':
         return <OrganisationView />;
       default:
