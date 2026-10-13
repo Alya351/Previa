@@ -309,3 +309,20 @@ def marquer_toutes_sessions_alertees() -> None:
             if s.get("en_zone"):
                 s["alerte_envoyee"] = True
 
+
+def marquer_camera_alertee(id_camera: str, pid: str | None = None) -> None:
+    """Marque les sessions actuellement en zone pour une caméra donnée comme déjà alertées.
+    Empêche la résurgence immédiate lorsqu'une alerte isolée est supprimée."""
+    sessions = _sessions_suivi.get(id_camera, {})
+    marque = False
+    if pid:
+        for sid, s in sessions.items():
+            if s.get("en_zone") and pid in s.get("pids", set()):
+                s["alerte_envoyee"] = True
+                marque = True
+    if not marque:
+        for sid, s in sessions.items():
+            if s.get("en_zone"):
+                s["alerte_envoyee"] = True
+
+

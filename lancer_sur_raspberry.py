@@ -46,8 +46,8 @@ if hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
-USERNAME = "previa"
-PASSWORD = "Sentinel2k26"
+USERNAME = os.environ.get("PREVIA_PI_USER", "previa")
+PASSWORD = os.environ.get("PREVIA_PI_PASSWORD", "Sentinel2k26")
 LOCAL_DIR = Path(__file__).resolve().parent
 
 def executer_commande_distante(ssh, commande, sudo=False):
@@ -284,14 +284,12 @@ def executer_sur_pi(host):
 
     # Synchro stricte de la date et heure du PC vers le Raspberry Pi (anti-décalage horodatage)
     now_epoch = int(time.time())
-    now_iso = time.strftime("%Y-%m-%d %H:%M:%S")
     try:
-        cmd_date = (
-            f"timedatectl set-ntp false 2>/dev/null || true; "
-            f"date -s '@{now_epoch}' 2>/dev/null || date -s '{now_iso}'; "
-            f"hwclock -w 2>/dev/null || true"
-        )
-        executer_commande_distante(ssh, cmd_date, sudo=True)
+        executer_commande_distante(ssh, f"date -s @{now_epoch}", sudo=True)
+    except Exception as exc:
+        print(f"  [!] ATTENTION : l'heure du Pi n'a pas pu être synchronisée : {exc}")
+    try:
+        executer_commande_distante(ssh, "hwclock -w", sudo=True)  # sans effet s'il n'y a pas d'horloge matérielle
     except Exception:
         pass
 

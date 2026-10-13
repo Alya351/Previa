@@ -104,6 +104,14 @@ def normaliser_url_rtsp(url: str) -> str:
         return u
 
 
+def masquer_url_rtsp(url: str | None) -> str:
+    """Masque le mot de passe dans les URL RTSP pour éviter l'exposition d'identifiants dans les logs."""
+    if not url or not isinstance(url, str):
+        return ""
+    import re
+    return re.sub(r"://([^:@]+):([^@]+)@", r"://\1:***@", url)
+
+
 
 def tester_connexion_rtsp(url_flux: str, timeout_sec: int = 5) -> dict:
     """Teste si l'URL RTSP/HTTP de la caméra IP est accessible et renvoie une trame valide."""
@@ -163,9 +171,9 @@ def tester_connexion_rtsp(url_flux: str, timeout_sec: int = 5) -> dict:
                     proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout_sec)
                     if proc.returncode == 0 and len(proc.stdout) > 300:
                         return {"ok": True, "taille_image": len(proc.stdout)}
-                    err_msg = proc.stderr.decode("utf-8", errors="ignore")[-250:]
+                    err_msg = masquer_url_rtsp(proc.stderr.decode("utf-8", errors="ignore")[-250:])
                 except Exception as exc:
-                    err_msg = f"Erreur capture FFmpeg : {exc}"
+                    err_msg = masquer_url_rtsp(f"Erreur capture FFmpeg : {exc}")
 
     # 2. Fallback universel OpenCV (avec et sans préfixe)
     try:
@@ -180,7 +188,7 @@ def tester_connexion_rtsp(url_flux: str, timeout_sec: int = 5) -> dict:
                     return {"ok": True, "taille_image": len(buf), "methode": "opencv"}
             cap.release()
     except Exception as exc:
-        err_msg = f"OpenCV : {exc}"
+        err_msg = masquer_url_rtsp(f"OpenCV : {exc}")
 
     # Si le test ponctuel échoue (ex: serveur mobile qui verrouille jusqu'au stream continu), autoriser l'enregistrement
     return {
@@ -326,7 +334,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
     url_norm = normaliser_url_rtsp(url_flux)
     # 1. Thread de capture vidéo continu (FFmpeg unique + Fallback OpenCV -> Buffer de taille 1)
     def _boucle_capture_ffmpeg():
-        print(f"[rtsp_service] 🚀 Démarrage capture continue pour {id_camera} ({url_norm})", flush=True)
+        print(f"[rtsp_service] 🚀 Démarrage capture continue pour {id_camera} ({masquer_url_rtsp(url_norm)})", flush=True)
         import cv2
 
         tenter_hw = verifier_support_v4l2m2m()
@@ -405,7 +413,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                                 err_out = proc.stderr.read(2048).decode(errors="ignore") if proc.stderr else ""
                                 err_msg = err_out.strip()
                                 if err_msg:
-                                    print(f"[rtsp_service] ⚠️ Erreur FFmpeg pour {id_camera} : {err_msg}", flush=True)
+                                    print(f"[rtsp_service] ⚠️ Erreur FFmpeg pour {id_camera} : {masquer_url_rtsp(err_msg)}", flush=True)
                             except Exception:
                                 pass
                             # Alterner entre URL brute et URL normalisée
@@ -422,7 +430,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         if reussi and not evt_arret.is_set():
                             continue
                     except Exception as e:
-                        print(f"[rtsp_service] Reconnexion FFmpeg CLI {id_camera} : {e}", flush=True)
+                        print(f"[rtsp_service] Reconnexion FFmpeg CLI {id_camera} : {masquer_url_rtsp(str(e))}", flush=True)
                         if tenter_hw:
                             tenter_hw = False
                         time.sleep(5.0)
@@ -449,7 +457,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                                 break
                         cap.release()
                 except Exception as e:
-                    print(f"[rtsp_service] Erreur fallback OpenCV {id_camera} : {e}", flush=True)
+                    print(f"[rtsp_service] Erreur fallback OpenCV {id_camera} : {masquer_url_rtsp(str(e))}", flush=True)
 
                 time.sleep(1.0)
         finally:

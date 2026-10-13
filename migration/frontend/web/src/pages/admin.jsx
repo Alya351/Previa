@@ -961,7 +961,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
   }
 
   const camerasEtat = cameras.map((c) => {
-    const age = c.misAJourLe ? Date.now() / 1000 - c.misAJourLe : null;
+    const age = c.misAJourLe ? (Date.now() / 1000 - g_decalageServeurSec - c.misAJourLe) : null;
     const isOff = c.urlFlux ? false : (age == null || age > 15);
     const persSurCam = personnes.filter((p) => String(p.camCtx?.id_camera || '') === String(c.id));
     const persCount = persSurCam.length > 0 ? persSurCam.length : (c.nombrePersonnes ?? 0);
@@ -4818,7 +4818,7 @@ export default function Admin() {
     (a) =>
       ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(String(a.type_evenement || '').toLowerCase()) &&
       a.horodatage &&
-      (Date.now() / 1000 - a.horodatage) <= 120
+      (Date.now() / 1000 - g_decalageServeurSec - a.horodatage) <= 120
   );
 
   const alerteEnCours = derniereAlerteCritique ? {
@@ -4828,7 +4828,7 @@ export default function Admin() {
 
   const alertesPrioritaires = personnes.filter((p) => p.riskPct >= 70).length + objets.filter((o) => o.riskPct >= 70).length;
 
-  const camerasEnLigne = camerasReelles.filter((c) => c.misAJourLe && Date.now() / 1000 - c.misAJourLe <= 15).length;
+  const camerasEnLigne = camerasReelles.filter((c) => c.misAJourLe && (Date.now() / 1000 - g_decalageServeurSec - c.misAJourLe) <= 15).length;
   const uptimeRate = camerasReelles.length > 0 ? `${Math.round((camerasEnLigne / camerasReelles.length) * 100)}%` : '—';
 
   const kpis = {

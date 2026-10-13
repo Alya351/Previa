@@ -198,7 +198,7 @@ else:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ORIGINES_AUTORISEES,
-    allow_origin_regex=r"^https?://.*",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|previa\.local|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -2046,7 +2046,7 @@ def _demarrer_workers_cameras_existants():
         cams = camera.lister_cameras()
         for c in cams:
             if c.get("url_flux"):
-                print(f"[main] 🚀 Démarrage worker caméra existante {c['id']} ({c['url_flux']})", flush=True)
+                print(f"[main] 🚀 Démarrage worker caméra existante {c['id']} ({rtsp_service.masquer_url_rtsp(c['url_flux'])})", flush=True)
                 rtsp_service.demarrer_worker_camera(c["id"], c["url_flux"])
     except Exception as exc:
         print(f"[main] Erreur démarrage auto workers caméras : {exc}", flush=True)

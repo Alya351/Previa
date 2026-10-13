@@ -226,7 +226,20 @@ def supprimer_alerte(id_alerte: str) -> bool:
     fichier_img = _chemin_image(id_alerte)
     fichier_clip = ALERTES_DIR / f"{id_alerte}.mp4"
     supprime = False
+    id_camera = None
+    type_evenement = None
+    pid = None
+
     if fichier_json.exists():
+        try:
+            with open(fichier_json, encoding="utf-8") as f:
+                al = json.load(f)
+                if isinstance(al, dict):
+                    id_camera = al.get("id_camera")
+                    type_evenement = al.get("type_evenement")
+                    pid = al.get("pid")
+        except Exception:
+            pass
         fichier_json.unlink(missing_ok=True)
         supprime = True
     if fichier_img.exists():
@@ -242,7 +255,24 @@ def supprimer_alerte(id_alerte: str) -> bool:
     except Exception:
         pass
 
-    # Ne pas vider la mémoire anti-flood pour éviter une résurgence immédiate de l'incident supprimé
+    # Verrouiller l'anti-flood et marquer la session pour cette caméra afin d'éviter la résurgence immédiate
+    now = time.time()
+    with _lock_alertes:
+        if id_camera and type_evenement:
+            _dernieres_alertes_enregistrees[f"{id_camera}_{type_evenement}"] = now
+        elif id_camera:
+            for k in list(_dernieres_alertes_enregistrees.keys()):
+                if k.startswith(f"{id_camera}_"):
+                    _dernieres_alertes_enregistrees[k] = now
+
+    if id_camera:
+        try:
+            from fonctionnalites.zoneCam import detectionEnZone
+            if hasattr(detectionEnZone, "marquer_camera_alertee"):
+                detectionEnZone.marquer_camera_alertee(id_camera, pid)
+        except Exception:
+            pass
+
     return supprime
 
 
