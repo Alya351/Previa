@@ -336,8 +336,13 @@ def executer_sur_pi(host):
     synchroniser_code(ssh)
     synchroniser_modeles(ssh)
 
-    # Synchro stricte de la date et heure du PC vers le Raspberry Pi (anti-décalage horodatage)
+    # Synchro stricte de la date, heure et fuseau horaire vers le Raspberry Pi (anti-décalage horodatage & plages horaires)
     now_epoch = int(time.time())
+    fuseau = os.environ.get("PREVIA_TIMEZONE", "Africa/Ouagadougou")
+    try:
+        executer_commande_distante(ssh, f"timedatectl set-timezone {fuseau}", sudo=True)
+    except Exception:
+        pass
     try:
         executer_commande_distante(ssh, f"date -s @{now_epoch}", sudo=True)
     except Exception as exc:
