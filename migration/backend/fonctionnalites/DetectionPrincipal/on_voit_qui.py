@@ -60,7 +60,8 @@ try:
     else:
         DEVICE = "cpu"
         try:
-            torch.set_num_threads(max(1, min(8, os.cpu_count() or 4)))
+            # Sur CPU (en particulier Raspberry Pi 4), limiter à 2 threads pour laisser 2 cœurs à FFmpeg et Uvicorn
+            torch.set_num_threads(max(1, min(2, (os.cpu_count() or 4) // 2)))
         except Exception:
             pass
 except Exception as _exc:
@@ -220,6 +221,8 @@ ORIENTATION_CONFIRMATIONS = 2
 ORIENTATION_INTERVALLE_ESSAI_S = 5.0
 _orientations_candidates: dict[str, tuple] = {}   # id_camera -> (code_rotation, nb_confirmations)
 _orientations_dernier_essai: dict[str, float] = {}
+_dernier_segformer_ts: dict[str, float] = {}
+_derniere_carte_vetements: dict[str, np.ndarray] = {}
 
 
 def orientation_verrouillee(id_camera: str):
@@ -589,7 +592,7 @@ def _get_models_impl():
                     allowed_modules=["detection", "recognition", "genderage", "landmark_3d_68"],
                     root=str(MODELS_DIR / "insightface"),
                 )
-                face_app.prepare(ctx_id=-1, det_size=(640, 640))
+                face_app.prepare(ctx_id=-1, det_size=(320, 320) if DEVICE == "cpu" else (640, 640))
             except Exception as e:
                 print(f"[on_voit_qui] face_app ignoré : {e}", flush=True)
 
@@ -702,7 +705,7 @@ def _assign_faces_to_people(people_centroids: list, face_centroids: list) -> dic
     return personne_vers_visage
 
 
-_inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="ai_worker")
+_inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="ai_worker")
 
 
 _verrou_suivi = threading.Lock()
@@ -1531,14 +1534,25 @@ def analyser(id_camera: str, frame) -> dict:
         faces = detect_faces(None, frame, poses=poses)
     print(f"[chrono] passe parallèle multi-modèles (person, clothing, pose, face) : {time.time() - _t0:.2f}s", flush=True)
 
-    # SegFormer : exécuté uniquement si au moins une personne ou un visage est réellement présent
+    # SegFormer : exécuté uniquement si au moins une personne ou un visage est réellement présent,
+    # avec mise en cache de 6 secondes pour soulager le processeur du Raspberry Pi 4
     _t_seg = time.time()
+    maintenant_seg = time.time()
     if (len(personnes) > 0 or len(faces) > 0) and models["clothing_processor"] is not None and models["clothing_model"] is not None:
-        # Réduction x2 pour accélérer l'analyse de segmentation sur CPU/Raspberry Pi
-        h, w = frame.shape[:2]
-        small_frame = cv2.resize(frame, (w // 2, h // 2), interpolation=cv2.INTER_LINEAR)
-        carte_small = _segment_clothing(models["clothing_processor"], models["clothing_model"], small_frame)
-        carte_vetements = cv2.resize(carte_small, (w, h), interpolation=cv2.INTER_NEAREST)
+        carte_cache = _derniere_carte_vetements.get(id_camera)
+        if carte_cache is not None and (maintenant_seg - _dernier_segformer_ts.get(id_camera, 0)) < 6.0:
+            if carte_cache.shape[:2] != frame.shape[:2]:
+                carte_vetements = cv2.resize(carte_cache, (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_NEAREST)
+            else:
+                carte_vetements = carte_cache
+        else:
+            # Réduction x2 pour accélérer l'analyse de segmentation sur CPU/Raspberry Pi
+            h, w = frame.shape[:2]
+            small_frame = cv2.resize(frame, (w // 2, h // 2), interpolation=cv2.INTER_LINEAR)
+            carte_small = _segment_clothing(models["clothing_processor"], models["clothing_model"], small_frame)
+            carte_vetements = cv2.resize(carte_small, (w, h), interpolation=cv2.INTER_NEAREST)
+            _derniere_carte_vetements[id_camera] = carte_vetements
+            _dernier_segformer_ts[id_camera] = maintenant_seg
     else:
         carte_vetements = np.zeros(frame.shape[:2], dtype=np.int64)
     print(f"[chrono] segformer vêtements & accessoires : {time.time() - _t_seg:.2f}s", flush=True)

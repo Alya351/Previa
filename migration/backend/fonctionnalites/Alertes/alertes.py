@@ -159,7 +159,7 @@ def enregistrer_alerte(
         return {"id": "ignored", "statut": "collaborateur_autorise_ignore"}
 
     ts = now if now is not None else time.time()
-    cle_anti_flood = f"{id_camera}_{type_evenement}_{pid or 'anonyme'}"
+    cle_anti_flood = f"{id_camera}_{type_evenement}"
 
     with _lock_alertes:
         dernier_envoi = _dernieres_alertes_enregistrees.get(cle_anti_flood, 0.0)
@@ -242,10 +242,7 @@ def supprimer_alerte(id_alerte: str) -> bool:
     except Exception:
         pass
 
-    # Réinitialiser la mémoire anti-flood pour permettre une vraie suppression sans résurgence immédiate
-    with _lock_alertes:
-        _dernieres_alertes_enregistrees.clear()
-
+    # Ne pas vider la mémoire anti-flood pour éviter une résurgence immédiate de l'incident supprimé
     return supprime
 
 
@@ -267,9 +264,11 @@ def supprimer_toutes_alertes() -> int:
     except Exception:
         pass
 
-    # Réinitialiser complètement l'état de détection actif pour éviter le retour des alertes
+    # Verrouiller l'anti-flood à 'maintenant' pour éviter le retour immédiat des alertes en cours
+    now = time.time()
     with _lock_alertes:
-        _dernieres_alertes_enregistrees.clear()
+        for k in list(_dernieres_alertes_enregistrees.keys()):
+            _dernieres_alertes_enregistrees[k] = now
 
     try:
         from fonctionnalites.ComportementsSupects import rodeur, infiltre
@@ -277,6 +276,13 @@ def supprimer_toutes_alertes() -> int:
             rodeur._suivi_rodeurs.clear()
         if hasattr(infiltre, "_suivi_infiltres"):
             infiltre._suivi_infiltres.clear()
+    except Exception:
+        pass
+
+    try:
+        from fonctionnalites.zoneCam import detectionEnZone
+        if hasattr(detectionEnZone, "marquer_toutes_sessions_alertees"):
+            detectionEnZone.marquer_toutes_sessions_alertees()
     except Exception:
         pass
 

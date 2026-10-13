@@ -838,6 +838,12 @@ const btnPrimaire = {
   boxShadow: '0 2px 8px rgba(2,132,199,0.3)',
 };
 
+let g_decalageServeurSec = 0;
+
+export function definirDecalageServeur(decalageSec) {
+  g_decalageServeurSec = decalageSec;
+}
+
 function formaterTempsRelatif(horodatage, fallback = "à l'instant") {
   if (!horodatage || (typeof horodatage !== 'number' && isNaN(Number(horodatage)))) {
     return fallback;
@@ -853,7 +859,8 @@ function formaterTempsRelatif(horodatage, fallback = "à l'instant") {
     return 'antérieur';
   }
 
-  const maintenant = Math.floor(Date.now() / 1000);
+  // Calcul du temps écoulé ajusté du décalage d'horloge entre Raspberry Pi et PC
+  const maintenant = Math.floor(Date.now() / 1000) - g_decalageServeurSec;
   const diffSec = Math.max(0, maintenant - ts);
 
   if (diffSec < 10) return "à l'instant";
@@ -888,7 +895,9 @@ function heureLocale(horodatage) {
   let ts = Number(horodatage);
   if (isNaN(ts) || ts <= 0) return '--:--';
   if (ts < 1e11) ts = ts * 1000;
-  return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // Ajustement pour afficher l'heure dans le fuseau du navigateur client si le Pi a un décalage
+  const tsAjuste = ts + (g_decalageServeurSec * 1000);
+  return new Date(tsAjuste).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 // ============================================================================
@@ -903,6 +912,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
   const [tick, setTick] = useState(0);
   const [alerteInspectee, setAlerteInspectee] = useState(null);
   const [fullscreenModalCam, setFullscreenModalCam] = useState(null);
+  const [alertesMasquees, setAlertesMasquees] = useState(new Set());
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 2000);
@@ -977,7 +987,12 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
   const isOffline = currentCamera.isOffline;
   const streamDirectCourant = useFluxDirect(currentCamera.urlFlux ? null : currentCamera.id);
   const detectionsSurCetteCam = personnes.filter((p) => String(p.camCtx?.id_camera || '') === String(currentCamera.id));
-  const derniereAlerteCetteCam = currentCamera.alertes[0];
+  const nbPersonnesVisibles = Math.max(
+    detectionsSurCetteCam.length,
+    currentCamera.persons || 0,
+    currentCamera.nombrePersonnes || 0
+  );
+  const derniereAlerteCetteCam = (currentCamera.alertes || []).find((a) => !alertesMasquees.has(a.id));
 
   const handleSync = () => {
     setIsSyncing(true);
@@ -994,6 +1009,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
   const handleDeleteAlerte = async (id, e) => {
     if (e && e.stopPropagation) e.stopPropagation();
     try {
+      setAlertesMasquees((prev) => new Set([...prev, id]));
       await supprimerAlerte(id);
       if (onRefresh) onRefresh();
     } catch (err) {
@@ -1353,7 +1369,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   </span>
                   <span style={{ opacity: 0.4 }}>|</span>
                   <span style={{ color: '#bae6fd' }}>
-                    👤 {detectionsSurCetteCam.length} vue{detectionsSurCetteCam.length > 1 ? 's' : ''}
+                    👤 {nbPersonnesVisibles} vue{nbPersonnesVisibles > 1 ? 's' : ''}
                   </span>
                 </div>
               </div>
@@ -4651,6 +4667,9 @@ export default function Admin() {
     try {
       const v = await appelApi('/vue-ensemble');
       setVueEnsemble(v);
+      if (v && v.serveur_temps) {
+        definirDecalageServeur(Math.floor(Date.now() / 1000) - Math.floor(v.serveur_temps));
+      }
 
       const resultats = await Promise.all(
         v.cameras.map((c) => appelApi(`/cameras/${c.id_camera}/etat`).then((e) => ({ c, e })).catch(() => null)),
@@ -4665,6 +4684,27 @@ export default function Admin() {
         const personnesVues = e.personnesVues || {};
         const vueActuelle = e.vueActuelle || {};
         (personnesVues.personnes || []).forEach((p, idx) => nouvellesPersonnes.push(mapPersonneApi(p, idx, camCtx)));
+        // Si l'analyse détaillée est encore en cours mais que YOLO a détecté des personnes en direct :
+        const nbDirect = Math.max(c.nombrePersonnes || 0, vueActuelle.nombre_personnes || 0, (vueActuelle.personnes_suivies || []).length);
+        if ((!personnesVues.personnes || personnesVues.personnes.length === 0) && nbDirect > 0) {
+          for (let i = 0; i < nbDirect; i++) {
+            const ps = (vueActuelle.personnes_suivies || [])[i];
+            nouvellesPersonnes.push({
+              id: `live_${c.id_camera}_${ps?.track_id || i + 1}`,
+              pid: `live_${c.id_camera}_${ps?.track_id || i + 1}`,
+              nom: null,
+              matricule: null,
+              statut: 'visiteur',
+              est_suspect: false,
+              riskPct: 15,
+              riskLevel: 'low',
+              camCtx,
+              genre: null,
+              vetements: [],
+              action: { posture: { activite: 'Surveillance' } },
+            });
+          }
+        }
         Object.entries(vueActuelle.objets || {}).forEach(([nomObj, info]) => {
           (info.instances || []).forEach((instance) => nouveauxObjets.push(mapObjetInstanceApi(nomObj, instance, camCtx)));
         });

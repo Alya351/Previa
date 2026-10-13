@@ -282,10 +282,16 @@ def executer_sur_pi(host):
     synchroniser_code(ssh)
     synchroniser_modeles(ssh)
 
-    # Synchro de la date et heure du PC vers le Raspberry Pi (anti-décalage horodatage)
+    # Synchro stricte de la date et heure du PC vers le Raspberry Pi (anti-décalage horodatage)
+    now_epoch = int(time.time())
     now_iso = time.strftime("%Y-%m-%d %H:%M:%S")
     try:
-        executer_commande_distante(ssh, f"date -s '{now_iso}'", sudo=True)
+        cmd_date = (
+            f"timedatectl set-ntp false 2>/dev/null || true; "
+            f"date -s '@{now_epoch}' 2>/dev/null || date -s '{now_iso}'; "
+            f"hwclock -w 2>/dev/null || true"
+        )
+        executer_commande_distante(ssh, cmd_date, sudo=True)
     except Exception:
         pass
 

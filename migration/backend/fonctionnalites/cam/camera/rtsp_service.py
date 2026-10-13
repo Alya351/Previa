@@ -465,7 +465,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
     def _boucle_analyse_ia():
         print(f"[rtsp_service] 🧠 Démarrage worker IA autonome pour {id_camera}", flush=True)
         while not evt_arret.is_set():
-            time.sleep(0.75)  # Cadence ~1.3 FPS pour l'IA (optimisé Raspberry Pi / CPU)
+            time.sleep(1.0)  # Cadence ~1 FPS pour l'IA (garantit une fluidité maximale du flux vidéo)
             with _buffer_lock:
                 jpg = _buffer_derniere_frame.get(id_camera)
             if jpg:

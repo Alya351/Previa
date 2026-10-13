@@ -300,3 +300,12 @@ def evaluer(
         "avis_ia": avis_ia,
     }
 
+
+def marquer_toutes_sessions_alertees() -> None:
+    """Marque toutes les sessions actuellement en zone comme déjà alertées.
+    Empêche les alertes en boucle lorsqu'un opérateur efface ou acquitte toutes les alertes."""
+    for id_cam, sessions in _sessions_suivi.items():
+        for sid, s in sessions.items():
+            if s.get("en_zone"):
+                s["alerte_envoyee"] = True
+

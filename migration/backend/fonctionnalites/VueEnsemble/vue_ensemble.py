@@ -78,7 +78,7 @@ def vue_ensemble() -> dict:
         cameras.append({
             "id_camera": id_camera,
             **contexte,
-            "nombre_personnes": personnes_vues.get("nombre_personnes", vue_actuelle.get("nombre_personnes", 0)),
+            "nombre_personnes": max(personnes_vues.get("nombre_personnes", 0), vue_actuelle.get("nombre_personnes", 0)),
             "objets": vue_actuelle.get("objets", {}),
             "alertes_feu_fumee": vue_actuelle.get("alertes_feu_fumee", []),
             "zones_suspectes_anonymes": personnes_vues.get("zones_suspectes", []),
@@ -113,4 +113,5 @@ def vue_ensemble() -> dict:
         "cameras": cameras,
         "nombre_personnes_suspectes": len(personnes_suspectes),
         "personnes_suspectes": personnes_suspectes,
+        "serveur_temps": time.time(),
     }
