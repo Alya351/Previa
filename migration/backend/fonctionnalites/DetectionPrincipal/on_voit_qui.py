@@ -1496,13 +1496,13 @@ def analyser(id_camera: str, frame) -> dict:
         if _est_personne(d) and d.get("score", 0.0) >= 0.05
     ]
 
-    # Si 0 personne trouvée et aucune orientation verrouillée, tester les 3
-    # autres orientations — au plus une fois toutes les
-    # ORIENTATION_INTERVALLE_ESSAI_S secondes, avec un seuil de confiance
-    # plus exigeant, et verrouillage seulement après
-    # ORIENTATION_CONFIRMATIONS observations de la MÊME rotation.
+    # Si aucune personne crédible n'est détectée (score < 0.25) et aucune orientation verrouillée,
+    # tester les 3 autres orientations — au plus une fois toutes les
+    # ORIENTATION_INTERVALLE_ESSAI_S secondes.
+    # Évite le piège où un faux positif à 0.06 sur une image couchée bloquait le redressement.
     # IMPORTANT : suivre=False pour ne pas polluer l'état du tracker avec des rotations !
-    if not personnes and rot_candidat is None and (
+    meilleur_score_actuel = max((d.get("score", 0.0) for d in personnes), default=0.0)
+    if meilleur_score_actuel < 0.25 and rot_candidat is None and (
         now - _orientations_dernier_essai.get(id_camera, 0.0) >= ORIENTATION_INTERVALLE_ESSAI_S
     ):
         _orientations_dernier_essai[id_camera] = now
@@ -1518,7 +1518,7 @@ def analyser(id_camera: str, frame) -> dict:
                 score = max(d.get("score", 0.0) for d in found_rot)
                 if meilleur is None or score > meilleur[0]:
                     meilleur = (score, rot_code, frame_rot, candidats_rot, found_rot)
-        if meilleur is not None:
+        if meilleur is not None and meilleur[0] > meilleur_score_actuel:
             score_m, rot_code, frame_rot, candidats_rot, found_rot = meilleur
             precedent = _orientations_candidates.get(id_camera)
             nb = precedent[1] + 1 if precedent and precedent[0] == rot_code else 1

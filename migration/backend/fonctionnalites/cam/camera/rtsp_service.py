@@ -367,14 +367,20 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         rot_deg = _mapping.get(rc, 0)
                     except Exception:
                         pass
+                if rot_deg not in (90, 180, 270):
+                    rot_env = os.environ.get("PREVIA_ROTATION_VIDEO", "").strip().lower()
+                    env_map = {"cw": 90, "90": 90, "180": 180, "ccw": 270, "270": 270}
+                    rot_deg = env_map.get(rot_env, 0)
 
-                vf_filtre = "scale=854:-1"
+                _scale = "scale=854:854:force_original_aspect_ratio=decrease"
                 if rot_deg == 90:
-                    vf_filtre = "scale=854:-1,transpose=1"
+                    vf_filtre = f"transpose=1,{_scale}"
                 elif rot_deg == 180:
-                    vf_filtre = "scale=854:-1,hflip,vflip"
+                    vf_filtre = f"hflip,vflip,{_scale}"
                 elif rot_deg == 270:
-                    vf_filtre = "scale=854:-1,transpose=2"
+                    vf_filtre = f"transpose=2,{_scale}"
+                else:
+                    vf_filtre = _scale
 
                 if ffmpeg:
                     opt_timeout = _option_timeout_rtsp(ffmpeg)
