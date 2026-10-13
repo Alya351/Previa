@@ -39,46 +39,61 @@ class PreviaWebHandler(http.server.SimpleHTTPRequestHandler):
         return first_segment in ROUTES_BACKEND
 
     def proxy_to_backend(self, method: str):
-        target_url = f"https://127.0.0.1:8012{self.path}"
+        target_urls = [
+            f"https://127.0.0.1:8012{self.path}",
+            f"http://127.0.0.1:8012{self.path}",
+        ]
         headers = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "content-length")}
+        headers["Host"] = "127.0.0.1:8012"
 
-        
         body = None
         content_length = int(self.headers.get("Content-Length", 0))
         if content_length > 0:
             body = self.rfile.read(content_length)
 
-        try:
-            req = urllib.request.Request(target_url, data=body, headers=headers, method=method)
-            with urllib.request.urlopen(req, context=ssl_ctx, timeout=30) as resp:
-                self.send_response(resp.status)
-                for k, v in resp.getheaders():
+        dernier_erreur = None
+        for target_url in target_urls:
+            try:
+                req = urllib.request.Request(target_url, data=body, headers=headers, method=method)
+                with urllib.request.urlopen(req, context=ssl_ctx, timeout=30) as resp:
+                    self.send_response(resp.status)
+                    for k, v in resp.getheaders():
+                        if k.lower() not in ("transfer-encoding", "content-encoding"):
+                            self.send_header(k, v)
+                    self.end_headers()
+                    while True:
+                        chunk = resp.read(8192)
+                        if not chunk:
+                            break
+                        try:
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError):
+                            break
+                    return
+            except urllib.error.HTTPError as e:
+                self.send_response(e.code)
+                for k, v in e.headers.items():
                     if k.lower() not in ("transfer-encoding", "content-encoding"):
                         self.send_header(k, v)
                 self.end_headers()
-                while True:
-                    chunk = resp.read(8192)
-                    if not chunk:
-                        break
-                    try:
-                        self.wfile.write(chunk)
-                        self.wfile.flush()
-                    except (BrokenPipeError, ConnectionResetError):
-                        break
-        except urllib.error.HTTPError as e:
-            self.send_response(e.code)
-            for k, v in e.headers.items():
-                if k.lower() not in ("transfer-encoding", "content-encoding"):
-                    self.send_header(k, v)
+                self.wfile.write(e.read())
+                return
+            except Exception as e:
+                dernier_erreur = e
+                continue
+
+        try:
+            self.send_response(502)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
-            self.wfile.write(e.read())
-        except Exception as e:
-            try:
-                self.send_response(502)
-                self.end_headers()
-                self.wfile.write(f"Backend proxy error: {e}".encode("utf-8"))
-            except Exception:
-                pass
+            import json
+            reponse = json.dumps({
+                "detail": f"Backend PREVIA en cours de démarrage ou injoignable sur le port 8012 ({dernier_erreur}). Patientez quelques instants."
+            })
+            self.wfile.write(reponse.encode("utf-8"))
+        except Exception:
+            pass
 
     def do_GET(self):
         if self.is_backend_route(self.path):
