@@ -46,13 +46,37 @@ if hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
-USERNAME = os.environ.get("PREVIA_PI_USER", "previa")
-PASSWORD = os.environ.get("PREVIA_PI_PASSWORD", "")
 LOCAL_DIR = Path(__file__).resolve().parent
 
+def charger_env_local():
+    """Charge automatiquement les secrets depuis le fichier .env local (strictement ignoré par Git)."""
+    env_file = LOCAL_DIR / ".env"
+    if env_file.is_file():
+        try:
+            with open(env_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+        except Exception:
+            pass
+
+charger_env_local()
+USERNAME = os.environ.get("PREVIA_PI_USER", "previa")
+PASSWORD = os.environ.get("PREVIA_PI_PASSWORD", "")
+
 def verifier_mot_de_passe():
-    """Vérifie ou demande interactivement le mot de passe SSH s'il n'est pas fourni via variable d'environnement."""
-    global PASSWORD
+    """Vérifie ou demande interactivement le mot de passe SSH s'il n'est pas fourni via variable d'environnement ou .env."""
+    global USERNAME, PASSWORD
+    if not PASSWORD:
+        charger_env_local()
+        USERNAME = os.environ.get("PREVIA_PI_USER", USERNAME)
+        PASSWORD = os.environ.get("PREVIA_PI_PASSWORD", PASSWORD)
+
     if not PASSWORD:
         import getpass
         print(f"[*] Authentification SSH requise pour l'utilisateur '{USERNAME}'.")
@@ -63,8 +87,23 @@ def verifier_mot_de_passe():
                 PASSWORD = input(f"  Mot de passe SSH ({USERNAME}) : ")
         except Exception:
             pass
+
+        if PASSWORD:
+            try:
+                env_file = LOCAL_DIR / ".env"
+                lignes = []
+                if env_file.is_file():
+                    lignes = env_file.read_text(encoding="utf-8").splitlines()
+                lignes = [l for l in lignes if not l.startswith("PREVIA_PI_")]
+                lignes.append(f"PREVIA_PI_USER={USERNAME}")
+                lignes.append(f"PREVIA_PI_PASSWORD={PASSWORD}")
+                env_file.write_text("\n".join(lignes) + "\n", encoding="utf-8")
+                print("  [+] Mot de passe mémorisé localement dans .env (ignoré par Git).")
+            except Exception:
+                pass
+
     if not PASSWORD:
-        print("  [!] Aucun mot de passe fourni. Définissez la variable PREVIA_PI_PASSWORD ou saisissez-le.")
+        print("  [!] Aucun mot de passe fourni. Définissez la variable PREVIA_PI_PASSWORD dans .env ou saisissez-le.")
         sys.exit(1)
 
 def executer_commande_distante(ssh, commande, sudo=False):
