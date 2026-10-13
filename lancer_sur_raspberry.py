@@ -219,7 +219,6 @@ def synchroniser_code(ssh):
         ("migration/frontend/web/dist", "migration/frontend/web/dist"),
         ("migration/frontend/web/src", "migration/frontend/web/src"),
         ("migration/frontend/web/serveur_web_https.py", "migration/frontend/web/serveur_web_https.py"),
-        ("migration/db", "migration/db"),
         ("docker", "docker"),
         ("lancer_previa.py", "lancer_previa.py"),
     ]
@@ -255,7 +254,6 @@ def synchroniser_code(ssh):
     # Extraction et redémarrage propre (conservation des caméras configurées)
     commande_extraction = (
         "mkdir -p ~/tech-impact/migration/db/cam/cameras && "
-        "rm -f $HOME/tech-impact/migration/db/profils/*.json && "
         "for path in migration/backend migration/frontend/web/dist "
         "migration/frontend/web/src docker; do "
         "[ ! -e \"$HOME/tech-impact/$path\" ] || chmod -R u+rwX \"$HOME/tech-impact/$path\" || true; "

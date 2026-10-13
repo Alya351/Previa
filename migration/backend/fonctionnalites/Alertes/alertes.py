@@ -277,7 +277,7 @@ def supprimer_alerte(id_alerte: str) -> bool:
 
 
 def supprimer_toutes_alertes() -> int:
-    """Supprime l'ensemble des alertes, images, clips archivés ET la table SQLite evenements_historique."""
+    """Supprime l'ensemble des alertes visuelles, images et clips archivés. Conserve l'historique d'audit SQLite."""
     ALERTES_DIR.mkdir(parents=True, exist_ok=True)
     count = 0
     for f in list(ALERTES_DIR.glob("*")):
@@ -285,14 +285,6 @@ def supprimer_toutes_alertes() -> int:
             if f.suffix == ".json":
                 count += 1
             f.unlink(missing_ok=True)
-
-    try:
-        from fonctionnalites.Infrastructure.sqlite_db import get_connection
-        conn = get_connection()
-        with conn:
-            conn.execute("DELETE FROM evenements_historique;")
-    except Exception:
-        pass
 
     # Verrouiller l'anti-flood à 'maintenant' pour éviter le retour immédiat des alertes en cours
     now = time.time()

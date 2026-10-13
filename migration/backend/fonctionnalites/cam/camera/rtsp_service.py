@@ -243,6 +243,7 @@ def capturer_snapshot_unique(url_flux: str, timeout_sec: int = 4) -> Optional[by
 
 
 _stats_ticks_ia: dict[str, dict] = {}
+_analyses_debut: dict[str, float] = {}
 
 
 def obtenir_sante_ia(id_camera: str) -> dict:
@@ -283,9 +284,14 @@ def declencher_analyse_asynchrone(id_camera_ou_url: str, jpg_bytes: bytes) -> No
             st["reset_ts"] = maintenant
 
         if id_camera_ou_url in _analyses_actives:
-            st["ignores"] += 1
-            return
+            if maintenant - _analyses_debut.get(id_camera_ou_url, maintenant) > 300.0:
+                print(f"[rtsp_service] ⚠️ Analyse bloquée > 5 min pour {id_camera_ou_url} : reprise forcée", flush=True)
+                _analyses_actives.discard(id_camera_ou_url)
+            else:
+                st["ignores"] += 1
+                return
         _analyses_actives.add(id_camera_ou_url)
+        _analyses_debut[id_camera_ou_url] = maintenant
 
     def _tache_analyse():
         try:
