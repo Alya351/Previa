@@ -46,6 +46,15 @@ def get_connection() -> sqlite3.Connection:
         return _conn
 
 
+def fermer_connexion() -> None:
+    global _conn
+    with _lock:
+        if _conn is not None:
+            try:
+                _conn.close()
+            except Exception:
+                pass
+            _conn = None
 
 def _initialiser_tables(conn: sqlite3.Connection):
     with conn:
@@ -76,7 +85,15 @@ def _initialiser_tables(conn: sqlite3.Connection):
         # Index multi-critères et haute performance pour filtrage instantané
         conn.execute("CREATE INDEX IF NOT EXISTS idx_hist_cam_ts ON evenements_historique(camera_id, timestamp DESC);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_hist_ts ON evenements_historique(timestamp DESC);")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_hist_statut ON evenements_historique(statut);")
+        # 3. Table des sessions révoquées (liste noire pour déconnexion immédiate)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS sessions_revoquees (
+                jti TEXT PRIMARY KEY,
+                exp REAL NOT NULL,
+                revoque_le REAL NOT NULL
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_revoquees_exp ON sessions_revoquees(exp);")
 
 
 def _migrer_anciens_historiques(conn: sqlite3.Connection):

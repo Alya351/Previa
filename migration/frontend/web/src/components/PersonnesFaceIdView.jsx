@@ -989,7 +989,7 @@ export function PersonnesFaceIdView({ items = [] }) {
 
             {/* FORMULAIRE IDENTITÉ */}
             <form onSubmit={sauvegarderEmploye} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-grid-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={labelStyle}>Prénom *</label>
                   <input
@@ -1014,7 +1014,7 @@ export function PersonnesFaceIdView({ items = [] }) {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-grid-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={labelStyle}>Poste / Fonction</label>
                   <input

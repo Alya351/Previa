@@ -30,7 +30,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import requests
-from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import StreamingResponse
@@ -437,6 +437,19 @@ def se_connecter(demande: DemandeConnexion):
     rep = dict(u_maj if u_maj else existant)
     rep["token"] = session.creer_session(rep)
     return rep
+
+
+@app.post(
+    "/utilisateurs/deconnexion",
+    tags=["Utilisateurs"],
+    summary="Se déconnecter (révoque le jeton de session courant)",
+    description="Inscrit le jeton d'authentification en liste noire pour invalider la session immédiatement.",
+)
+def se_deconnecter(utilisateur: dict = Depends(session.exiger_authentification)):
+    token = utilisateur.get("_token_brut")
+    if token:
+        session.revoquer_session(token)
+    return {"message": "Déconnexion réussie"}
 
 
 @app.get(
@@ -1502,12 +1515,42 @@ def etat_licence():
     description=(
         "Supprime comptes, bâtiments/pièces/caméras, alertes, profils, état "
         "comportemental ET licence -- repart d'une installation vierge, comme "
-        "au tout premier lancement (un nouveau code d'amorçage sera exigé "
-        "pour recréer le premier admin). IRRÉVERSIBLE. Accessible sans "
-        "connexion, volontairement -- voir Infrastructure/reboot.py."
+        "au tout premier lancement. Réservé aux administrateurs ou à la console locale "
+        "physique de secours (127.0.0.1 / localhost)."
     ),
+    responses={
+        401: {"description": "Authentification requise pour la réinitialisation distante"},
+        403: {"description": "Privilèges administrateur requis"},
+    },
 )
-def rebooter_systeme():
+def rebooter_systeme(
+    request: Request,
+    authorization: str | None = Header(None, alias="Authorization"),
+    x_session_token: str | None = Header(None, alias="X-Session-Token"),
+):
+    ip_client = request.client.host if request.client else ""
+    est_local = ip_client in ("127.0.0.1", "::1", "localhost", "testclient")
+
+    if not est_local:
+        token = None
+        if isinstance(authorization, str) and authorization.strip():
+            parts = authorization.strip().split()
+            if len(parts) == 2 and parts[0].lower() == "bearer":
+                token = parts[1]
+            elif len(parts) == 1:
+                token = parts[0]
+        elif isinstance(x_session_token, str) and x_session_token.strip():
+            token = x_session_token.strip()
+
+        if not token:
+            raise HTTPException(401, "Authentification requise pour la réinitialisation à distance")
+
+        sess = session.verifier_session(token)
+        if not sess:
+            raise HTTPException(401, "Session invalide ou expirée")
+        if sess.get("role") != "admin":
+            raise HTTPException(403, "Privilèges administrateur requis pour réinitialiser le système")
+
     reboot.reinitialiser()
     return {"reinitialise": True}
 

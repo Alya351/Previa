@@ -15,6 +15,7 @@ confirmation côté serveur au-delà de l'appel HTTP lui-même — la
 confirmation ("es-tu sûr ?") est du ressort du frontend."""
 import shutil
 from pathlib import Path
+from fonctionnalites.Infrastructure import sqlite_db
 
 # Même racine que USERS_DIR dans users/compte.py (Path(__file__)....
 # parent x4) : "toutes les données" = tout ce dossier, pas juste les
@@ -26,10 +27,18 @@ def reinitialiser() -> None:
     """Vide DOSSIER_DB (fichiers ET sous-dossiers), sans le supprimer
     lui-même — le volume Docker (previa_db) doit rester monté au même
     endroit après coup."""
+    try:
+        sqlite_db.fermer_connexion()
+    except Exception:
+        pass
+
     if not DOSSIER_DB.exists():
         return
     for element in DOSSIER_DB.iterdir():
-        if element.is_dir():
-            shutil.rmtree(element)
-        else:
-            element.unlink()
+        try:
+            if element.is_dir():
+                shutil.rmtree(element, ignore_errors=True)
+            else:
+                element.unlink()
+        except Exception as exc:
+            print(f"[reboot] Erreur suppression {element} : {exc}", flush=True)

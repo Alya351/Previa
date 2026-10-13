@@ -4143,47 +4143,49 @@ function SectionComptes({ comptes = [], onChange }) {
         <button style={btn} disabled={envoi} type="submit"><Plus size={15} /> Créer le compte</button>
       </form>
       {err && <p style={{ color: '#dc2626', fontSize: '0.8rem' }}>{err}</p>}
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-        <thead><tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--ink-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-          <th style={{ padding: '8px', textAlign: 'left' }}>Nom & Prénom</th><th style={{ padding: '8px', textAlign: 'left' }}>Email</th><th style={{ padding: '8px', textAlign: 'left' }}>Rôle</th><th />
-        </tr></thead>
-        <tbody>
-          {(comptes || []).map((c) => (
-            <tr key={c.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-              <td style={{ padding: '8px', fontWeight: 700 }}>{c.prenom} {c.nom}</td>
-              <td style={{ padding: '8px', color: 'var(--ink-muted)' }}>{c.email}</td>
-              <td style={{ padding: '8px' }}>
-                <span style={{ background: c.role === 'admin' ? '#e0f2fe' : '#f1f5f9', color: c.role === 'admin' ? '#0284c7' : '#475569', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '0.75rem' }}>
-                  {c.role === 'admin' ? 'Administrateur' : 'Opérateur'}
-                  {c.est_par_defaut ? ' (Principal)' : ''}
-                </span>
-              </td>
-              <td style={{ padding: '8px', textAlign: 'right', display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                <button
-                  style={{ ...btnSuppr, background: '#f0f9ff', color: '#0284c7', borderColor: '#bae6fd' }}
-                  onClick={async () => {
-                    const nmp = prompt(`Nouveau mot de passe pour ${c.prenom} ${c.nom} :`);
-                    if (nmp && nmp.trim()) {
-                      try {
-                        const chemin = c.role === 'admin' ? `/utilisateurs/admins/${c.id}` : `/utilisateurs/users/${c.id}`;
-                        await appelApiOrg(chemin, { method: 'PUT', body: JSON.stringify({ mot_de_passe: nmp.trim() }) });
-                        alert(`Le mot de passe de ${c.prenom} a bien été réinitialisé !`);
-                        onChange();
-                      } catch (errM) {
-                        alert(`Erreur : ${errM.message}`);
+      <div className="table-responsive" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ width: '100%', minWidth: '550px', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <thead><tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--ink-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+            <th style={{ padding: '8px', textAlign: 'left' }}>Nom & Prénom</th><th style={{ padding: '8px', textAlign: 'left' }}>Email</th><th style={{ padding: '8px', textAlign: 'left' }}>Rôle</th><th />
+          </tr></thead>
+          <tbody>
+            {(comptes || []).map((c) => (
+              <tr key={c.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                <td style={{ padding: '8px', fontWeight: 700 }}>{c.prenom} {c.nom}</td>
+                <td style={{ padding: '8px', color: 'var(--ink-muted)' }}>{c.email}</td>
+                <td style={{ padding: '8px' }}>
+                  <span style={{ background: c.role === 'admin' ? '#e0f2fe' : '#f1f5f9', color: c.role === 'admin' ? '#0284c7' : '#475569', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '0.75rem' }}>
+                    {c.role === 'admin' ? 'Administrateur' : 'Opérateur'}
+                    {c.est_par_defaut ? ' (Principal)' : ''}
+                  </span>
+                </td>
+                <td style={{ padding: '8px', textAlign: 'right', display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                  <button
+                    style={{ ...btnSuppr, background: '#f0f9ff', color: '#0284c7', borderColor: '#bae6fd' }}
+                    onClick={async () => {
+                      const nmp = prompt(`Nouveau mot de passe pour ${c.prenom} ${c.nom} :`);
+                      if (nmp && nmp.trim()) {
+                        try {
+                          const chemin = c.role === 'admin' ? `/utilisateurs/admins/${c.id}` : `/utilisateurs/users/${c.id}`;
+                          await appelApiOrg(chemin, { method: 'PUT', body: JSON.stringify({ mot_de_passe: nmp.trim() }) });
+                          alert(`Le mot de passe de ${c.prenom} a bien été réinitialisé !`);
+                          onChange();
+                        } catch (errM) {
+                          alert(`Erreur : ${errM.message}`);
+                        }
                       }
-                    }
-                  }}
-                  title="Réinitialiser le mot de passe"
-                >
-                  Réinitialiser Pass
-                </button>
-                {!c.est_par_defaut && <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer ce compte"><Trash2 size={14} /></button>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                    }}
+                    title="Réinitialiser le mot de passe"
+                  >
+                    Réinitialiser Pass
+                  </button>
+                  {!c.est_par_defaut && <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer ce compte"><Trash2 size={14} /></button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

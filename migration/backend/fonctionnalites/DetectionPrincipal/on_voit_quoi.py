@@ -282,10 +282,13 @@ def analyser(id_camera: str, frame) -> dict:
     labels = [info["label"] for info in instances.values()]
     print(f"[on_voit_quoi] caméra {id_camera} — détections : {labels}", flush=True)
 
-    # Positions des personnes de CET appel — sert à savoir si un objet
-    # portable (sac, valise...) a quelqu'un à proximité ou non (voir
-    # ComportementsSupects/abandonne.py).
-    personnes_centroides = [i["centroid"] for i in instances.values() if i["label"] == "person"]
+    # Positions et track_id des personnes suivies PAR CETTE CAMÉRA (ByteTrack isolé)
+    personnes_suivies = [
+        {"track_id": tid, "centroid": i["centroid"]}
+        for tid, i in instances.items()
+        if i["label"] == "person"
+    ]
+    personnes_centroides = [p["centroid"] for p in personnes_suivies]
 
     instances_par_label = {}
     for track_id, info in instances.items():
@@ -324,6 +327,7 @@ def analyser(id_camera: str, frame) -> dict:
         "objets": dict(sorted(objets.items())),
         "nombre_personnes": len(personnes_centroides),
         "personnes_centroides": personnes_centroides,
+        "personnes_suivies": personnes_suivies,
         "alertes_feu_fumee": alertes_feu_fumee,
         "updated_at": now,
     }

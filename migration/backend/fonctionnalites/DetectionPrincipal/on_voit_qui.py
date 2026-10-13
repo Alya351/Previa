@@ -705,21 +705,35 @@ def _assign_faces_to_people(people_centroids: list, face_centroids: list) -> dic
 _inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="ai_worker")
 
 
-def _run_seg(model, frame, conf, utiliser_onnx=True, imgsz=None):
+_trackers_seg_par_camera: dict[str, list] = {}
+
+
+def _run_seg(model, frame, conf, utiliser_onnx=True, imgsz=None, id_camera=None, tracking=True):
     """Détection+segmentation pleine résolution : tente YOLO .pt, puis YOLO .onnx.
 
     `utiliser_onnx=False` : à passer pour tout modèle qui ne détecte PAS des
     personnes (ex. vêtements) — le repli ONNX est un détecteur de personnes,
     il ressortait sinon des « personnes » à la place des vêtements.
-    `imgsz` : résolution d'inférence YOLO (None = défaut Ultralytics)."""
+    `imgsz` : résolution d'inférence YOLO (None = défaut Ultralytics).
+    `id_camera` : identifiant caméra pour sauvegarder/restaurer l'état du tracker ByteTrack.
+    `tracking` : activer ou non le suivi ByteTrack (désactivé lors des tests d'orientation
+    pour ne pas corrompre le suivi avec des frames tournées à 90/180°)."""
     if model is not None:
         try:
             kwargs = {"conf": conf, "verbose": False}
             if imgsz:
                 kwargs["imgsz"] = imgsz
-            if utiliser_onnx and hasattr(model, "track"):
+            if tracking and utiliser_onnx and hasattr(model, "track"):
                 try:
+                    # Isoler l'état du tracker ByteTrack pour CETTE caméra
+                    if id_camera and hasattr(model, "predictor") and model.predictor is not None:
+                        if id_camera in _trackers_seg_par_camera:
+                            model.predictor.trackers = _trackers_seg_par_camera[id_camera]
+                        else:
+                            model.predictor.trackers = []
                     result = model.track(frame, persist=True, **kwargs)[0]
+                    if id_camera and hasattr(model, "predictor") and model.predictor is not None:
+                        _trackers_seg_par_camera[id_camera] = model.predictor.trackers
                 except Exception:
                     result = model.predict(frame, **kwargs)[0]
             else:
@@ -1378,7 +1392,8 @@ def analyser(id_camera: str, frame) -> dict:
     # modèle de plus ici. Récupéré TÔT (pas seulement en fin de fonction)
     # car rodeur.py s'en sert pour corréler rôdage + disparition d'un
     # objet proche (indice de vol).
-    objets_actuels = rapport_cam.lire_etat(id_camera, "vueActuelle").get("objets", {})
+    vue_actuelle = rapport_cam.lire_etat(id_camera, "vueActuelle")
+    objets_actuels = vue_actuelle.get("objets", {})
 
     rot_candidat = _orientations_camera.get(id_camera)
     if rot_candidat is not None:
@@ -1391,7 +1406,10 @@ def analyser(id_camera: str, frame) -> dict:
         )
 
     _t0 = time.time()
-    tous_candidats_personnes = _run_seg(models["person_seg"], frame, CONF_RODEUR_ANONYME, imgsz=IMGSZ_PERSONNES)
+    tous_candidats_personnes = _run_seg(
+        models["person_seg"], frame, CONF_RODEUR_ANONYME,
+        imgsz=IMGSZ_PERSONNES, id_camera=id_camera, tracking=True
+    )
     personnes = [
         d for d in tous_candidats_personnes
         if _est_personne(d) and d.get("score", 0.0) >= 0.05
@@ -1402,6 +1420,7 @@ def analyser(id_camera: str, frame) -> dict:
     # ORIENTATION_INTERVALLE_ESSAI_S secondes, avec un seuil de confiance
     # plus exigeant, et verrouillage seulement après
     # ORIENTATION_CONFIRMATIONS observations de la MÊME rotation.
+    # IMPORTANT : tracking=False pour ne pas polluer l'état du tracker avec des rotations !
     if not personnes and rot_candidat is None and (
         now - _orientations_dernier_essai.get(id_camera, 0.0) >= ORIENTATION_INTERVALLE_ESSAI_S
     ):
@@ -1409,7 +1428,10 @@ def analyser(id_camera: str, frame) -> dict:
         meilleur = None  # (score, code, frame_rot, candidats, trouves)
         for rot_code in (cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE):
             frame_rot = cv2.rotate(frame, rot_code)
-            candidats_rot = _run_seg(models["person_seg"], frame_rot, CONF_RODEUR_ANONYME, imgsz=IMGSZ_PERSONNES)
+            candidats_rot = _run_seg(
+                models["person_seg"], frame_rot, CONF_RODEUR_ANONYME,
+                imgsz=IMGSZ_PERSONNES, id_camera=id_camera, tracking=False
+            )
             found_rot = [
                 d for d in candidats_rot
                 if _est_personne(d) and d.get("score", 0.0) >= ORIENTATION_CONF_MIN
@@ -1431,6 +1453,26 @@ def analyser(id_camera: str, frame) -> dict:
             personnes = found_rot
         else:
             _orientations_candidates.pop(id_camera, None)
+
+    # Harmonisation des Track IDs avec le tracker par caméra de on_voit_quoi
+    personnes_suivies_cam = vue_actuelle.get("personnes_suivies", [])
+    if personnes_suivies_cam and personnes:
+        seuil_fusion = 0.08 * diagonale_frame
+        for pers in personnes:
+            c = pers.get("centroid")
+            if not c:
+                continue
+            meilleur_tid = None
+            meilleure_dist = seuil_fusion
+            for p_suivi in personnes_suivies_cam:
+                cs = p_suivi.get("centroid")
+                if cs:
+                    dist = ((c[0] - cs[0]) ** 2 + (c[1] - cs[1]) ** 2) ** 0.5
+                    if dist < meilleure_dist:
+                        meilleure_dist = dist
+                        meilleur_tid = p_suivi.get("track_id")
+            if meilleur_tid is not None:
+                pers["track_id"] = meilleur_tid
 
     # Si YOLO segmentation ne voit pas le corps entier (ex: selfie / visage de très près),
     # tenter une détection de visage directe avant d'abandonner
