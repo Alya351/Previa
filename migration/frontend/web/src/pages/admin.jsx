@@ -4,7 +4,7 @@ import {
   Activity, AlertTriangle, ArrowRight, ArrowUpDown, BarChart3, Building2, Camera, Cctv, Check, CheckCircle, CheckCircle2,
   ChevronLeft, ChevronRight, Clock, DoorOpen, Download, Eye, FileSpreadsheet, FileText, Filter, Info, KeyRound, LayoutGrid,
   Lightbulb, List, Loader2, Mail, MapPin, Maximize2, Menu, Package, Play, Plus, RefreshCw, Save, Search,
-  Router, Shield, ShieldAlert, ShieldCheck, SlidersHorizontal, Target, Trash2, TrendingUp, Undo2, Users, Volume2,
+  Shield, ShieldAlert, ShieldCheck, SlidersHorizontal, Target, Trash2, TrendingUp, Undo2, Users, Volume2,
   VolumeX, Wifi, WifiOff, X, Zap, ZoomIn,
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
@@ -18,8 +18,7 @@ import PersonnesFaceIdView from '../components/PersonnesFaceIdView';
 import AlertMediaModal from '../components/AlertMediaModal';
 import ConfirmModal from '../components/ConfirmModal';
 import {
-  API_BASE, chargerEtatAlarme, arreterAlarme, listerEsp, chargerEtatEsp, ajouterReseauEsp,
-  supprimerReseauEsp, basculerReseauEsp, chargerEtatLicence, activerLicence,
+  API_BASE, chargerEtatAlarme, arreterAlarme, chargerEtatLicence, activerLicence,
   chargerZoneCamera, enregistrerZoneCamera, supprimerZoneCamera, listerCameras,
   creerCamera, supprimerCamera, testerFluxRtsp, urlFluxCamera, urlImageAlerte, urlClipAlerte,
   supprimerAlerte, supprimerToutesAlertes,
@@ -4030,156 +4029,6 @@ const champ = { padding: '9px 12px', borderRadius: '8px', border: '1px solid var
 const btn = { background: '#0284c7', border: 'none', color: '#fff', padding: '9px 16px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' };
 const btnSuppr = { background: '#fee2e2', border: 'none', color: '#dc2626', width: '30px', height: '30px', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 };
 
-// ============================================================================
-// SECTION : CONFIG ALARME — Boîtiers sirène & éclairage sans fil
-// ============================================================================
-function ConfigAlerteView() {
-  const [appareils, setAppareils] = useState([]);
-  const [erreur, setErreur] = useState('');
-  const [chargement, setChargement] = useState(true);
-
-  useEffect(() => {
-    let annule = false;
-    const rafraichir = () => {
-      listerEsp()
-        .then((liste) => { if (!annule) { setAppareils(Array.isArray(liste) ? liste : []); setErreur(''); } })
-        .catch((e) => { if (!annule) setErreur(e.message); })
-        .finally(() => { if (!annule) setChargement(false); });
-    };
-    rafraichir();
-    const id = setInterval(rafraichir, 5000);
-    return () => { annule = true; clearInterval(id); };
-  }, []);
-
-  return (
-    <div className="content-body">
-      <div className="welcome-header">
-        <div>
-          <h1 className="welcome-heading">Boîtiers <span>Sirènes & Projecteurs</span></h1>
-          <p className="welcome-sub">Gérez la connexion Wi-Fi des sirènes et projecteurs physiques de vos locaux</p>
-        </div>
-      </div>
-
-      {erreur && <p style={{ color: '#dc2626', fontSize: '0.85rem', marginBottom: '14px' }}>{erreur}</p>}
-
-      {chargement ? (
-        <div style={carte}><p style={{ color: 'var(--ink-muted)', fontSize: '0.88rem', margin: 0 }}>Recherche des boîtiers sans fil...</p></div>
-      ) : (appareils || []).length === 0 ? (
-        <div style={{ ...carte, textAlign: 'center', padding: '48px' }}>
-          <Router size={40} color="#94a3b8" style={{ marginBottom: '12px' }} />
-          <h3 style={{ fontSize: '1.05rem', color: 'var(--ink-primary)', fontWeight: 700, margin: '0 0 6px' }}>Aucun boîtier sirène détecté</h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)', margin: 0 }}>
-            Vérifiez que le boîtier sirène est allumé et connecté au même réseau Wi-Fi que le serveur.
-          </p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {(appareils || []).map((a) => <CarteEsp key={a.id} appareil={a} />)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CarteEsp({ appareil }) {
-  const [etatEsp, setEtatEsp] = useState(null);
-  const [erreur, setErreur] = useState('');
-  const [ssid, setSsid] = useState('');
-  const [motDePasse, setMotDePasse] = useState('');
-  const [enCours, setEnCours] = useState(false);
-
-  const rafraichir = () => {
-    chargerEtatEsp(appareil.id)
-      .then((e) => { setEtatEsp(e); setErreur(''); })
-      .catch((e) => setErreur(e.message));
-  };
-
-  useEffect(() => {
-    rafraichir();
-    const id = setInterval(rafraichir, 4000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appareil.id]);
-
-  const ajouter = async (e) => {
-    e.preventDefault();
-    setEnCours(true); setErreur('');
-    try {
-      await ajouterReseauEsp(appareil.id, ssid, motDePasse);
-      setSsid(''); setMotDePasse('');
-      rafraichir();
-    } catch (e2) { setErreur(e2.message); } finally { setEnCours(false); }
-  };
-
-  const supprimer = async (s) => {
-    setEnCours(true); setErreur('');
-    try { await supprimerReseauEsp(appareil.id, s); rafraichir(); }
-    catch (e2) { setErreur(e2.message); } finally { setEnCours(false); }
-  };
-
-  const basculer = async (s) => {
-    setEnCours(true); setErreur('');
-    try { await basculerReseauEsp(appareil.id, s); }
-    catch (e2) { setErreur(e2.message); } finally { setEnCours(false); }
-  };
-
-  const signalTexte = etatEsp ? (etatEsp.rssi > -65 ? '🟢 Signal Excellent' : etatEsp.rssi > -80 ? '🟡 Signal Bon' : '🔴 Signal Faible') : '—';
-
-  return (
-    <div style={carte}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-        <div>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--ink-primary)', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Router size={18} color="#0284c7" /> Boîtier Sirène & Projecteur Sans Fil
-          </h3>
-          <p style={{ fontSize: '0.8rem', color: 'var(--ink-muted)', margin: 0 }}>Identifiant : {appareil.hote || appareil.id} (IP : {appareil.ip})</p>
-        </div>
-        {etatEsp && (
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0284c7' }}>Connecté au Wi-Fi « {etatEsp.ssid_actuel || '—'} »</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)', fontWeight: 600 }}>{signalTexte}</div>
-          </div>
-        )}
-      </div>
-
-      {erreur && <p style={{ color: '#dc2626', fontSize: '0.82rem', marginBottom: '12px' }}>{erreur}</p>}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-        {(etatEsp?.reseaux || []).length === 0 ? (
-          <p style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', margin: 0 }}>Aucun réseau Wi-Fi enregistré pour ce boîtier.</p>
-        ) : (
-          (etatEsp?.reseaux || []).map((s) => {
-            const actif = s === etatEsp.ssid_actuel;
-            return (
-              <div key={s} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: actif ? 'rgba(2,132,199,0.08)' : '#f8fafc', borderRadius: '10px', border: actif ? '1px solid #0284c7' : '1px solid var(--border-light)' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--ink-primary)' }}>Wi-Fi : {s}{actif ? ' (Réseau actuel actif)' : ''}</span>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {!actif && (
-                    <button disabled={enCours} onClick={() => basculer(s)} style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700, cursor: enCours ? 'default' : 'pointer' }}>
-                      Se connecter
-                    </button>
-                  )}
-                  <button disabled={enCours} onClick={() => supprimer(s)} style={{ background: '#fee2e2', color: '#dc2626', border: 'none', padding: '6px 10px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700, cursor: enCours ? 'default' : 'pointer' }}>
-                    Oublier
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      <form onSubmit={ajouter} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <input style={champ} placeholder="Nom du réseau Wi-Fi (Box)" value={ssid} onChange={(e) => setSsid(e.target.value)} required />
-        <input style={champ} type="password" placeholder="Mot de passe du Wi-Fi" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} />
-        <button type="submit" disabled={enCours} style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '9px 16px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, cursor: enCours ? 'default' : 'pointer' }}>
-          Connecter ce boîtier au Wi-Fi
-        </button>
-      </form>
-    </div>
-  );
-}
-
 function OrganisationView() {
   const [onglet, setOnglet] = useState('comptes');
   const [comptes, setComptes] = useState([]);
@@ -5000,7 +4849,6 @@ export default function Admin() {
     alerts: 'Alertes',
     reports: 'Rapports',
     organisation: 'Organisation',
-    configAlerte: 'Boîtiers d\'alarme',
   };
 
   return (

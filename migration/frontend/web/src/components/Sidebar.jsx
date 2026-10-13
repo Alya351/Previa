@@ -7,7 +7,6 @@ import {
   FileText,
   Building2,
   Users,
-  Router,
   X
 } from 'lucide-react';
 import PreviaLogo from './PreviaLogo';
