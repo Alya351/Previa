@@ -31,6 +31,14 @@ export function urlFluxWebSocket(chemin) {
 }
 
 async function jsonOuErreur(reponse) {
+  if (reponse.status === 401) {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.clear();
+    }
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+  }
   if (!reponse.ok) {
     let detail = `Erreur ${reponse.status}`;
     try {

@@ -4016,6 +4016,11 @@ async function appelApiOrg(chemin, options = {}) {
     ...options,
     headers,
   });
+  if (res.status === 401) {
+    sessionStorage.clear();
+    window.location.href = '/login';
+    return null;
+  }
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.detail || `Erreur ${res.status}`);
   return data;
@@ -4545,6 +4550,11 @@ async function appelApi(chemin) {
   const res = await fetch(`${API_BASE}${chemin}`, {
     headers: entetesAuth(),
   });
+  if (res.status === 401) {
+    sessionStorage.clear();
+    window.location.href = '/login';
+    return null;
+  }
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.detail || `Erreur ${res.status}`);
   return data;

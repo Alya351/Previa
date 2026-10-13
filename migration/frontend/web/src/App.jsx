@@ -31,7 +31,12 @@ function LoginPage() {
 // login redirige là-bas).
 function RequireAuth({ children }) {
   const connecte = sessionStorage.getItem('previa_connecte') === 'oui'
-  return connecte ? children : <Navigate to="/login" replace />
+  const token = sessionStorage.getItem('previa_token')
+  if (!connecte || !token) {
+    sessionStorage.clear()
+    return <Navigate to="/login" replace />
+  }
+  return children
 }
 
 function App() {
