@@ -705,35 +705,49 @@ def _assign_faces_to_people(people_centroids: list, face_centroids: list) -> dic
 _inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="ai_worker")
 
 
-_trackers_seg_par_camera: dict[str, list] = {}
+_verrou_suivi = threading.Lock()
+_suivis_par_camera: dict = {}
 
 
-def _run_seg(model, frame, conf, utiliser_onnx=True, imgsz=None, id_camera=None, tracking=True):
+def _track_isole(model, frame, id_camera, **kwargs):
+    """Un suivi (ByteTrack) par (modèle, caméra) au lieu d'un seul partagé."""
+    with _verrou_suivi:
+        cle = (id(model), id_camera)
+        predictor = getattr(model, "predictor", None)
+        if predictor is not None:
+            sauvegarde = _suivis_par_camera.get(cle)
+            if sauvegarde is not None:
+                predictor.trackers = sauvegarde
+            elif hasattr(predictor, "trackers"):
+                del predictor.trackers
+        resultat = model.track(frame, persist=True, **kwargs)
+        predictor = getattr(model, "predictor", None)
+        if predictor is not None and hasattr(predictor, "trackers"):
+            _suivis_par_camera[cle] = predictor.trackers
+        return resultat
+
+
+def oublier_suivi(id_camera: str) -> None:
+    with _verrou_suivi:
+        for cle in [k for k in _suivis_par_camera if k[1] == id_camera]:
+            _suivis_par_camera.pop(cle, None)
+
+
+def _run_seg(model, frame, conf, utiliser_onnx=True, imgsz=None, id_camera=None, suivre=True):
     """Détection+segmentation pleine résolution : tente YOLO .pt, puis YOLO .onnx.
 
     `utiliser_onnx=False` : à passer pour tout modèle qui ne détecte PAS des
     personnes (ex. vêtements) — le repli ONNX est un détecteur de personnes,
     il ressortait sinon des « personnes » à la place des vêtements.
-    `imgsz` : résolution d'inférence YOLO (None = défaut Ultralytics).
-    `id_camera` : identifiant caméra pour sauvegarder/restaurer l'état du tracker ByteTrack.
-    `tracking` : activer ou non le suivi ByteTrack (désactivé lors des tests d'orientation
-    pour ne pas corrompre le suivi avec des frames tournées à 90/180°)."""
+    `imgsz` : résolution d'inférence YOLO (None = défaut Ultralytics)."""
     if model is not None:
         try:
             kwargs = {"conf": conf, "verbose": False}
             if imgsz:
                 kwargs["imgsz"] = imgsz
-            if tracking and utiliser_onnx and hasattr(model, "track"):
+            if utiliser_onnx and suivre and id_camera is not None and hasattr(model, "track"):
                 try:
-                    # Isoler l'état du tracker ByteTrack pour CETTE caméra
-                    if id_camera and hasattr(model, "predictor") and model.predictor is not None:
-                        if id_camera in _trackers_seg_par_camera:
-                            model.predictor.trackers = _trackers_seg_par_camera[id_camera]
-                        else:
-                            model.predictor.trackers = []
-                    result = model.track(frame, persist=True, **kwargs)[0]
-                    if id_camera and hasattr(model, "predictor") and model.predictor is not None:
-                        _trackers_seg_par_camera[id_camera] = model.predictor.trackers
+                    result = _track_isole(model, frame, id_camera, **kwargs)[0]
                 except Exception:
                     result = model.predict(frame, **kwargs)[0]
             else:
@@ -1406,10 +1420,7 @@ def analyser(id_camera: str, frame) -> dict:
         )
 
     _t0 = time.time()
-    tous_candidats_personnes = _run_seg(
-        models["person_seg"], frame, CONF_RODEUR_ANONYME,
-        imgsz=IMGSZ_PERSONNES, id_camera=id_camera, tracking=True
-    )
+    tous_candidats_personnes = _run_seg(models["person_seg"], frame, CONF_RODEUR_ANONYME, imgsz=IMGSZ_PERSONNES, id_camera=id_camera)
     personnes = [
         d for d in tous_candidats_personnes
         if _est_personne(d) and d.get("score", 0.0) >= 0.05
@@ -1420,7 +1431,7 @@ def analyser(id_camera: str, frame) -> dict:
     # ORIENTATION_INTERVALLE_ESSAI_S secondes, avec un seuil de confiance
     # plus exigeant, et verrouillage seulement après
     # ORIENTATION_CONFIRMATIONS observations de la MÊME rotation.
-    # IMPORTANT : tracking=False pour ne pas polluer l'état du tracker avec des rotations !
+    # IMPORTANT : suivre=False pour ne pas polluer l'état du tracker avec des rotations !
     if not personnes and rot_candidat is None and (
         now - _orientations_dernier_essai.get(id_camera, 0.0) >= ORIENTATION_INTERVALLE_ESSAI_S
     ):
@@ -1428,10 +1439,7 @@ def analyser(id_camera: str, frame) -> dict:
         meilleur = None  # (score, code, frame_rot, candidats, trouves)
         for rot_code in (cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE):
             frame_rot = cv2.rotate(frame, rot_code)
-            candidats_rot = _run_seg(
-                models["person_seg"], frame_rot, CONF_RODEUR_ANONYME,
-                imgsz=IMGSZ_PERSONNES, id_camera=id_camera, tracking=False
-            )
+            candidats_rot = _run_seg(models["person_seg"], frame_rot, CONF_RODEUR_ANONYME, imgsz=IMGSZ_PERSONNES, suivre=False)
             found_rot = [
                 d for d in candidats_rot
                 if _est_personne(d) and d.get("score", 0.0) >= ORIENTATION_CONF_MIN

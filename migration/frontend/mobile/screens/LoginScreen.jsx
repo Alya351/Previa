@@ -34,19 +34,6 @@ export const LoginScreen = ({ onLogin }) => {
       onLogin(utilisateur);
     } catch (e) {
       const errStr = e?.message || '';
-      // Si le serveur est momentanément inaccessible, autoriser la session locale nomade
-      if (errStr.includes('fetch') || errStr.includes('introuvable') || errStr.includes('Network') || errStr.includes('NetworkError')) {
-        console.warn('Serveur distant injoignable, passage en mode poste nomade local:', errStr);
-        onLogin({
-          email: email.trim(),
-          nom: 'Alyakiemde',
-          prenom: 'Admin',
-          role: 'admin',
-          est_par_defaut: true,
-          modeHorsLigne: true,
-        });
-        return;
-      }
       setErreur(errStr || 'Connexion impossible.');
     } finally {
       setEnCours(false);

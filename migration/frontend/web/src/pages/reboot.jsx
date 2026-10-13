@@ -17,12 +17,13 @@ export default function Reboot() {
   const navigate = useNavigate();
   const [etape, setEtape] = useState('avertissement'); // avertissement | confirmation | en_cours | fait | erreur
   const [erreur, setErreur] = useState('');
+  const [code, setCode] = useState('');
 
   async function confirmerReboot() {
     setEtape('en_cours');
     setErreur('');
     try {
-      await reinitialiserSysteme();
+      await reinitialiserSysteme(code.trim());
       setEtape('fait');
       setTimeout(() => navigate('/login', { replace: true }), 4000);
     } catch (err) {
@@ -80,6 +81,12 @@ export default function Reboot() {
               repart de zéro -- création du tout premier compte administrateur,
               nouveau code d'amorçage requis.
             </p>
+
+            {etape !== 'fait' && etape !== 'en_cours' && (
+              <input type="text" value={code} onChange={(e) => setCode(e.target.value)}
+                placeholder="Code d'amorçage (si vous n'êtes pas connecté en admin)"
+                style={{ width: '100%', marginTop: 16, padding: '11px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+            )}
 
             {etape === 'erreur' && (
               <div style={{ background: '#fee2e2', color: '#dc2626', padding: '10px 14px', borderRadius: '10px', fontSize: '0.84rem', fontWeight: 600, marginTop: 16, width: '100%' }}>

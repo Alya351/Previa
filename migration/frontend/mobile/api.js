@@ -128,31 +128,9 @@ if (!API_BASE && Platform.OS !== 'web') {
   assurerAdresseServeur();
 }
 
-let tokenSession = null;
-
-export function definirTokenSession(token) {
-  tokenSession = token;
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-    if (token) {
-      window.localStorage.setItem('previa_mobile_token', token);
-    } else {
-      window.localStorage.removeItem('previa_mobile_token');
-    }
-  }
-}
-
-export function obtenirTokenSession() {
-  if (!tokenSession && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-    tokenSession = window.localStorage.getItem('previa_mobile_token');
-  }
-  return tokenSession;
-}
-
-export function effacerTokenSession() {
-  tokenSession = null;
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-    window.localStorage.removeItem('previa_mobile_token');
-  }
+let jetonSession = null;
+export function definirJeton(jeton) {
+  jetonSession = jeton || null;
 }
 
 async function appelApi(chemin, options = {}) {
@@ -165,19 +143,14 @@ async function appelApi(chemin, options = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    };
-    const token = obtenirTokenSession();
-    if (token && !headers['Authorization'] && !headers['authorization']) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
     const reponse = await fetch(`${API_BASE}${chemin}`, {
-      ...options,
-      headers,
       signal: controller.signal,
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(jetonSession ? { Authorization: `Bearer ${jetonSession}` } : {}),
+        ...(options.headers || {}),
+      },
     });
     clearTimeout(timeoutId);
 
@@ -205,15 +178,14 @@ async function appelApi(chemin, options = {}) {
 // POST /utilisateurs/connexion — voir compte.authentifier() côté backend.
 // Renvoie le compte (sans mot de passe) ou lève une erreur avec le
 // message du backend ("Email ou mot de passe incorrect.").
-export async function seConnecter(email, motDePasse) {
-  const data = await appelApi('/utilisateurs/connexion', {
+export function seConnecter(email, motDePasse) {
+  return appelApi('/utilisateurs/connexion', {
     method: 'POST',
     body: JSON.stringify({ email, mot_de_passe: motDePasse }),
+  }).then((utilisateur) => {
+    definirJeton(utilisateur?.token);
+    return utilisateur;
   });
-  if (data && data.token) {
-    definirTokenSession(data.token);
-  }
-  return data;
 }
 
 export async function seDeconnecter() {

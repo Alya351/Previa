@@ -43,7 +43,7 @@ from fonctionnalites.cam.batiment import batiment
 from fonctionnalites.cam.camera import camera, rtsp_service
 from fonctionnalites.cam.pieces import piece
 from fonctionnalites.ComportementsSupects import profil_suspect
-from fonctionnalites.Infrastructure import alarme_physique, clips_service, derniere_image, esp_decouverte, gestion_thermique, licence, rapport_cam, reboot, signalisation_webrtc
+from fonctionnalites.Infrastructure import alarme_physique, clips_service, derniere_image, esp_decouverte, gestion_thermique, licence, profil_usage, rapport_cam, reboot, signalisation_webrtc
 from fonctionnalites.VueEnsemble import vue_ensemble as vue_ensemble_module
 from fonctionnalites.zoneCam import enregitre as zone_module
 from fonctionnalites.Infrastructure.local_store import db
@@ -62,7 +62,7 @@ os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 
 # Importés ici, une seule fois au démarrage
 from fonctionnalites.DetectionPrincipal.on_voit_quoi import analyser as analyser_quoi
-from fonctionnalites.DetectionPrincipal.on_voit_qui import analyser as analyser_qui, _get_models
+from fonctionnalites.DetectionPrincipal.on_voit_qui import analyser as analyser_qui, _get_models, oublier_suivi as oublier_suivi_personnes
 
 # Préchargement asynchrone des modèles IA pour démarrer l'API et l'interface Web instantanément (0ms)
 def _charger_modeles_arrière_plan():
@@ -255,6 +255,7 @@ class DemandeAmorcage(BaseModel):
     email: str
     mot_de_passe: str
     code_secret: str
+    profil: str = "entreprise"
 
 
 class DemandeConnexion(BaseModel):
@@ -355,10 +356,14 @@ class DemandeZone(BaseModel):
     },
 )
 def amorcer_admin_par_defaut(demande: DemandeAmorcage):
+    if demande.profil not in profil_usage.PROFILS:
+        raise HTTPException(422, f"Profil inconnu : attendu {' ou '.join(profil_usage.PROFILS)}")
     try:
-        return defaultAdmin.initialiser_admin_par_defaut(
+        admin_cree = defaultAdmin.initialiser_admin_par_defaut(
             demande.nom, demande.prenom, demande.email, demande.mot_de_passe, demande.code_secret,
         )
+        profil_usage.appliquer_a_l_amorcage(demande.profil, admin_cree)
+        return admin_cree
     except defaultAdmin.CodeSecretInvalide as exc:
         raise HTTPException(403, str(exc))
     except ValueError as exc:
@@ -922,6 +927,7 @@ def supprimer_camera(id_camera: str):
     rtsp_service.arreter_worker_camera(id_camera)
     derniere_image.oublier(id_camera)
     zone_module.supprimer_zone(id_camera)
+    oublier_suivi_personnes(id_camera)
     return {"supprime": True}
 
 
@@ -1508,50 +1514,32 @@ def etat_licence():
     return licence.etat()
 
 
+class DemandeReboot(BaseModel):
+    code: str | None = None
+
+
+@app.get("/systeme/profil", tags=["Système"], summary="Profil d'usage (particulier / entreprise)")
+def profil_systeme():
+    return profil_usage.description()
+
+
 @app.post(
     "/systeme/reboot",
     tags=["Système"],
     summary="Réinitialise complètement l'installation (efface TOUTES les données)",
-    description=(
-        "Supprime comptes, bâtiments/pièces/caméras, alertes, profils, état "
-        "comportemental ET licence -- repart d'une installation vierge, comme "
-        "au tout premier lancement. Réservé aux administrateurs ou à la console locale "
-        "physique de secours (127.0.0.1 / localhost)."
-    ),
-    responses={
-        401: {"description": "Authentification requise pour la réinitialisation distante"},
-        403: {"description": "Privilèges administrateur requis"},
-    },
+    description="Admin connecté OU code d'amorçage de l'installation (mot de passe perdu). IRRÉVERSIBLE.",
 )
 def rebooter_systeme(
-    request: Request,
-    authorization: str | None = Header(None, alias="Authorization"),
-    x_session_token: str | None = Header(None, alias="X-Session-Token"),
+    demande: DemandeReboot | None = None,
+    utilisateur: dict | None = Depends(session.utilisateur_optionnel),
 ):
-    ip_client = request.client.host if request.client else ""
-    est_local = ip_client in ("127.0.0.1", "::1", "localhost", "testclient")
-
-    if not est_local:
-        token = None
-        if isinstance(authorization, str) and authorization.strip():
-            parts = authorization.strip().split()
-            if len(parts) == 2 and parts[0].lower() == "bearer":
-                token = parts[1]
-            elif len(parts) == 1:
-                token = parts[0]
-        elif isinstance(x_session_token, str) and x_session_token.strip():
-            token = x_session_token.strip()
-
-        if not token:
-            raise HTTPException(401, "Authentification requise pour la réinitialisation à distance")
-
-        sess = session.verifier_session(token)
-        if not sess:
-            raise HTTPException(401, "Session invalide ou expirée")
-        if sess.get("role") != "admin":
-            raise HTTPException(403, "Privilèges administrateur requis pour réinitialiser le système")
-
+    est_admin = bool(utilisateur) and utilisateur.get("role") == "admin"
+    code_ok = bool(demande) and licence.code_correspond(demande.code)
+    rien_a_perdre = not compte.lister_utilisateurs()
+    if not (est_admin or code_ok or rien_a_perdre):
+        raise HTTPException(403, "Réinitialisation refusée : connectez-vous en admin ou fournissez le code d'amorçage.")
     reboot.reinitialiser()
+    session.regenerer_secret()
     return {"reinitialise": True}
 
 

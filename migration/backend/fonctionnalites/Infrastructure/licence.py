@@ -118,6 +118,15 @@ def _revalider_si_besoin(donnees: dict) -> dict:
     return donnees
 
 
+def code_correspond(code: str | None) -> bool:
+    """Vrai si `code` est le code d'amorçage de CETTE installation."""
+    import hmac
+    donnees = _lire()
+    if not donnees or not code or not donnees.get("code"):
+        return False
+    return hmac.compare_digest(str(donnees["code"]).strip().upper(), code.strip().upper())
+
+
 def etat() -> dict:
     """Statut de la licence de cette installation, calculable ENTIÈREMENT
     hors ligne (voir docstring du module) :

@@ -19,6 +19,7 @@ export default function Login({ onLoginSuccess }) {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [codeSecret, setCodeSecret] = useState('');
+  const [profil, setProfil] = useState('entreprise');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [erreur, setErreur] = useState('');
@@ -36,7 +37,7 @@ export default function Login({ onLoginSuccess }) {
         const res = await fetch(`${API_BASE}/utilisateurs/amorcer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nom, prenom, email, mot_de_passe: password, code_secret: codeSecret }),
+          body: JSON.stringify({ nom, prenom, email, mot_de_passe: password, code_secret: codeSecret, profil }),
         });
         const data = await res.json().catch(() => null);
         if (!res.ok) throw new Error(data?.detail || `Erreur ${res.status}`);
@@ -63,13 +64,8 @@ export default function Login({ onLoginSuccess }) {
         onLoginSuccess();
       }
     } catch (err) {
-      // Fallback démo si le backend n'est pas joignable
-      sessionStorage.setItem('previa_connecte', 'oui');
-      sessionStorage.setItem('previa_utilisateur_id', 'admin_local');
-      sessionStorage.setItem('previa_utilisateur_role', 'admin');
-      sessionStorage.setItem('previa_utilisateur_nom', 'Administrateur Previa');
-      sessionStorage.setItem('previa_est_par_defaut', 'oui');
-      onLoginSuccess();
+      const reseau = err instanceof TypeError;
+      setErreur(reseau ? "Serveur PREVIA injoignable. Vérifiez qu'il est démarré." : (err.message || 'Connexion impossible.'));
     } finally {
       setIsLoading(false);
     }
@@ -180,6 +176,19 @@ export default function Login({ onLoginSuccess }) {
                 </button>
               </div>
             </div>
+
+            {isSignUp && (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[['particulier', 'Mon domicile / mon commerce'], ['entreprise', 'Une entreprise']].map(([valeur, texte]) => (
+                  <button key={valeur} type="button" onClick={() => setProfil(valeur)}
+                    style={{ flex: 1, padding: '10px 12px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700,
+                      border: profil === valeur ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                      background: profil === valeur ? '#e0f2fe' : '#f8fafc' }}>
+                    {texte}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {isSignUp && (
               <div>

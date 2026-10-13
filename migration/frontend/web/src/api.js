@@ -243,8 +243,16 @@ export function activerLicence(code) {
 }
 
 // Réinitialisation système
-export function reinitialiserSysteme() {
-  return fetchAvecAuth(`${API_BASE}/systeme/reboot`, { method: 'POST' }).then(jsonOuErreur);
+export function reinitialiserSysteme(code) {
+  return fetchAvecAuth(`${API_BASE}/systeme/reboot`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: code || null }),
+  }).then(jsonOuErreur);
+}
+
+export function obtenirProfil() {
+  return fetch(`${API_BASE}/systeme/profil`).then(jsonOuErreur);
 }
 
 // ============================================================================
