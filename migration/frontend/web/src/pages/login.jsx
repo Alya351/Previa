@@ -57,6 +57,9 @@ export default function Login({ onLoginSuccess }) {
         sessionStorage.setItem('previa_utilisateur_role', data.role);
         sessionStorage.setItem('previa_utilisateur_nom', `${data.prenom} ${data.nom}`);
         sessionStorage.setItem('previa_est_par_defaut', data.est_par_defaut ? 'oui' : 'non');
+        if (data.token) {
+          sessionStorage.setItem('previa_token', data.token);
+        }
         onLoginSuccess();
       }
     } catch (err) {

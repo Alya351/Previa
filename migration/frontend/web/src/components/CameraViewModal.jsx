@@ -16,7 +16,7 @@ import {
 import { useFluxDirect } from '../lib/useFluxDirect.js';
 import { FluxCamera } from './FluxCamera.jsx';
 import { DetectionOverlay } from './DetectionOverlay.jsx';
-import { API_BASE, envoyerFrameVoir, envoyerFrameQui } from '../api.js';
+import { API_BASE, envoyerFrameVoir, envoyerFrameQui, chargerEtatCamera } from '../api.js';
 import { mapPersonneApi } from '../lib/mappageCibles.js';
 
 // `camera.image` : URL de GET /cameras/{id}/image, réinterrogée toutes
@@ -59,9 +59,8 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
       if (enCours) return;
       enCours = true;
       try {
-        const res = await fetch(`${API_BASE}/cameras/${camera.id}/etat`);
-        if (res.ok) {
-          const etat = await res.json();
+        const etat = await chargerEtatCamera(camera.id);
+        if (etat) {
           const camCtx = {
             id_camera: camera.id,
             num: camera.name,

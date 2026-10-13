@@ -18,7 +18,7 @@ import PersonnesFaceIdView from '../components/PersonnesFaceIdView';
 import AlertMediaModal from '../components/AlertMediaModal';
 import ConfirmModal from '../components/ConfirmModal';
 import {
-  API_BASE, chargerEtatAlarme, arreterAlarme, chargerEtatLicence, activerLicence,
+  API_BASE, entetesAuth, chargerEtatAlarme, arreterAlarme, chargerEtatLicence, activerLicence,
   chargerZoneCamera, enregistrerZoneCamera, supprimerZoneCamera, listerCameras,
   creerCamera, supprimerCamera, testerFluxRtsp, urlFluxCamera, urlImageAlerte, urlClipAlerte,
   supprimerAlerte, supprimerToutesAlertes,
@@ -4008,9 +4008,13 @@ function ReportsView({ alertesReelles = [], kpis = {} }) {
 const idAdmin = () => sessionStorage.getItem('previa_utilisateur_id');
 
 async function appelApiOrg(chemin, options = {}) {
+  const headers = entetesAuth({
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  });
   const res = await fetch(`${API_BASE}${chemin}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers,
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.detail || `Erreur ${res.status}`);
@@ -4536,7 +4540,9 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
 const INTERVALLE_MS = 2000;
 
 async function appelApi(chemin) {
-  const res = await fetch(`${API_BASE}${chemin}`);
+  const res = await fetch(`${API_BASE}${chemin}`, {
+    headers: entetesAuth(),
+  });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.detail || `Erreur ${res.status}`);
   return data;

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  API_BASE, urlFluxWebSocket, urlDirectEmettre, envoyerFrameVoir, envoyerFrameQui, listerCameras,
+  API_BASE, urlFluxWebSocket, urlDirectEmettre, envoyerFrameVoir, envoyerFrameQui, listerCameras, listerPieces, listerBatiments,
 } from '../api.js';
 import logoPrevia from '../assets/logo_previa_clean.png';
 import { Icone } from '../lib/icones.jsx';
@@ -73,8 +73,8 @@ export default function Camera() {
     try {
       const [cams, pieces, batiments] = await Promise.all([
         listerCameras().catch(() => []),
-        fetch(`${API_BASE}/pieces`).then((r) => r.json()).catch(() => []),
-        fetch(`${API_BASE}/batiments`).then((r) => r.json()).catch(() => []),
+        listerPieces().catch(() => []),
+        listerBatiments().catch(() => []),
       ]);
       const enrichies = cams.map((c) => {
         const p = pieces.find((pp) => pp.id === c.piece_id);

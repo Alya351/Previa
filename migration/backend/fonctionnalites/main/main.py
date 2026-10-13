@@ -30,7 +30,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import requests
-from fastapi import FastAPI, File, HTTPException, Response, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import StreamingResponse
@@ -47,7 +47,7 @@ from fonctionnalites.Infrastructure import alarme_physique, clips_service, derni
 from fonctionnalites.VueEnsemble import vue_ensemble as vue_ensemble_module
 from fonctionnalites.zoneCam import enregitre as zone_module
 from fonctionnalites.Infrastructure.local_store import db
-from fonctionnalites.users import admin, compte, defaultAdmin, user
+from fonctionnalites.users import admin, compte, defaultAdmin, user, session
 from fonctionnalites.Infrastructure import sqlite_db, etat_persistant, generer_certificat
 
 # 1. Initialisation instantanée de la base de données SQLite embarquée (0ms)
@@ -164,18 +164,41 @@ app = FastAPI(
     redoc_url=None,
 )
 
-# Le frontend React (migration/frontend/web/, servi par le serveur de dev
-# Vite sur son propre port) tourne sur une origine DIFFÉRENTE de cette
-# API (contrairement à l'ancien backend/, qui servait le frontend en
-# fichiers statiques depuis le MÊME serveur — pas de souci d'origine
-# croisée à l'époque). Sans CORS, le navigateur bloquerait purement et
-# simplement tout appel fetch() du frontend vers cette API. `allow_origins`
-# large ("*") : acceptable pour l'instant (pas de cookies de session, pas
-# de credentials envoyés — juste des identifiants dans le corps JSON), à
-# resserrer si une vraie authentification par cookie/session arrive.
+# Configuration des origines autorisées (CORS) :
+# Restreint aux origines applicatives locales (ports Vite 5173-5176, backend 8012/8080)
+# et extensible via la variable d'environnement PREVIA_CORS_ORIGINS.
+cors_env = os.environ.get("PREVIA_CORS_ORIGINS", "").strip()
+if cors_env:
+    ORIGINES_AUTORISEES = [o.strip() for o in cors_env.split(",") if o.strip()]
+elif os.environ.get("PREVIA_MODE_DEV", "").strip() == "1":
+    ORIGINES_AUTORISEES = ["*"]
+else:
+    ORIGINES_AUTORISEES = [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:5176",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        "http://127.0.0.1:5176",
+        "http://localhost:8012",
+        "http://127.0.0.1:8012",
+        "https://localhost:8012",
+        "https://127.0.0.1:8012",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    ]
+    ip_loc = _ip_locale()
+    if ip_loc and ip_loc not in ("127.0.0.1", "localhost"):
+        for port in (5173, 5174, 5175, 5176, 8012, 8080):
+            ORIGINES_AUTORISEES.append(f"http://{ip_loc}:{port}")
+            ORIGINES_AUTORISEES.append(f"https://{ip_loc}:{port}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ORIGINES_AUTORISEES,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -366,7 +389,9 @@ def se_connecter(demande: DemandeConnexion):
     # 1. Authentification standard — seule voie en production.
     u = compte.authentifier(demande.email, demande.mot_de_passe)
     if u is not None:
-        return u
+        rep = dict(u)
+        rep["token"] = session.creer_session(u)
+        return rep
 
     # 2. Aucun contournement hors mode développement explicite.
     if not MODE_DEV_CONNEXION:
@@ -377,7 +402,7 @@ def se_connecter(demande: DemandeConnexion):
 
     # Admin local sans mot de passe
     if email_clean in ("admin@previa.local", "admin@previa.fr", "admin"):
-        return {
+        rep = {
             "id": "admin_local",
             "nom": "Administrateur",
             "prenom": "Previa",
@@ -385,6 +410,8 @@ def se_connecter(demande: DemandeConnexion):
             "role": "admin",
             "est_par_defaut": True,
         }
+        rep["token"] = session.creer_session(rep)
+        return rep
 
     # Si le compte n'existe pas encore dans la base, on le crée en tant qu'admin
     existant = compte.trouver_par_email(demande.email)
@@ -398,24 +425,26 @@ def se_connecter(demande: DemandeConnexion):
             role="admin",
             est_par_defaut=True,
         )
-        return u_nouveau
+        rep = dict(u_nouveau)
+        rep["token"] = session.creer_session(rep)
+        return rep
 
     # Si le compte existe mais mot de passe différent, mise à jour pour ne jamais bloquer l'administrateur
     u_maj = compte.modifier_utilisateur(
         existant["id"],
         mot_de_passe=demande.mot_de_passe,
     )
-    if u_maj:
-        return u_maj
-
-    return existant
+    rep = dict(u_maj if u_maj else existant)
+    rep["token"] = session.creer_session(rep)
+    return rep
 
 
 @app.get(
     "/utilisateurs/admin-defaut",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Voir le compte admin par défaut",
-    description="Le compte créé par l'amorçage initial, s'il existe encore.",
+    description="Le compte créé par l'amorçage initial, s'il existe encore (accès admin requis).",
     responses={404: {"description": "Aucun admin par défaut (jamais amorcé, ou supprimé depuis)"}},
 )
 def voir_admin_par_defaut():
@@ -427,9 +456,10 @@ def voir_admin_par_defaut():
 
 @app.put(
     "/utilisateurs/admin-defaut",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Modifier le compte admin par défaut",
-    description="Modifie nom/prénom/email/mot de passe de l'admin par défaut. Seuls les champs fournis changent.",
+    description="Modifie nom/prénom/email/mot de passe de l'admin par défaut (accès admin requis). Seuls les champs fournis changent.",
     responses={404: {"description": "Aucun admin par défaut"}, 409: {"description": "Email déjà pris"}},
 )
 def modifier_admin_par_defaut(demande: DemandeModificationCompte):
@@ -446,9 +476,10 @@ def modifier_admin_par_defaut(demande: DemandeModificationCompte):
 
 @app.delete(
     "/utilisateurs/admin-defaut",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Supprimer le compte admin par défaut",
-    description="Supprime l'admin par défaut — permet de refaire POST /utilisateurs/amorcer après.",
+    description="Supprime l'admin par défaut — permet de refaire POST /utilisateurs/amorcer après (accès admin requis).",
     responses={404: {"description": "Aucun admin par défaut"}},
 )
 def supprimer_admin_par_defaut():
@@ -462,13 +493,10 @@ def supprimer_admin_par_defaut():
 # ========================================================================
 @app.post(
     "/utilisateurs/admins",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Créer un compte admin",
-    description=(
-        "Crée un nouveau compte admin (accès complet), avec son identifiant "
-        "unique (`id`). Réservé à un admin déjà connecté — la vérification de "
-        "session/jeton n'est pas encore branchée ici, à venir."
-    ),
+    description="Crée un nouveau compte admin (accès complet). Réservé à un administrateur connecté.",
     responses={409: {"description": "Un compte existe déjà avec cet email"}},
 )
 def creer_admin(demande: DemandeCreationCompte):
@@ -480,9 +508,10 @@ def creer_admin(demande: DemandeCreationCompte):
 
 @app.get(
     "/utilisateurs/admins",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Lister les comptes admin",
-    description="Tous les comptes admin (y compris l'admin par défaut), mot de passe exclu.",
+    description="Tous les comptes admin (y compris l'admin par défaut), mot de passe exclu (accès admin requis).",
 )
 def lister_admins():
     return admin.lister_admins()
@@ -490,9 +519,10 @@ def lister_admins():
 
 @app.put(
     "/utilisateurs/admins/{id_utilisateur}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Modifier un compte admin",
-    description="Seuls les champs fournis changent. Sans effet sur un id qui n'est pas un admin.",
+    description="Seuls les champs fournis changent (accès admin requis). Sans effet sur un id qui n'est pas un admin.",
     responses={404: {"description": "Aucun admin avec cet id"}, 409: {"description": "Email déjà pris"}},
 )
 def modifier_admin(id_utilisateur: str, demande: DemandeModificationCompte):
@@ -510,9 +540,10 @@ def modifier_admin(id_utilisateur: str, demande: DemandeModificationCompte):
 
 @app.delete(
     "/utilisateurs/admins/{id_utilisateur}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Supprimer un compte admin",
-    description="Refuse (404) si l'id n'existe pas ou n'est pas un admin (protège un user par cette voie).",
+    description="Refuse (404) si l'id n'existe pas ou n'est pas un admin (accès admin requis).",
     responses={404: {"description": "Aucun admin avec cet id"}},
 )
 def supprimer_admin(id_utilisateur: str):
@@ -526,15 +557,10 @@ def supprimer_admin(id_utilisateur: str):
 # ========================================================================
 @app.post(
     "/utilisateurs/users",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Créer un compte user (accès notifications uniquement)",
-    description=(
-        "Crée un nouveau compte user, avec son identifiant unique (`id`). "
-        "Un user est un compte RESTREINT : il ne verra que les "
-        "notifications/alertes, pas le reste de l'API (contrairement à un "
-        "admin, accès complet). Réservé à un admin déjà connecté — la "
-        "vérification de session/jeton n'est pas encore branchée ici, à venir."
-    ),
+    description="Crée un nouveau compte user. Réservé à un administrateur connecté.",
     responses={409: {"description": "Un compte existe déjà avec cet email"}},
 )
 def creer_utilisateur_standard(demande: DemandeCreationCompte):
@@ -548,9 +574,10 @@ def creer_utilisateur_standard(demande: DemandeCreationCompte):
 
 @app.get(
     "/utilisateurs/users",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Lister les comptes user",
-    description="Tous les comptes user (restreints aux notifications), mot de passe exclu.",
+    description="Tous les comptes user, mot de passe exclu (accès admin requis).",
 )
 def lister_utilisateurs_standard():
     return user.lister_utilisateurs_standard()
@@ -558,9 +585,10 @@ def lister_utilisateurs_standard():
 
 @app.put(
     "/utilisateurs/users/{id_utilisateur}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Modifier un compte user",
-    description="Seuls les champs fournis changent. Sans effet sur un id qui n'est pas un user.",
+    description="Seuls les champs fournis changent (accès admin requis). Sans effet sur un id qui n'est pas un user.",
     responses={404: {"description": "Aucun user avec cet id"}, 409: {"description": "Email déjà pris"}},
 )
 def modifier_utilisateur_standard(id_utilisateur: str, demande: DemandeModificationCompte):
@@ -578,9 +606,10 @@ def modifier_utilisateur_standard(id_utilisateur: str, demande: DemandeModificat
 
 @app.delete(
     "/utilisateurs/users/{id_utilisateur}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Supprimer un compte user",
-    description="Refuse (404) si l'id n'existe pas ou n'est pas un user (protège un admin par cette voie).",
+    description="Refuse (404) si l'id n'existe pas ou n'est pas un user (accès admin requis).",
     responses={404: {"description": "Aucun user avec cet id"}},
 )
 def supprimer_utilisateur_standard(id_utilisateur: str):
@@ -594,9 +623,10 @@ def supprimer_utilisateur_standard(id_utilisateur: str):
 # ========================================================================
 @app.get(
     "/utilisateurs",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Utilisateurs"],
     summary="Lister tous les comptes",
-    description="Tous les comptes (admins et users confondus), mot de passe exclu.",
+    description="Tous les comptes (admins et users confondus), mot de passe exclu (accès admin requis).",
 )
 def lister_tous_les_utilisateurs():
     return compte.lister_utilisateurs()
@@ -607,13 +637,10 @@ def lister_tous_les_utilisateurs():
 # ========================================================================
 @app.post(
     "/batiments",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Bâtiments"],
     summary="Créer un bâtiment",
-    description=(
-        "Crée un bâtiment (nom, lieu), avec son identifiant unique (`id`). "
-        "Réservé à un admin — `id_admin` doit être l'id d'un compte admin "
-        "existant (pas encore de session/jeton, voir admin.py)."
-    ),
+    description="Crée un bâtiment (nom, lieu). Réservé à un administrateur connecté.",
     responses={403: {"description": "id_admin ne correspond à aucun compte admin"}},
 )
 def creer_batiment(demande: DemandeCreationBatiment):
@@ -625,6 +652,7 @@ def creer_batiment(demande: DemandeCreationBatiment):
 
 @app.get(
     "/batiments",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Bâtiments"],
     summary="Lister les bâtiments",
     description="Tous les bâtiments existants.",
@@ -635,6 +663,7 @@ def lister_batiments():
 
 @app.get(
     "/batiments/{id_batiment}",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Bâtiments"],
     summary="Voir un bâtiment",
     description="Un seul bâtiment par son id.",
@@ -649,6 +678,7 @@ def voir_batiment(id_batiment: str):
 
 @app.put(
     "/batiments/{id_batiment}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Bâtiments"],
     summary="Modifier un bâtiment",
     description="Seuls les champs fournis (nom, lieu, responsable_id) changent.",
@@ -663,6 +693,7 @@ def modifier_batiment(id_batiment: str, demande: DemandeModificationBatiment):
 
 @app.delete(
     "/batiments/{id_batiment}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Bâtiments"],
     summary="Supprimer un bâtiment",
     description="Refusé (409) si le bâtiment a encore des pièces — les supprimer (ou les déplacer) d'abord.",
@@ -686,13 +717,10 @@ def supprimer_batiment(id_batiment: str):
 # ========================================================================
 @app.post(
     "/pieces",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Pièces"],
     summary="Créer une pièce",
-    description=(
-        "Crée une pièce (nom) rattachée à un bâtiment (`batiment_id`), avec "
-        "son identifiant unique (`id`). Réservé à un admin — `id_admin` doit "
-        "être l'id d'un compte admin existant."
-    ),
+    description="Crée une pièce rattachée à un bâtiment. Réservé à un administrateur connecté.",
     responses={
         403: {"description": "id_admin ne correspond à aucun compte admin"},
         404: {"description": "Aucun bâtiment avec ce batiment_id"},
@@ -709,6 +737,7 @@ def creer_piece(demande: DemandeCreationPiece):
 
 @app.get(
     "/pieces",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Pièces"],
     summary="Lister les pièces",
     description="Toutes les pièces, ou seulement celles d'un bâtiment si `batiment_id` est fourni.",
@@ -721,6 +750,7 @@ def lister_pieces(batiment_id: str | None = None):
 
 @app.get(
     "/pieces/{id_piece}",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Pièces"],
     summary="Voir une pièce",
     description="Une seule pièce par son id.",
@@ -735,6 +765,7 @@ def voir_piece(id_piece: str):
 
 @app.put(
     "/pieces/{id_piece}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Pièces"],
     summary="Modifier une pièce",
     description="Seuls les champs fournis (nom, batiment_id) changent.",
@@ -752,6 +783,7 @@ def modifier_piece(id_piece: str, demande: DemandeModificationPiece):
 
 @app.delete(
     "/pieces/{id_piece}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Pièces"],
     summary="Supprimer une pièce",
     description="Refusé (409) si la pièce a encore des caméras — les supprimer (ou les déplacer) d'abord.",
@@ -793,15 +825,10 @@ def demarrer_services_arriere_plan():
 
 @app.post(
     "/cameras",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Caméras"],
     summary="Créer une caméra",
-    description=(
-        "Crée une caméra (num) rattachée à une pièce (`piece_id`), avec son "
-        "identifiant unique (`id`). `est_entree=true` marque cette caméra "
-        "comme surveillant un point d'entrée du bâtiment (voir "
-        "ComportementsSupects/infiltre.py). Réservé à un admin — `id_admin` "
-        "doit être l'id d'un compte admin existant."
-    ),
+    description="Crée une caméra rattachée à une pièce. Réservé à un administrateur connecté.",
     responses={
         403: {"description": "id_admin ne correspond à aucun compte admin"},
         404: {"description": "Aucune pièce avec ce piece_id"},
@@ -821,6 +848,7 @@ def creer_camera(demande: DemandeCreationCamera):
 
 @app.get(
     "/cameras",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Caméras"],
     summary="Lister les caméras",
     description="Toutes les caméras, ou seulement celles d'une pièce si `piece_id` est fourni.",
@@ -833,6 +861,7 @@ def lister_cameras(piece_id: str | None = None):
 
 @app.get(
     "/cameras/{id_camera}",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Caméras"],
     summary="Voir une caméra",
     description="Une seule caméra par son id.",
@@ -847,9 +876,10 @@ def voir_camera(id_camera: str):
 
 @app.put(
     "/cameras/{id_camera}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Caméras"],
     summary="Modifier une caméra",
-    description="Seuls les champs fournis (num, piece_id) changent.",
+    description="Seuls les champs fournis (num, piece_id) changent (accès admin requis).",
     responses={404: {"description": "Aucune caméra avec cet id, ou aucune pièce avec le nouveau piece_id"}},
 )
 def modifier_camera(id_camera: str, demande: DemandeModificationCamera):
@@ -868,6 +898,7 @@ def modifier_camera(id_camera: str, demande: DemandeModificationCamera):
 
 @app.delete(
     "/cameras/{id_camera}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Caméras"],
     summary="Supprimer une caméra",
     responses={404: {"description": "Aucune caméra avec cet id"}},
@@ -886,6 +917,7 @@ def supprimer_camera(id_camera: str):
 # ========================================================================
 @app.get(
     "/vue-ensemble",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Vue d'ensemble"],
     summary="État de tout le bâtiment, toutes caméras confondues",
     description=(
@@ -893,8 +925,7 @@ def supprimer_camera(id_camera: str):
         "alertes feu/fumée) et la liste des personnes actuellement suspectes "
         "n'importe où dans le bâtiment (rôdage en cours, regard qui scanne, "
         "objet proche disparu), avec la caméra qui les voit et, si connu, où "
-        "elles ont déjà été suspectes ailleurs. N'invente aucun nouveau "
-        "jugement — assemble ce que chaque caméra a déjà décidé."
+        "elles ont déjà été suspectes ailleurs."
     ),
 )
 def voir_vue_ensemble():
@@ -983,6 +1014,7 @@ def qui(id_camera: str, file: UploadFile = File(..., description="Image JPEG cap
 
 @app.get(
     "/cameras/{id_camera}/etat",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Analyse"],
     summary="Dernier état connu de cette caméra",
     description="Le dernier résultat de /voir (vueActuelle) et /qui (personnesVues) pour CETTE caméra.",
@@ -1030,6 +1062,7 @@ def image_camera(id_camera: str):
 
 @app.post(
     "/cameras/tester_flux",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Caméras"],
     summary="Tester la joignabilité d'un flux vidéo RTSP",
 )
@@ -1142,17 +1175,10 @@ async def direct_regarder(websocket: WebSocket, id_camera: str):
 # ========================================================================
 @app.post(
     "/cameras/{id_camera}/zone",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Zones"],
     summary="Enregistrer la zone à surveiller de cette caméra",
-    description=(
-        "Remplace (ou crée) le polygone de zone de CETTE caméra — `points` "
-        "est une liste d'au moins 3 points `{x, y}`, chacun une FRACTION "
-        "(0.0 à 1.0) de la largeur/hauteur de l'image affichée, pas des "
-        "pixels (reste valable quelle que soit la résolution réelle de la "
-        "caméra). Réservé à un admin — `id_admin` doit être l'id d'un "
-        "compte admin existant (même mécanisme que la création de "
-        "bâtiment/pièce/caméra, voir admin.py)."
-    ),
+    description="Remplace (ou crée) le polygone de zone de CETTE caméra. Réservé à un administrateur connecté.",
     responses={
         400: {"description": "Moins de 3 points, ou coordonnées hors de [0, 1]"},
         403: {"description": "id_admin ne correspond à aucun compte admin"},
@@ -1180,6 +1206,7 @@ def enregistrer_zone_camera(id_camera: str, demande: DemandeZone):
 
 @app.get(
     "/cameras/{id_camera}/zone",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Zones"],
     summary="Lire la zone à surveiller de cette caméra",
     description="Le polygone actuellement enregistré pour CETTE caméra, ou 404 si aucun n'a encore été dessiné.",
@@ -1196,6 +1223,7 @@ def lire_zone_camera(id_camera: str):
 
 @app.delete(
     "/cameras/{id_camera}/zone",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Zones"],
     summary="Supprimer la zone à surveiller de cette caméra",
     responses={404: {"description": "Aucune zone enregistrée pour cette caméra"}},
@@ -1208,6 +1236,7 @@ def supprimer_zone_camera(id_camera: str):
 
 @app.get(
     "/cameras/{id_camera}/historique",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Analyse"],
     summary="Historique des événements de cette caméra",
     description="Événements horodatés (rôdage, objet abandonné, feu/fumée, posture...) de CETTE caméra, les plus récents en dernier.",
@@ -1224,13 +1253,10 @@ def historique_camera(id_camera: str):
 # ========================================================================
 @app.get(
     "/profils/{pid}",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Profils"],
     summary="Profil de suspicion global d'une personne",
-    description=(
-        "Tous les événements suspects connus pour cette identité (`pid`), "
-        "TOUTES CAMÉRAS CONFONDUES — voir ComportementsSupects/profil_suspect.py. "
-        "{'pid': ..., 'evenements': []} si rien n'est encore connu."
-    ),
+    description="Tous les événements suspects connus pour cette identité (pid), toutes caméras confondues.",
 )
 def profil_personne(pid: str):
     return profil_suspect.profil_de(pid)
@@ -1241,14 +1267,13 @@ def profil_personne(pid: str):
 # ========================================================================
 @app.get(
     "/alertes",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Alertes"],
     summary="Lister les alertes confirmées",
     description=(
         "Comportements anormaux CONFIRMÉS (rôdage, objet abandonné, objet "
         "disparu, feu/fumée, infiltration), toutes caméras confondues, avec "
-        "l'avis du comparateur IA (voir Alertes/comparaison_ia.py) et le "
-        "contexte de la caméra (numéro, pièce, bâtiment). Filtrable par "
-        "`id_camera` et/ou `pid`. Les plus récentes en premier."
+        "l'avis du comparateur IA et le contexte de la caméra. Les plus récentes en premier."
     ),
 )
 def lister_alertes(id_camera: str | None = None, pid: str | None = None):
@@ -1263,12 +1288,8 @@ def lister_alertes(id_camera: str | None = None, pid: str | None = None):
     tags=["Alertes"],
     summary="Instantané au moment de l'alerte",
     description=(
-        "L'image de la caméra AU MOMENT où cette alerte s'est déclenchée "
-        "(voir Alertes/alertes.py, _enregistrer_instantane) — pas l'image "
-        "actuelle de la caméra (voir GET /cameras/{id}/image pour ça). "
-        "404 si aucune image n'était disponible à ce moment-là (caméra "
-        "venant de démarrer, ou alerte créée avant l'ajout de cette "
-        "fonctionnalité)."
+        "L'image de la caméra AU MOMENT où cette alerte s'est déclenchée — "
+        "directement accessible pour les balises <img> web."
     ),
     responses={404: {"description": "Aucun instantané enregistré pour cette alerte"}},
 )
@@ -1299,9 +1320,10 @@ def clip_alerte(id_alerte: str):
 
 @app.delete(
     "/alertes/{id_alerte}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Alertes"],
     summary="Supprimer une alerte",
-    description="Supprime définitivement une alerte ainsi que son image et son extrait vidéo associé.",
+    description="Supprime définitivement une alerte ainsi que son image et son extrait vidéo associé (accès admin requis).",
 )
 def supprimer_alerte(id_alerte: str):
     succes = alertes_module.supprimer_alerte(id_alerte)
@@ -1312,9 +1334,10 @@ def supprimer_alerte(id_alerte: str):
 
 @app.delete(
     "/alertes",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Alertes"],
     summary="Supprimer toutes les alertes",
-    description="Supprime l'ensemble des alertes et notifications archivées.",
+    description="Supprime l'ensemble des alertes et notifications archivées (accès admin requis).",
 )
 def supprimer_toutes_alertes():
     nb = alertes_module.supprimer_toutes_alertes()
@@ -1329,6 +1352,7 @@ class TraitementAlerteSchema(BaseModel):
 
 @app.post(
     "/alertes/{id_alerte}/traiter",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Alertes"],
     summary="Qualifier/Traiter une alerte avec motif",
     description="Permet à l'opérateur de qualifier une alerte comme 'confirmee' ou 'erreur' avec justification."
@@ -1344,6 +1368,7 @@ def traiter_alerte_route(id_alerte: str, me: TraitementAlerteSchema):
 
 @app.get(
     "/journal-actions",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Audit & Journal"],
     summary="Consulter le journal des actions d'audit",
     description="Affiche la liste chronologique des actions effectuées sur le système (validations d'alertes, sirène, etc.)."
@@ -1354,6 +1379,7 @@ def journal_actions():
 
 @app.get(
     "/export/alertes/csv",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Export & Rapports"],
     summary="Exporter les alertes au format CSV",
     description="Génère un fichier CSV téléchargeable récapitulant les alertes et leurs traitements."
@@ -1407,6 +1433,7 @@ def etat_alarme():
 
 @app.post(
     "/alarme/arreter",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Alarme"],
     summary="Éteint la lampe et la sirène",
     description="Appelé par \"Arrêter l'alerte\" (app mobile/web) — le prochain polling de l'ESP32 verra l'état éteint et coupera les deux broches.",
@@ -1417,6 +1444,7 @@ def arreter_alarme():
 
 @app.post(
     "/alarme/reactiver",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Alarme"],
     summary="Rallume la lampe et la sirène",
     description="Appelé par \"Réarmer\" (app mobile/web).",
@@ -1427,12 +1455,7 @@ def reactiver_alarme():
 
 # ========================================================================
 # Système — accès direct à ce qui peut raisonnablement se tester seul,
-# parmi les modules sans route dédiée (voir la réponse dans le chat pour
-# lesquels n'en ont délibérément pas : qui_fait_quoi.py, rodeur.py,
-# abandonne.py, feu_fume.py, infiltre.py ont besoin d'une vraie image
-# analysée pour avoir un sens — testables uniquement via /voir et /qui —
-# et generer_certificat.py n'a rien à faire exposé en API, question de
-# sécurité, déjà auto-exécuté au démarrage).
+# parmi les modules sans route dédiée
 # ========================================================================
 class DemandeComparateur(BaseModel):
     comportement: str
@@ -1453,6 +1476,7 @@ class DemandeCodeLicence(BaseModel):
 
 @app.get(
     "/systeme/thermique",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Système"],
     summary="État thermique et régime anti-surchauffe du processeur Edge AI",
     description="Renvoie la température CPU, le régime thermique (NOMINAL, ECO_TIEDE, PROTECTION_SURCHAUFFE) et la cadence d'inférence recommandée.",
@@ -1490,13 +1514,10 @@ def rebooter_systeme():
 
 @app.post(
     "/systeme/licence/activer",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Système"],
     summary="Active (ou renouvelle) la licence avec un code d'amorçage",
-    description=(
-        "Vérifie `code` en ligne auprès de previa-SV — exige une connexion "
-        "internet pour CET appel précis (voir licence.py, `etat()` lui ne "
-        "l'exige pas ensuite)."
-    ),
+    description="Vérifie `code` en ligne auprès de previa-SV (accès admin requis).",
     responses={403: {"description": "Code invalide, désactivé, ou previa-SV injoignable"}},
 )
 def activer_licence(demande: DemandeCodeLicence):
@@ -1508,12 +1529,10 @@ def activer_licence(demande: DemandeCodeLicence):
 
 @app.get(
     "/systeme/esp",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Système"],
     summary="Liste des ESP32 alarme détectés sur le réseau local",
-    description=(
-        "Voir Infrastructure/esp_decouverte.py — lit ce que docker/mdns_previa.py "
-        "(tourne sur l'hôte) a trouvé par mDNS."
-    ),
+    description="Lit ce que docker/mdns_previa.py a trouvé par mDNS (accès admin requis).",
 )
 def lister_esp():
     return esp_decouverte.lister()
@@ -1543,6 +1562,7 @@ def _relais_esp(fn, *args):
 
 @app.get(
     "/systeme/esp/{id_appareil}/etat",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Système"],
     summary="État en direct d'un ESP32 alarme (réseau actuel, réseaux enregistrés, signal)",
 )
@@ -1552,6 +1572,7 @@ def etat_esp(id_appareil: str):
 
 @app.post(
     "/systeme/esp/{id_appareil}/reseaux",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Système"],
     summary="Enregistre un nouveau Wi-Fi sur un ESP32 alarme",
 )
@@ -1561,6 +1582,7 @@ def ajouter_reseau_esp(id_appareil: str, corps: ReseauEsp):
 
 @app.post(
     "/systeme/esp/{id_appareil}/reseaux/supprimer",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Système"],
     summary="Retire un Wi-Fi enregistré d'un ESP32 alarme",
 )
@@ -1570,6 +1592,7 @@ def supprimer_reseau_esp(id_appareil: str, corps: SsidEsp):
 
 @app.post(
     "/systeme/esp/{id_appareil}/basculer",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Système"],
     summary="Fait basculer un ESP32 alarme vers un Wi-Fi déjà enregistré",
 )
@@ -1579,16 +1602,10 @@ def basculer_esp(id_appareil: str, corps: SsidEsp):
 
 @app.post(
     "/systeme/comparateur/tester",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Système"],
     summary="Tester le comparateur IA avec une phrase libre",
-    description=(
-        "Appelle directement comparaison_ia.comparer() — le second avis "
-        "normalement déclenché automatiquement par rodeur.py/abandonne.py/"
-        "infiltre.py à la confirmation d'un comportement — avec n'importe "
-        "quelle phrase, pour tester le comparateur (voir traiteComportement/) "
-        "sans avoir à déclencher un vrai comportement suspect. `null` si "
-        "traiteComportement n'est pas lancé (jamais une erreur)."
-    ),
+    description="Appelle directement comparaison_ia.comparer() (accès admin requis).",
 )
 def tester_comparateur(demande: DemandeComparateur):
     return comparaison_ia.comparer(demande.comportement)
@@ -1596,15 +1613,10 @@ def tester_comparateur(demande: DemandeComparateur):
 
 @app.post(
     "/systeme/sauvegarder",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Système"],
     summary="Forcer une sauvegarde immédiate de l'état comportemental",
-    description=(
-        "Appelle etat_persistant.sauvegarder_maintenant() tout de suite, "
-        "sans attendre le prochain /qui ni un arrêt propre du serveur — "
-        "utile pour tester la persistance (voir GET /systeme/identites, "
-        "ou simplement relire migration/db/etat_comportemental.json) sans "
-        "avoir à couper le serveur."
-    ),
+    description="Appelle etat_persistant.sauvegarder_maintenant() (accès admin requis).",
 )
 def forcer_sauvegarde():
     etat_persistant.sauvegarder_maintenant()
@@ -1613,15 +1625,10 @@ def forcer_sauvegarde():
 
 @app.get(
     "/systeme/identites",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Système"],
     summary="Registres d'identité bruts (visages/corps)",
-    description=(
-        "Contenu brut de local_store.py sous 'faces/' et 'corps/' — les "
-        "identités confirmées (registry) et en cours d'observation "
-        "(candidates), globales à toutes les caméras (voir on_voit_qui.py). "
-        "Utile pour vérifier l'union corps/visage (voir "
-        "_lier_corps_a_visage) sans avoir à ranalyser une image."
-    ),
+    description="Contenu brut sous faces/ et corps/ (identités confirmées et candidates).",
 )
 def voir_identites():
     return {
@@ -1671,6 +1678,7 @@ class PersonnelUpdateModel(BaseModel):
 
 @app.get(
     "/personnel",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Personnel"],
     summary="Liste du personnel enregistré pour la reconnaissance Face ID",
 )
@@ -1780,6 +1788,7 @@ def _demarrage_serveur():
 
 @app.post(
     "/personnel",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Personnel"],
     summary="Enregistrer ou ajouter un collaborateur avec son Face ID multi-angles",
 )
@@ -1828,6 +1837,7 @@ def enregistrer_personnel(donnees: PersonnelModel):
 
 @app.put(
     "/personnel/{id_personne}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Personnel"],
     summary="Mettre à jour les informations ou le statut d'un collaborateur",
 )
@@ -1880,6 +1890,7 @@ class VerificationVisageModel(BaseModel):
 
 @app.post(
     "/personnel/verifier-visage",
+    dependencies=[Depends(session.exiger_authentification)],
     tags=["Personnel"],
     summary="Vérifie si un visage humain est détecté avant de valider le scan",
 )
@@ -1977,6 +1988,7 @@ def verifier_visage_scan(payload: VerificationVisageModel):
 
 @app.delete(
     "/personnel/{id_personne}",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Personnel"],
     summary="Supprimer définitivement un collaborateur et ses données biométriques",
 )

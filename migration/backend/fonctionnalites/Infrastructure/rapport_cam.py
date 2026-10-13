@@ -17,6 +17,7 @@ synchrone à chaque appel) — thread-safety : un verrou par caméra (pas un
 verrou global) pour ne pas bloquer l'écriture de la caméra A pendant que
 la caméra B écrit la sienne."""
 import json
+import os
 import threading
 import time
 from collections import defaultdict
