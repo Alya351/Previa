@@ -16,7 +16,7 @@ import {
 import { useFluxDirect } from '../lib/useFluxDirect.js';
 import { FluxCamera } from './FluxCamera.jsx';
 import { DetectionOverlay } from './DetectionOverlay.jsx';
-import { API_BASE, envoyerFrameVoir, envoyerFrameQui, chargerEtatCamera } from '../api.js';
+import { API_BASE, envoyerFrameVoir, envoyerFrameQui, chargerEtatCamera, pivoterCamera } from '../api.js';
 import { mapPersonneApi } from '../lib/mappageCibles.js';
 
 // `camera.image` : URL de GET /cameras/{id}/image, réinterrogée toutes
@@ -37,9 +37,28 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
   const [alarmOn, setAlarmOn] = useState(false);
   const [toast, setToast] = useState(null);
   const [tick, setTick] = useState(0);
+  const [rotation, setRotation] = useState(camera.rotation || 0);
+  const [enPivotement, setEnPivotement] = useState(false);
   const videoRef = useRef(null);
   const fluxVideoRef = useRef(null);
   const streamDirect = useFluxDirect(camera.urlFlux ? null : camera.id);
+
+  const handlePivoter = async () => {
+    if (enPivotement) return;
+    const nouvelleRotation = (rotation + 90) % 360;
+    setEnPivotement(true);
+    setRotation(nouvelleRotation);
+    try {
+      await pivoterCamera(camera.id, nouvelleRotation);
+      setToast(`Orientation : ${nouvelleRotation}°`);
+      setTimeout(() => setToast(null), 2500);
+      setTick((t) => t + 1);
+    } catch (err) {
+      console.warn('Erreur lors du pivotement de la caméra:', err);
+    } finally {
+      setEnPivotement(false);
+    }
+  };
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 2000);
@@ -47,7 +66,7 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
   }, []);
 
   const imageUrlRepli = camera.urlFlux
-    ? `${API_BASE}/cameras/${camera.id}/flux`
+    ? `${API_BASE}/cameras/${camera.id}/flux?t=${tick}`
     : (camera.image.includes('?') ? `${camera.image}&t=${tick}` : `${camera.image}?t=${tick}`);
 
   // Polling ultra-rapide en temps réel de l'état IA de la caméra physique
@@ -358,6 +377,29 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
             >
               <Camera size={14} />
               <span>Prendre une photo</span>
+            </button>
+
+            <button
+              onClick={handlePivoter}
+              disabled={enPivotement}
+              title="Pivoter le flux vidéo et réorienter l'IA de 90° (0°, 90°, 180°, 270°)"
+              style={{
+                background: rotation > 0 ? 'rgba(2, 132, 199, 0.25)' : 'rgba(255,255,255,0.08)',
+                border: rotation > 0 ? '1px solid #0284c7' : '1px solid rgba(255,255,255,0.15)',
+                color: '#ffffff',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: enPivotement ? 'wait' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <RotateCcw size={14} style={{ transform: enPivotement ? 'rotate(180deg)' : 'none', transition: 'transform 0.4s ease' }} />
+              <span>Pivoter 90° ({rotation}°)</span>
             </button>
           </div>
 

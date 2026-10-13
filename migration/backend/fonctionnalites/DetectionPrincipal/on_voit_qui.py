@@ -216,9 +216,9 @@ _orientations_camera: dict[str, int | None] = {}
 # toute la durée du processus), et la recherche des 3 autres orientations
 # n'est retentée qu'à intervalle espacé (avant : à CHAQUE image vide, soit
 # 3 inférences de plus par image).
-ORIENTATION_CONF_MIN = 0.35
+ORIENTATION_CONF_MIN = 0.18
 ORIENTATION_CONFIRMATIONS = 2
-ORIENTATION_INTERVALLE_ESSAI_S = 5.0
+ORIENTATION_INTERVALLE_ESSAI_S = 3.0
 _orientations_candidates: dict[str, tuple] = {}   # id_camera -> (code_rotation, nb_confirmations)
 _orientations_dernier_essai: dict[str, float] = {}
 _dernier_segformer_ts: dict[str, float] = {}
@@ -227,7 +227,29 @@ _derniere_carte_vetements: dict[str, np.ndarray] = {}
 
 def orientation_verrouillee(id_camera: str):
     """Code de rotation OpenCV verrouillé pour cette caméra, ou None."""
+    # 1. Priorité à la rotation explicite enregistrée dans le profil de la caméra
+    try:
+        from fonctionnalites.cam.camera import camera as _c_reg
+        cam_meta = _c_reg.trouver_par_id(id_camera)
+        if cam_meta and cam_meta.get("rotation") in (90, 180, 270):
+            deg = int(cam_meta["rotation"])
+            mapping = {
+                90: cv2.ROTATE_90_CLOCKWISE,
+                180: cv2.ROTATE_180,
+                270: cv2.ROTATE_90_COUNTERCLOCKWISE,
+            }
+            return mapping.get(deg)
+    except Exception:
+        pass
     return _orientations_camera.get(id_camera)
+
+
+def definir_orientation(id_camera: str, rot_code: int | None) -> None:
+    """Force ou met à jour l'orientation OpenCV mémorisée pour une caméra."""
+    if rot_code is None:
+        _orientations_camera.pop(id_camera, None)
+    else:
+        _orientations_camera[id_camera] = rot_code
 
 
 def reinitialiser_orientation(id_camera: str) -> None:
@@ -443,8 +465,9 @@ def _detect_persons_yolo_onnx(net, frame, conf_threshold=0.20) -> list:
             })
         return results
 
-    # 2. Si aucune détection (ex: caméra smartphone orientée à 90°), tester rotation 90° CW
+    # 2. Si aucune détection, tester rotations (caméra montée de côté ou au plafond)
     h_orig, w_orig = frame.shape[:2]
+    # 2a. Rotation 90° CW
     rot90 = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
     dets90 = _run_forward(rot90)
     if dets90:
@@ -452,8 +475,52 @@ def _detect_persons_yolo_onnx(net, frame, conf_threshold=0.20) -> list:
         for i, d in enumerate(dets90):
             xr1, yr1, xr2, yr2 = d["box"]
             # Inverse map 90CW: x_orig = y_rot, y_orig = h_orig - 1 - x_rot
-            xo1, yo1 = yr1, max(0.0, h_orig - 1 - xr2)
-            xo2, yo2 = yr2, min(float(h_orig), h_orig - 1 - xr1)
+            xo1, yo1 = yr1, max(0.0, float(h_orig - 1 - xr2))
+            xo2, yo2 = yr2, min(float(h_orig), float(h_orig - 1 - xr1))
+            x_min, x_max = min(xo1, xo2), max(xo1, xo2)
+            y_min, y_max = min(yo1, yo2), max(yo1, yo2)
+            results.append({
+                "label": "person",
+                "box": [round(x_min, 1), round(y_min, 1), round(x_max, 1), round(y_max, 1)],
+                "centroid": ((x_min + x_max) / 2.0, (y_min + y_max) / 2.0),
+                "mask_poly": None,
+                "score": d["score"],
+                "track_id": (i + 1),
+            })
+        return results
+
+    # 2b. Rotation 90° CCW (270° CW)
+    rot90ccw = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    dets90ccw = _run_forward(rot90ccw)
+    if dets90ccw:
+        results = []
+        for i, d in enumerate(dets90ccw):
+            xr1, yr1, xr2, yr2 = d["box"]
+            # Inverse map 90CCW: x_orig = w_orig - 1 - y_rot, y_orig = x_rot
+            xo1, yo1 = max(0.0, float(w_orig - 1 - yr2)), xr1
+            xo2, yo2 = min(float(w_orig), float(w_orig - 1 - yr1)), xr2
+            x_min, x_max = min(xo1, xo2), max(xo1, xo2)
+            y_min, y_max = min(yo1, yo2), max(yo1, yo2)
+            results.append({
+                "label": "person",
+                "box": [round(x_min, 1), round(y_min, 1), round(x_max, 1), round(y_max, 1)],
+                "centroid": ((x_min + x_max) / 2.0, (y_min + y_max) / 2.0),
+                "mask_poly": None,
+                "score": d["score"],
+                "track_id": (i + 1),
+            })
+        return results
+
+    # 2c. Rotation 180°
+    rot180 = cv2.rotate(frame, cv2.ROTATE_180)
+    dets180 = _run_forward(rot180)
+    if dets180:
+        results = []
+        for i, d in enumerate(dets180):
+            xr1, yr1, xr2, yr2 = d["box"]
+            # Inverse map 180: x_orig = w_orig - 1 - x_rot, y_orig = h_orig - 1 - y_rot
+            xo1, yo1 = max(0.0, float(w_orig - 1 - xr2)), max(0.0, float(h_orig - 1 - yr2))
+            xo2, yo2 = min(float(w_orig), float(w_orig - 1 - xr1)), min(float(h_orig), float(h_orig - 1 - yr1))
             x_min, x_max = min(xo1, xo2), max(xo1, xo2)
             y_min, y_max = min(yo1, yo2), max(yo1, yo2)
             results.append({
@@ -1452,18 +1519,26 @@ def analyser(id_camera: str, frame) -> dict:
                 if meilleur is None or score > meilleur[0]:
                     meilleur = (score, rot_code, frame_rot, candidats_rot, found_rot)
         if meilleur is not None:
-            _, rot_code, frame_rot, candidats_rot, found_rot = meilleur
+            score_m, rot_code, frame_rot, candidats_rot, found_rot = meilleur
             precedent = _orientations_candidates.get(id_camera)
             nb = precedent[1] + 1 if precedent and precedent[0] == rot_code else 1
             _orientations_candidates[id_camera] = (rot_code, nb)
-            if nb >= ORIENTATION_CONFIRMATIONS:
+            if nb >= ORIENTATION_CONFIRMATIONS or score_m >= 0.28:
                 _orientations_camera[id_camera] = rot_code
-                print(f"[on_voit_qui] orientation caméra {id_camera} verrouillée (rotation {rot_code})", flush=True)
+                print(f"[on_voit_qui] orientation caméra {id_camera} verrouillée (rotation {rot_code}, score {score_m:.2f})", flush=True)
+                try:
+                    code_vers_deg = {
+                        cv2.ROTATE_90_CLOCKWISE: 90,
+                        cv2.ROTATE_180: 180,
+                        cv2.ROTATE_90_COUNTERCLOCKWISE: 270,
+                    }
+                    if rot_code in code_vers_deg:
+                        _camera_registre.definir_rotation(id_camera, code_vers_deg[rot_code])
+                except Exception:
+                    pass
             frame = frame_rot
             tous_candidats_personnes = candidats_rot
             personnes = found_rot
-        else:
-            _orientations_candidates.pop(id_camera, None)
 
     # Harmonisation des Track IDs avec le tracker par caméra de on_voit_quoi
     personnes_suivies_cam = vue_actuelle.get("personnes_suivies", [])

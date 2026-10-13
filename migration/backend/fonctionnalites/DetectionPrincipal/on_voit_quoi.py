@@ -83,7 +83,7 @@ COCO_FR = {
 }
 
 CONF = 0.35
-CONF_PERSONNE = 0.25
+CONF_PERSONNE = 0.15
 
 # Si une instance suivie n'est plus revue pendant ce délai, ByteTrack lui-
 # même l'a perdue (son propre buffer interne l'oublie) : elle passe dans

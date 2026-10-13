@@ -49,7 +49,7 @@ def trouver_par_id(id_camera: str) -> dict | None:
         return json.load(f)
 
 
-def creer_camera(num: str, piece_id: str, est_entree: bool = False, url_flux: str | None = None) -> dict:
+def creer_camera(num: str, piece_id: str, est_entree: bool = False, url_flux: str | None = None, rotation: int = 0) -> dict:
     """Lève ValueError si `piece_id` ne correspond à aucune pièce
     existante."""
     from fonctionnalites.cam.camera.rtsp_service import normaliser_url_rtsp
@@ -64,6 +64,7 @@ def creer_camera(num: str, piece_id: str, est_entree: bool = False, url_flux: st
         "piece_id": piece_id,
         "est_entree": bool(est_entree),
         "url_flux": url_propre,
+        "rotation": int(rotation) % 360,
         "cree_le": time.time(),
     }
     CAMERAS_DIR.mkdir(parents=True, exist_ok=True)
@@ -73,7 +74,7 @@ def creer_camera(num: str, piece_id: str, est_entree: bool = False, url_flux: st
 
 
 def modifier_camera(
-    id_camera: str, num: str | None = None, piece_id: str | None = None, est_entree: bool | None = None, url_flux: str | None = None,
+    id_camera: str, num: str | None = None, piece_id: str | None = None, est_entree: bool | None = None, url_flux: str | None = None, rotation: int | None = None,
 ) -> dict | None:
     """Lève ValueError si la nouvelle `piece_id` ne correspond à aucune
     pièce existante."""
@@ -90,6 +91,19 @@ def modifier_camera(
         c["est_entree"] = bool(est_entree)
     if url_flux is not None:
         c["url_flux"] = url_flux.strip() if url_flux else None
+    if rotation is not None:
+        c["rotation"] = int(rotation) % 360
+    with open(_chemin(id_camera), "w", encoding="utf-8") as f:
+        json.dump(c, f, ensure_ascii=False, indent=2)
+    return c
+
+
+def definir_rotation(id_camera: str, rotation: int) -> dict | None:
+    """Met à jour directement l'orientation en degrés (0, 90, 180, 270) d'une caméra."""
+    c = trouver_par_id(id_camera)
+    if c is None:
+        return None
+    c["rotation"] = int(rotation) % 360
     with open(_chemin(id_camera), "w", encoding="utf-8") as f:
         json.dump(c, f, ensure_ascii=False, indent=2)
     return c

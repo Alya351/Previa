@@ -350,6 +350,32 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
         try:
             transport_opt = "tcp"
             while not evt_arret.is_set():
+                # Résolution de la rotation de la caméra (0, 90, 180, 270)
+                rot_deg = 0
+                try:
+                    from fonctionnalites.cam.camera import camera as _c_reg
+                    cam_d = _c_reg.trouver_par_id(id_camera)
+                    if cam_d and cam_d.get("rotation") in (90, 180, 270):
+                        rot_deg = int(cam_d["rotation"])
+                except Exception:
+                    pass
+                if rot_deg not in (90, 180, 270):
+                    try:
+                        from fonctionnalites.DetectionPrincipal import on_voit_qui as _q_reg
+                        rc = _q_reg.orientation_verrouillee(id_camera)
+                        _mapping = {cv2.ROTATE_90_CLOCKWISE: 90, cv2.ROTATE_180: 180, cv2.ROTATE_90_COUNTERCLOCKWISE: 270}
+                        rot_deg = _mapping.get(rc, 0)
+                    except Exception:
+                        pass
+
+                vf_filtre = "scale=854:-1"
+                if rot_deg == 90:
+                    vf_filtre = "scale=854:-1,transpose=1"
+                elif rot_deg == 180:
+                    vf_filtre = "scale=854:-1,hflip,vflip"
+                elif rot_deg == 270:
+                    vf_filtre = "scale=854:-1,transpose=2"
+
                 if ffmpeg:
                     opt_timeout = _option_timeout_rtsp(ffmpeg)
                     cmd = [
@@ -360,7 +386,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         opt_timeout, "5000000",
                         "-i", url_a_utiliser,
                         "-an",
-                        "-vf", "scale=854:-1",
+                        "-vf", vf_filtre,
                         "-f", "image2pipe",
                         "-vcodec", "mjpeg",
                         "-q:v", "5",
@@ -451,6 +477,12 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         while not evt_arret.is_set():
                             ret, frame = cap.read()
                             if ret and frame is not None:
+                                if rot_deg == 90:
+                                    frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+                                elif rot_deg == 180:
+                                    frame = cv2.rotate(frame, cv2.ROTATE_180)
+                                elif rot_deg == 270:
+                                    frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
                                 ok_enc, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
                                 if ok_enc:
                                     jpg_bytes = buf.tobytes()
@@ -507,6 +539,19 @@ def arreter_worker_camera(id_camera: str) -> None:
                 proc.terminate()
             except Exception:
                 pass
+
+
+def redemarrer_worker_camera(id_camera: str) -> None:
+    """Arrête et relance le worker d'une caméra (ex: lors d'un changement d'orientation)."""
+    arreter_worker_camera(id_camera)
+    time.sleep(0.4)
+    try:
+        from fonctionnalites.cam.camera import camera as _c_reg
+        cam = _c_reg.trouver_par_id(id_camera)
+        if cam and cam.get("url_flux"):
+            demarrer_worker_camera(id_camera, cam["url_flux"])
+    except Exception as exc:
+        print(f"[rtsp_service] Erreur redemarrage worker {id_camera}: {exc}", flush=True)
 
 
 def generer_flux_mjpeg(id_camera: str, url_flux: str) -> Generator[bytes, None, None]:

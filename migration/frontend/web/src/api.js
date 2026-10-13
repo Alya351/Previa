@@ -112,6 +112,15 @@ export function supprimerCamera(idCamera) {
   return fetchAvecAuth(`${API_BASE}/cameras/${idCamera}`, { method: 'DELETE' }).then(jsonOuErreur);
 }
 
+// 5b. Pivoter l'orientation d'une caméra (0°, 90°, 180°, 270°)
+export function pivoterCamera(idCamera, rotation) {
+  return fetchAvecAuth(`${API_BASE}/cameras/${idCamera}/rotation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rotation: Number(rotation) }),
+  }).then(jsonOuErreur);
+}
+
 // 6. Obtenir le dernier état d'analyse IA de la caméra (personnes & objets)
 export function chargerEtatCamera(idCamera) {
   return fetchAvecAuth(`${API_BASE}/cameras/${idCamera}/etat`).then(jsonOuErreur);
