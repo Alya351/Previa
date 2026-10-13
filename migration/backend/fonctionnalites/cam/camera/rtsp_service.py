@@ -360,14 +360,6 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                 except Exception:
                     pass
                 if rot_deg not in (90, 180, 270):
-                    try:
-                        from fonctionnalites.DetectionPrincipal import on_voit_qui as _q_reg
-                        rc = _q_reg.orientation_verrouillee(id_camera)
-                        _mapping = {cv2.ROTATE_90_CLOCKWISE: 90, cv2.ROTATE_180: 180, cv2.ROTATE_90_COUNTERCLOCKWISE: 270}
-                        rot_deg = _mapping.get(rc, 0)
-                    except Exception:
-                        pass
-                if rot_deg not in (90, 180, 270):
                     rot_env = os.environ.get("PREVIA_ROTATION_VIDEO", "").strip().lower()
                     env_map = {"cw": 90, "90": 90, "180": 180, "ccw": 270, "270": 270}
                     rot_deg = env_map.get(rot_env, 0)

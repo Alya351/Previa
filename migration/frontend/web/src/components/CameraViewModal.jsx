@@ -66,7 +66,7 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
   }, []);
 
   const imageUrlRepli = camera.urlFlux
-    ? `${API_BASE}/cameras/${camera.id}/flux?t=${tick}`
+    ? `${API_BASE}/cameras/${camera.id}/flux?r=${rotation}`
     : (camera.image.includes('?') ? `${camera.image}&t=${tick}` : `${camera.image}?t=${tick}`);
 
   // Polling ultra-rapide en temps réel de l'état IA de la caméra physique

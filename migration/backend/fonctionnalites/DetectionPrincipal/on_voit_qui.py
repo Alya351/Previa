@@ -216,9 +216,9 @@ _orientations_camera: dict[str, int | None] = {}
 # toute la durée du processus), et la recherche des 3 autres orientations
 # n'est retentée qu'à intervalle espacé (avant : à CHAQUE image vide, soit
 # 3 inférences de plus par image).
-ORIENTATION_CONF_MIN = 0.18
+ORIENTATION_CONF_MIN = 0.35
 ORIENTATION_CONFIRMATIONS = 2
-ORIENTATION_INTERVALLE_ESSAI_S = 3.0
+ORIENTATION_INTERVALLE_ESSAI_S = 5.0
 _orientations_candidates: dict[str, tuple] = {}   # id_camera -> (code_rotation, nb_confirmations)
 _orientations_dernier_essai: dict[str, float] = {}
 _dernier_segformer_ts: dict[str, float] = {}
@@ -227,18 +227,13 @@ _derniere_carte_vetements: dict[str, np.ndarray] = {}
 
 def orientation_verrouillee(id_camera: str):
     """Code de rotation OpenCV verrouillé pour cette caméra, ou None."""
-    # 1. Priorité à la rotation explicite enregistrée dans le profil de la caméra
+    # Si le flux est déjà redressé à la source par FFmpeg (rotation dans la fiche caméra),
+    # aucun redressement supplémentaire ne doit être appliqué ici (évite la double rotation).
     try:
         from fonctionnalites.cam.camera import camera as _c_reg
         cam_meta = _c_reg.trouver_par_id(id_camera)
         if cam_meta and cam_meta.get("rotation") in (90, 180, 270):
-            deg = int(cam_meta["rotation"])
-            mapping = {
-                90: cv2.ROTATE_90_CLOCKWISE,
-                180: cv2.ROTATE_180,
-                270: cv2.ROTATE_90_COUNTERCLOCKWISE,
-            }
-            return mapping.get(deg)
+            return None
     except Exception:
         pass
     return _orientations_camera.get(id_camera)
@@ -1479,7 +1474,13 @@ def analyser(id_camera: str, frame) -> dict:
     vue_actuelle = rapport_cam.lire_etat(id_camera, "vueActuelle")
     objets_actuels = vue_actuelle.get("objets", {})
 
-    rot_candidat = _orientations_camera.get(id_camera)
+    try:
+        _cam_profil = _camera_registre.trouver_par_id(id_camera)
+        _rot_profil = int(_cam_profil.get("rotation", 0)) if _cam_profil else 0
+    except Exception:
+        _rot_profil = 0
+    flux_deja_redresse = _rot_profil in (90, 180, 270)
+    rot_candidat = None if flux_deja_redresse else _orientations_camera.get(id_camera)
     if rot_candidat is not None:
         frame = cv2.rotate(frame, rot_candidat)
 
@@ -1502,7 +1503,7 @@ def analyser(id_camera: str, frame) -> dict:
     # Évite le piège où un faux positif à 0.06 sur une image couchée bloquait le redressement.
     # IMPORTANT : suivre=False pour ne pas polluer l'état du tracker avec des rotations !
     meilleur_score_actuel = max((d.get("score", 0.0) for d in personnes), default=0.0)
-    if meilleur_score_actuel < 0.25 and rot_candidat is None and (
+    if not flux_deja_redresse and meilleur_score_actuel < 0.25 and rot_candidat is None and (
         now - _orientations_dernier_essai.get(id_camera, 0.0) >= ORIENTATION_INTERVALLE_ESSAI_S
     ):
         _orientations_dernier_essai[id_camera] = now
@@ -1523,22 +1524,14 @@ def analyser(id_camera: str, frame) -> dict:
             precedent = _orientations_candidates.get(id_camera)
             nb = precedent[1] + 1 if precedent and precedent[0] == rot_code else 1
             _orientations_candidates[id_camera] = (rot_code, nb)
-            if nb >= ORIENTATION_CONFIRMATIONS or score_m >= 0.28:
+            if nb >= ORIENTATION_CONFIRMATIONS or score_m >= 0.60:
                 _orientations_camera[id_camera] = rot_code
                 print(f"[on_voit_qui] orientation caméra {id_camera} verrouillée (rotation {rot_code}, score {score_m:.2f})", flush=True)
-                try:
-                    code_vers_deg = {
-                        cv2.ROTATE_90_CLOCKWISE: 90,
-                        cv2.ROTATE_180: 180,
-                        cv2.ROTATE_90_COUNTERCLOCKWISE: 270,
-                    }
-                    if rot_code in code_vers_deg:
-                        _camera_registre.definir_rotation(id_camera, code_vers_deg[rot_code])
-                except Exception:
-                    pass
             frame = frame_rot
             tous_candidats_personnes = candidats_rot
             personnes = found_rot
+        else:
+            _orientations_candidates.pop(id_camera, None)
 
     # Harmonisation des Track IDs avec le tracker par caméra de on_voit_quoi
     personnes_suivies_cam = vue_actuelle.get("personnes_suivies", [])

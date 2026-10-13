@@ -919,10 +919,8 @@ def modifier_camera(id_camera: str, demande: DemandeModificationCamera):
         )
         if demande.rotation is not None:
             try:
-                import cv2
-                deg_vers_code = {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
                 from fonctionnalites.DetectionPrincipal import on_voit_qui as _qui
-                _qui.definir_orientation(id_camera, deg_vers_code.get(demande.rotation))
+                _qui.reinitialiser_orientation(id_camera)
                 rtsp_service.redemarrer_worker_camera(id_camera)
             except Exception:
                 pass
@@ -939,6 +937,7 @@ def modifier_camera(id_camera: str, demande: DemandeModificationCamera):
 
 @app.post(
     "/cameras/{id_camera}/rotation",
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Caméras"],
     summary="Pivoter une caméra (0°, 90°, 180°, 270°)",
     description="Met à jour l'orientation physique de la caméra, redémarre le worker vidéo et synchronise l'IA.",
@@ -950,14 +949,8 @@ def changer_rotation_camera(id_camera: str, demande: DemandeRotationCamera):
         raise HTTPException(404, "Aucune caméra avec cet id")
 
     try:
-        import cv2
-        deg_vers_code = {
-            90: cv2.ROTATE_90_CLOCKWISE,
-            180: cv2.ROTATE_180,
-            270: cv2.ROTATE_90_COUNTERCLOCKWISE,
-        }
         from fonctionnalites.DetectionPrincipal import on_voit_qui as _qui
-        _qui.definir_orientation(id_camera, deg_vers_code.get(c.get("rotation", 0)))
+        _qui.reinitialiser_orientation(id_camera)
     except Exception:
         pass
 
