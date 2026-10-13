@@ -72,12 +72,17 @@ def enregistrer_etat(id_camera: str, cle: str, valeur) -> None:
             json.dump(etat, f, ensure_ascii=False, indent=2, default=_json_default)
 
 
-def lire_etat(id_camera: str, cle: str | None = None, peremption_s: float = 10.0):
+PEREMPTION_ETAT_S = float(os.environ.get("PREVIA_PEREMPTION_S", "25.0"))
+
+
+def lire_etat(id_camera: str, cle: str | None = None, peremption_s: float | None = None):
     """État courant de CETTE caméra — juste la valeur de `cle` si fournie
     (ex. "vueActuelle"), sinon tout l'état (toutes les clés). {} si rien
     n'a encore été rapporté / si `cle` n'existe pas encore.
-    Si la caméra n'a pas produit de nouvelle analyse depuis > peremption_s (10s),
+    Si la caméra n'a pas produit de nouvelle analyse depuis > peremption_s (25s par défaut),
     les détections fantômes sont réinitialisées à vide."""
+    if peremption_s is None:
+        peremption_s = PEREMPTION_ETAT_S
     chemin = _dossier_camera(id_camera) / "etat.json"
     if not chemin.exists():
         return {}

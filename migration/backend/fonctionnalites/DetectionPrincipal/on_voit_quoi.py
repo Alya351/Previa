@@ -83,6 +83,7 @@ COCO_FR = {
 }
 
 CONF = 0.35
+CONF_PERSONNE = 0.25
 
 # Si une instance suivie n'est plus revue pendant ce délai, ByteTrack lui-
 # même l'a perdue (son propre buffer interne l'oublie) : elle passe dans
@@ -221,8 +222,12 @@ def _suivre_instances(id_camera: str, result, now: float, diagonale_frame: float
 
     vus_maintenant = {}
     for i, box in enumerate(result.boxes):
-        track_id = int(box.id[0]) if (getattr(box, "id", None) is not None and box.id is not None) else (i + 1)
         label = result.names[int(box.cls[0])]
+        score = float(box.conf[0])
+        seuil = CONF_PERSONNE if label == "person" else CONF
+        if score < seuil:
+            continue
+        track_id = int(box.id[0]) if (getattr(box, "id", None) is not None and box.id is not None) else (i + 1)
         centroid = _centroid_instance(result, i, box)
 
         if track_id not in track_state_camera:
@@ -266,14 +271,15 @@ def analyser(id_camera: str, frame) -> dict:
     now = time.time()
     diagonale_frame = (frame.shape[0] ** 2 + frame.shape[1] ** 2) ** 0.5
 
+    conf_min = min(CONF, CONF_PERSONNE)
     try:
-        result = model.track(frame, persist=True, conf=CONF, verbose=False)[0]
+        result = model.track(frame, persist=True, conf=conf_min, verbose=False)[0]
     except Exception:
-        result = model.predict(frame, conf=CONF, verbose=False)[0]
+        result = model.predict(frame, conf=conf_min, verbose=False)[0]
 
     instances = _suivre_instances(id_camera, result, now, diagonale_frame)
     track_state_camera = _track_state[id_camera]
-    labels = [result.names[int(box.cls[0])] for box in result.boxes]
+    labels = [info["label"] for info in instances.values()]
     print(f"[on_voit_quoi] caméra {id_camera} — détections : {labels}", flush=True)
 
     # Positions des personnes de CET appel — sert à savoir si un objet
@@ -316,7 +322,8 @@ def analyser(id_camera: str, frame) -> dict:
     resultat = {
         "id_camera": id_camera,
         "objets": dict(sorted(objets.items())),
-        "nombre_personnes": labels.count("person"),
+        "nombre_personnes": len(personnes_centroides),
+        "personnes_centroides": personnes_centroides,
         "alertes_feu_fumee": alertes_feu_fumee,
         "updated_at": now,
     }

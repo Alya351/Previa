@@ -296,7 +296,7 @@ COLOR_FR = {
 
 GENDER_FR = {"female": "femme", "male": "homme"}
 
-CONF_PERSONNE = 0.20
+CONF_PERSONNE = 0.25
 CONF_VETEMENT = 0.35
 CONF_POSE = 0.35
 
@@ -363,21 +363,40 @@ def _get_onnx_yolo():
     return _onnx_net
 
 
+_onnx_input_dim: int | None = None
+
+
 def _detect_persons_yolo_onnx(net, frame, conf_threshold=0.20) -> list:
     if net is None or frame is None or frame.size == 0:
         return []
 
+    global _onnx_input_dim
+
     def _run_forward(img):
+        global _onnx_input_dim
         h, w = img.shape[:2]
-        # Résolution optimisée 416x416 : réduit de 58% le volume de calcul CPU par frame (latence < 100ms)
-        blob = cv2.dnn.blobFromImage(img, 1.0 / 255.0, (416, 416), swapRB=True, crop=False)
-        net.setInput(blob)
-        output = net.forward()
+        dims_to_try = [_onnx_input_dim] if _onnx_input_dim else [640, 416]
+        output = None
+        dim_utilisee = 640
+        for dim in dims_to_try:
+            try:
+                blob = cv2.dnn.blobFromImage(img, 1.0 / 255.0, (dim, dim), swapRB=True, crop=False)
+                net.setInput(blob)
+                output = net.forward()
+                dim_utilisee = dim
+                _onnx_input_dim = dim
+                break
+            except Exception:
+                continue
+
+        if output is None:
+            return []
+
         data = output[0].T
         boxes = []
         confidences = []
-        sx = w / 416.0
-        sy = h / 416.0
+        sx = w / float(dim_utilisee)
+        sy = h / float(dim_utilisee)
         for row in data:
             scores = row[4:]
             class_id = int(np.argmax(scores))
@@ -642,6 +661,12 @@ def _distance(p1: tuple, p2: tuple) -> float:
 
 def _corrobore_par_modele_general(id_camera: str, frame, centroid: tuple, diagonale_frame: float) -> bool:
     """Vérifie si le modèle général voit aussi une personne près de `centroid`."""
+    vue = rapport_cam.lire_etat(id_camera, "vueActuelle")
+    cents = vue.get("personnes_centroides")
+    if cents is not None:
+        seuil = RODEUR_CORROBORATION_DISTANCE_FRACTION * diagonale_frame
+        return any(_distance(c, centroid) <= seuil for c in cents)
+
     model = on_voit_quoi._get_model(id_camera)
     if model is None:
         return True
@@ -692,7 +717,13 @@ def _run_seg(model, frame, conf, utiliser_onnx=True, imgsz=None):
             kwargs = {"conf": conf, "verbose": False}
             if imgsz:
                 kwargs["imgsz"] = imgsz
-            result = model.predict(frame, **kwargs)[0]
+            if utiliser_onnx and hasattr(model, "track"):
+                try:
+                    result = model.track(frame, persist=True, **kwargs)[0]
+                except Exception:
+                    result = model.predict(frame, **kwargs)[0]
+            else:
+                result = model.predict(frame, **kwargs)[0]
             detections = []
             for i, box in enumerate(result.boxes):
                 det_box = [round(v, 1) for v in box.xyxy[0].tolist()]

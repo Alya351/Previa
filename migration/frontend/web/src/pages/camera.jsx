@@ -20,7 +20,7 @@ import './camera.css';
 // (un téléphone à l'entrée, par exemple), pas forcément un poste admin.
 
 const ANALYSE_INTERVAL_MS = 2000;
-const LARGEUR_MAX_ENVOI = 640;
+const LARGEUR_MAX_ENVOI = 960;
 
 // Flux "en direct" — vraie vidéo WebRTC, pas des JPEG répétés (voir
 // Infrastructure/signalisation_webrtc.py côté backend pour le
