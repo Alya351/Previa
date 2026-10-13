@@ -105,11 +105,12 @@ def normaliser_url_rtsp(url: str) -> str:
 
 
 def masquer_url_rtsp(url: str | None) -> str:
-    """Masque le mot de passe dans les URL RTSP pour éviter l'exposition d'identifiants dans les logs."""
+    """Masque le mot de passe dans les URL RTSP pour éviter l'exposition d'identifiants dans les logs.
+    Gère correctement les mots de passe contenant des caractères @ non encodés."""
     if not url or not isinstance(url, str):
         return ""
     import re
-    return re.sub(r"://([^:@]+):([^@]+)@", r"://\1:***@", url)
+    return re.sub(r"://([^:\s/@]+):([^/\s]+)@", r"://\1:***@", url)
 
 
 
@@ -344,7 +345,6 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
             transport_opt = "tcp"
             while not evt_arret.is_set():
                 if ffmpeg:
-                    hw_opts = ["-c:v", "h264_v4l2m2m"] if tenter_hw else []
                     opt_timeout = _option_timeout_rtsp(ffmpeg)
                     cmd = [
                         ffmpeg,

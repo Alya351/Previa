@@ -47,8 +47,25 @@ if hasattr(sys.stdout, 'reconfigure'):
         pass
 
 USERNAME = os.environ.get("PREVIA_PI_USER", "previa")
-PASSWORD = os.environ.get("PREVIA_PI_PASSWORD", "Sentinel2k26")
+PASSWORD = os.environ.get("PREVIA_PI_PASSWORD", "")
 LOCAL_DIR = Path(__file__).resolve().parent
+
+def verifier_mot_de_passe():
+    """Vérifie ou demande interactivement le mot de passe SSH s'il n'est pas fourni via variable d'environnement."""
+    global PASSWORD
+    if not PASSWORD:
+        import getpass
+        print(f"[*] Authentification SSH requise pour l'utilisateur '{USERNAME}'.")
+        try:
+            if sys.stdin.isatty():
+                PASSWORD = getpass.getpass(f"  Mot de passe SSH ({USERNAME}) : ")
+            else:
+                PASSWORD = input(f"  Mot de passe SSH ({USERNAME}) : ")
+        except Exception:
+            pass
+    if not PASSWORD:
+        print("  [!] Aucun mot de passe fourni. Définissez la variable PREVIA_PI_PASSWORD ou saisissez-le.")
+        sys.exit(1)
 
 def executer_commande_distante(ssh, commande, sudo=False):
     commande_distante = f"sudo -S -p '' {commande}" if sudo else commande
@@ -347,6 +364,8 @@ def main():
     print("======================================================================")
     print("      PREVIA - LANCEUR 1-CLIC SUR RASPBERRY PI")
     print("======================================================================")
+
+    verifier_mot_de_passe()
 
     host = detecter_raspberry()
     if not host:

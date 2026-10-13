@@ -4434,7 +4434,7 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <input
               style={{ ...champ, flex: 1, minWidth: '280px', fontFamily: 'monospace', fontSize: '0.85rem' }}
-              placeholder="Flux RTSP (ex: rtsp://admin:11Avril2002@@192.168.11.101:554/Streaming/Channels/101)"
+              placeholder="Flux RTSP (ex: rtsp://utilisateur:motdepasse@IP:554/Streaming/Channels/102)"
               value={ipUrl}
               onChange={(e) => setIpUrl(e.target.value)}
             />
