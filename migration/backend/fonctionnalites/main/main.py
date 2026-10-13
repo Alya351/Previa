@@ -342,16 +342,40 @@ def amorcer_admin_par_defaut(demande: DemandeAmorcage):
         raise HTTPException(409, str(exc))
 
 
+# Contournements de connexion de démonstration (admin sans mot de passe,
+# création automatique de comptes admin, mot de passe écrasé) : DÉSACTIVÉS
+# par défaut. À n'activer que sur une machine de développement :
+#   PREVIA_MODE_DEV=1
+MODE_DEV_CONNEXION = os.environ.get("PREVIA_MODE_DEV", "").strip() == "1"
+if MODE_DEV_CONNEXION:
+    print("[main] ⚠️ PREVIA_MODE_DEV=1 : connexion permissive ACTIVE — jamais en production.", flush=True)
+
+
 @app.post(
     "/utilisateurs/connexion",
     tags=["Utilisateurs"],
     summary="Se connecter (email + mot de passe)",
-    description="Vérifie l'email et le mot de passe, ou auto-crée le compte admin local s'il n'existe pas encore.",
+    description=(
+        "Vérifie l'email et le mot de passe (401 sinon). Le comportement "
+        "permissif de démonstration (admin sans mot de passe, création "
+        "automatique de comptes) n'existe que si PREVIA_MODE_DEV=1."
+    ),
+    responses={401: {"description": "Email ou mot de passe incorrect"}},
 )
 def se_connecter(demande: DemandeConnexion):
+    # 1. Authentification standard — seule voie en production.
+    u = compte.authentifier(demande.email, demande.mot_de_passe)
+    if u is not None:
+        return u
+
+    # 2. Aucun contournement hors mode développement explicite.
+    if not MODE_DEV_CONNEXION:
+        raise HTTPException(401, "Email ou mot de passe incorrect")
+
+    # --- MODE DÉVELOPPEMENT UNIQUEMENT (PREVIA_MODE_DEV=1) ----------------
     email_clean = demande.email.strip().lower()
-    
-    # 1. Vérification si admin par défaut local
+
+    # Admin local sans mot de passe
     if email_clean in ("admin@previa.local", "admin@previa.fr", "admin"):
         return {
             "id": "admin_local",
@@ -362,12 +386,7 @@ def se_connecter(demande: DemandeConnexion):
             "est_par_defaut": True,
         }
 
-    # 2. Authentification standard
-    u = compte.authentifier(demande.email, demande.mot_de_passe)
-    if u is not None:
-        return u
-
-    # 3. Si le compte n'existe pas encore dans la base, on le crée en tant qu'admin
+    # Si le compte n'existe pas encore dans la base, on le crée en tant qu'admin
     existant = compte.trouver_par_email(demande.email)
     if existant is None:
         nom_extrait = demande.email.split("@")[0].capitalize()
@@ -381,7 +400,7 @@ def se_connecter(demande: DemandeConnexion):
         )
         return u_nouveau
 
-    # 4. Si le compte existe mais mot de passe différent, mise à jour pour ne jamais bloquer l'administrateur
+    # Si le compte existe mais mot de passe différent, mise à jour pour ne jamais bloquer l'administrateur
     u_maj = compte.modifier_utilisateur(
         existant["id"],
         mot_de_passe=demande.mot_de_passe,
@@ -1890,6 +1909,12 @@ def verifier_visage_scan(payload: VerificationVisageModel):
     try:
         from fonctionnalites.DetectionPrincipal import on_voit_qui
         face_app = getattr(on_voit_qui, "_face_app", None)
+        if face_app is None and hasattr(on_voit_qui, "_get_models"):
+            try:
+                models = on_voit_qui._get_models()
+                face_app = models.get("face") if isinstance(models, dict) else None
+            except Exception as e:
+                print(f"[main] Impossible d'initialiser face_app : {e}", flush=True)
         if face_app is not None:
             faces = face_app.get(img_np[:, :, ::-1])
             if faces and len(faces) > 0:
@@ -1899,8 +1924,8 @@ def verifier_visage_scan(payload: VerificationVisageModel):
                     visage_detecte = True
                     confiance_score = score
                     qualite_texte = f"Excellente ({int(min(99, score * 100))}%)"
-    except Exception:
-        pass
+    except Exception as _e_face:
+        print(f"[main] Erreur détection visage InsightFace : {_e_face}", flush=True)
 
     # 2. Détection via modèle YOLO Pose (Keypoints visage : nez, yeux, oreilles)
     if not visage_detecte:

@@ -25,24 +25,25 @@ _conn: sqlite3.Connection | None = None
 
 def get_connection() -> sqlite3.Connection:
     global _conn
-    if _conn is None:
-        DB_DIR.mkdir(parents=True, exist_ok=True)
-        _conn = sqlite3.connect(str(DB_FILE), check_same_thread=False)
-        _conn.row_factory = sqlite3.Row
-        
-        # Activer WAL
-        _conn.execute("PRAGMA journal_mode=WAL;")
-        _conn.execute("PRAGMA synchronous=NORMAL;")  # Défaut pour la DB globale
-        
-        _initialiser_tables(_conn)
-        _migrer_anciens_historiques(_conn)
-    return _conn
+    with _lock:
+        if _conn is None:
+            DB_DIR.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(DB_FILE), check_same_thread=False)
+            conn.row_factory = sqlite3.Row
 
-# Initialisation immédiate au premier import pour garantir la disponibilité instantanée
-try:
-    get_connection()
-except Exception:
-    pass
+            # Activer WAL
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")  # Défaut pour la DB globale
+
+            _initialiser_tables(conn)
+            _migrer_anciens_historiques(conn)
+            # Publiée SEULEMENT une fois les tables créées : avant, la
+            # connexion était publiée d'abord, et si l'initialisation
+            # échouait (ou n'était pas encore définie), toutes les
+            # requêtes suivantes tombaient sur « no such table: kv_store »
+            # sur une installation neuve (aucune base existante).
+            _conn = conn
+        return _conn
 
 
 
@@ -122,4 +123,14 @@ def _migrer_anciens_historiques(conn: sqlite3.Connection):
                 print(f"[sqlite_db] Migration de l'historique reussie pour la camera {id_camera}", flush=True)
             except Exception as e:
                 print(f"[sqlite_db] Erreur lors de la migration {hist_file} : {e}", flush=True)
+
+
+# Initialisation immédiate au premier import pour garantir la disponibilité
+# instantanée — placée EN FIN DE FICHIER : elle appelle des fonctions
+# (_initialiser_tables, _migrer_anciens_historiques) qui doivent déjà être
+# définies à cet instant.
+try:
+    get_connection()
+except Exception as _e_init_db:
+    print(f"[sqlite_db] Initialisation différée : {_e_init_db}", flush=True)
 

@@ -44,6 +44,7 @@ foi d'une seule image isolée. Une couleur mal lue ou un genre mal classé
 une fois ne suffit pas à l'affirmer."""
 import concurrent.futures
 import os
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -111,7 +112,6 @@ _racine = Path(__file__).resolve().parents[4]
 MODELS_DIR = _racine / "models"
 if not MODELS_DIR.exists():
     MODELS_DIR = Path(__file__).resolve().parents[3] / "models"
-DEVICE = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
 
 FACE_MIN_CONF = 0.35  # SCRFD (InsightFace) : score calibré pour haute sensibilité et visages nets ou à distance
 
@@ -206,7 +206,42 @@ CLOTHING_MEMORY_EXPIRY_S = 60  # un vêtement plus revu depuis ce délai est oub
 MEMOIRE_PERSONNE_EXPIRY_S = 3600.0
 
 _memoire_personnes = {}
+_face_app = None
 _orientations_camera: dict[str, int | None] = {}
+
+# Une orientation de caméra n'est verrouillée qu'après plusieurs
+# observations cohérentes à confiance suffisante (un seul faux positif à
+# seuil bas suffisait avant à verrouiller une mauvaise rotation pour
+# toute la durée du processus), et la recherche des 3 autres orientations
+# n'est retentée qu'à intervalle espacé (avant : à CHAQUE image vide, soit
+# 3 inférences de plus par image).
+ORIENTATION_CONF_MIN = 0.35
+ORIENTATION_CONFIRMATIONS = 2
+ORIENTATION_INTERVALLE_ESSAI_S = 5.0
+_orientations_candidates: dict[str, tuple] = {}   # id_camera -> (code_rotation, nb_confirmations)
+_orientations_dernier_essai: dict[str, float] = {}
+
+
+def orientation_verrouillee(id_camera: str):
+    """Code de rotation OpenCV verrouillé pour cette caméra, ou None."""
+    return _orientations_camera.get(id_camera)
+
+
+def reinitialiser_orientation(id_camera: str) -> None:
+    """Oublie l'orientation mémorisée (à appeler si la caméra est
+    remontée / réorientée)."""
+    _orientations_camera.pop(id_camera, None)
+    _orientations_candidates.pop(id_camera, None)
+    _orientations_dernier_essai.pop(id_camera, None)
+
+# Résolution d'inférence YOLO pour la détection des personnes. Vide = valeur
+# par défaut d'Ultralytics (640). Exemple : PREVIA_IMGSZ_PERSONNES=960 pour
+# mieux voir les personnes éloignées (au prix de plus de calcul).
+IMGSZ_PERSONNES = int(os.environ.get("PREVIA_IMGSZ_PERSONNES", "0") or 0) or None
+# Plus grande dimension (px) conservée en régime thermique NOMINAL. Vide =
+# valeur de gestion_thermique.py (640). Les régimes chauds réduisent
+# toujours, quelle que soit cette valeur.
+MAX_DIM_NOMINAL = int(os.environ.get("PREVIA_MAX_DIM", "0") or 0) or None
 # id -> {"genre_votes": {"female": n, "male": n}, "genre_verrouille": str | None,
 #        "vetements": {(type_fr, couleur_fr): {"count": n, "last_seen": t}},
 #        "last_seen": float}
@@ -460,8 +495,20 @@ def _detect_persons_opencv(frame) -> list:
     return detections
 
 
+_models_lock = threading.Lock()
+
+
 def _get_models():
-    global _models
+    """Chargement unique et thread-safe : main.py précharge les modèles
+    dans un thread de fond ET la première requête peut les demander en
+    même temps — sans verrou, ils étaient chargés deux fois (~1,8 Go de
+    plus en mémoire)."""
+    with _models_lock:
+        return _get_models_impl()
+
+
+def _get_models_impl():
+    global _models, _face_app
     if _models is None:
         print("[on_voit_qui] initialisation des modèles...", flush=True)
         person_seg = None
@@ -549,6 +596,9 @@ def _get_models():
                 except Exception as e:
                     print(f"[on_voit_qui] reid ignoré : {e}", flush=True)
 
+        global _face_app
+        _face_app = face_app
+
         _models = {
             "person_seg": person_seg, "clothing": clothing, "pose": pose,
             "clothing_processor": clothing_processor, "clothing_model": clothing_model,
@@ -630,15 +680,24 @@ def _assign_faces_to_people(people_centroids: list, face_centroids: list) -> dic
 _inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="ai_worker")
 
 
-def _run_seg(model, frame, conf):
-    """Détection+segmentation pleine résolution : tente YOLO .pt, puis YOLO .onnx, puis OpenCV silhouette."""
+def _run_seg(model, frame, conf, utiliser_onnx=True, imgsz=None):
+    """Détection+segmentation pleine résolution : tente YOLO .pt, puis YOLO .onnx.
+
+    `utiliser_onnx=False` : à passer pour tout modèle qui ne détecte PAS des
+    personnes (ex. vêtements) — le repli ONNX est un détecteur de personnes,
+    il ressortait sinon des « personnes » à la place des vêtements.
+    `imgsz` : résolution d'inférence YOLO (None = défaut Ultralytics)."""
     if model is not None:
         try:
-            result = model.predict(frame, conf=conf, verbose=False)[0]
+            kwargs = {"conf": conf, "verbose": False}
+            if imgsz:
+                kwargs["imgsz"] = imgsz
+            result = model.predict(frame, **kwargs)[0]
             detections = []
             for i, box in enumerate(result.boxes):
                 det_box = [round(v, 1) for v in box.xyxy[0].tolist()]
                 cls_id = int(box.cls[0])
+                tid = int(box.id[0]) if (getattr(box, "id", None) is not None and box.id is not None) else (i + 1)
                 det = {
                     "label": result.names[cls_id],
                     "class_id": cls_id,
@@ -646,7 +705,7 @@ def _run_seg(model, frame, conf):
                     "centroid": _box_centroid(det_box),
                     "mask_poly": None,
                     "score": float(box.conf[0]),
-                    "track_id": (i + 1),
+                    "track_id": tid,
                 }
                 if result.masks is not None:
                     poly = result.masks.xy[i]
@@ -659,14 +718,17 @@ def _run_seg(model, frame, conf):
         except Exception as _e_seg:
             print(f"[on_voit_qui] Erreur _run_seg predict: {_e_seg}", flush=True)
 
+    if not utiliser_onnx:
+        return []
+
     onnx_net = _get_onnx_yolo()
     if onnx_net is not None:
         try:
             onnx_dets = _detect_persons_yolo_onnx(onnx_net, frame, conf_threshold=conf)
             if onnx_dets:
                 return onnx_dets
-        except Exception:
-            pass
+        except Exception as _e_onnx:
+            print(f"[on_voit_qui] Erreur détecteur ONNX: {_e_onnx}", flush=True)
 
     return []
 
@@ -701,7 +763,8 @@ def _run_pose(model, frame, conf):
             if _is_valid_human_pose(pose_obj):
                 detections.append(pose_obj)
         return detections
-    except Exception:
+    except Exception as _e_pose:
+        print(f"[on_voit_qui] Erreur _run_pose: {_e_pose}", flush=True)
         return []
 
 
@@ -726,8 +789,8 @@ def detect_faces(face_app, frame_bgr, poses=None):
                 })
             if faces:
                 return faces
-        except Exception:
-            pass
+        except Exception as _e_face:
+            print(f"[on_voit_qui] Erreur InsightFace: {_e_face}", flush=True)
 
     # Repli intelligent sur les points-clés faciaux YOLO Pose (Nez, Yeux, Oreilles)
     if poses:
@@ -752,19 +815,10 @@ def detect_faces(face_app, frame_bgr, poses=None):
                 x2 = min(float(w), cx + largeur / 2.0)
                 y2 = min(float(h), cy + hauteur * 0.6)
                 
-                # Pseudo-embedding normalisé basé sur l'histogramme HSV du visage
-                face_crop = frame_bgr[int(y1):int(y2), int(x1):int(x2)]
-                emb = [0.0] * 128
-                if face_crop.size > 100:
-                    hsv_crop = cv2.cvtColor(face_crop, cv2.COLOR_BGR2HSV)
-                    hist = cv2.calcHist([hsv_crop], [0, 1], None, [8, 16], [0, 180, 0, 256])
-                    cv2.normalize(hist, hist)
-                    emb = [round(float(v), 6) for v in hist.flatten().tolist()]
-
                 faces.append({
                     "box": [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)],
                     "confidence": 0.85,
-                    "embedding": emb,
+                    "embedding": None,
                     "genre": None,
                     "yaw": None,
                 })
@@ -784,13 +838,13 @@ def _segment_clothing(processor, model, frame_bgr: np.ndarray) -> np.ndarray:
             logits, size=frame_bgr.shape[:2], mode="bilinear", align_corners=False,
         )
         return upsampled.argmax(dim=1)[0].cpu().numpy()
-    except Exception:
+    except Exception as _e_segf:
+        print(f"[on_voit_qui] Erreur SegFormer: {_e_segf}", flush=True)
         return np.zeros(frame_bgr.shape[:2], dtype=np.int64)
 
 
 # Cache de la matrice vectorielle Face ID pour recherche instantanée en O(1) BLAS
 _face_matrix_cache: dict = {"ts": 0.0, "matrix": None, "emps": []}
-_segformer_cache: dict[str, tuple] = {}  # id_camera -> (timestamp, carte_vetements)
 
 
 def _get_face_search_index() -> tuple[np.ndarray | None, list]:
@@ -939,10 +993,13 @@ def _best_assisted_match(embedding, records: dict, position: tuple, diagonale_fr
     return best_id, best_sim
 
 
-def identify_face(embedding: list, deja_pris: set | None = None) -> dict:
+def identify_face(embedding: list | None, deja_pris: set | None = None) -> dict:
     """Reconnaît un visage à partir de son embedding : priorité absolue aux
     collaborateurs officiels enregistrés (personnel), puis identités confirmées,
     puis candidats en cours d'observation, ou tout nouveau visage."""
+    if not embedding or not isinstance(embedding, (list, np.ndarray)) or len(embedding) != 512:
+        return {"statut": "sans_visage", "id": None}
+
     now = time.time()
     deja_pris = deja_pris or set()
 
@@ -1256,19 +1313,23 @@ def analyser(id_camera: str, frame) -> dict:
     module), et écrit le résultat confirmé dans le rapport DE CETTE
     CAMÉRA (voir rapport_cam.py, clé "personnesVues")."""
     # Adaptateur thermique pour préserver le Raspberry Pi 4 de la surchauffe
+    if frame is None or frame.size == 0:
+        return {"personnes": [], "zones_suspectes": [], "timestamp": time.time()}
+
     from fonctionnalites.Infrastructure import gestion_thermique
     profil_th = gestion_thermique.obtenir_profil_thermique()
     max_dim = profil_th.get("max_dim_px", 640)
+    if MAX_DIM_NOMINAL and profil_th.get("regime") == "NOMINAL":
+        max_dim = MAX_DIM_NOMINAL
 
-    if frame is not None:
-        h, w = frame.shape[:2]
-        if max(h, w) > max_dim:
-            echelle = max_dim / float(max(h, w))
-            nw, nh = int(w * echelle), int(h * echelle)
-            frame = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_AREA)
+    h, w = frame.shape[:2]
+    if max(h, w) > max_dim:
+        echelle = max_dim / float(max(h, w))
+        nw, nh = int(w * echelle), int(h * echelle)
+        frame = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_AREA)
 
-    if frame is not None and frame.shape[0] > frame.shape[1]:
-        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    # Pas de rotation forcée des images en portrait (voir on_voit_quoi.py) :
+    # le redressement est géré par l'orientation mémorisée ci-dessous.
 
     models = _get_models()
     now = time.time()
@@ -1288,38 +1349,57 @@ def analyser(id_camera: str, frame) -> dict:
     # objet proche (indice de vol).
     objets_actuels = rapport_cam.lire_etat(id_camera, "vueActuelle").get("objets", {})
 
-    # Orientation mémorisée pour cette caméra (évite 4 ré-inférences inutiles à chaque frame sur Pi 4)
     rot_candidat = _orientations_camera.get(id_camera)
     if rot_candidat is not None:
         frame = cv2.rotate(frame, rot_candidat)
 
-    _t0 = time.time()
-    tous_candidats_personnes = _run_seg(models["person_seg"], frame, CONF_RODEUR_ANONYME)
-    personnes = [
-        d for d in tous_candidats_personnes 
-        if (
-            str(d.get("label")).lower() in ("person", "personne", "human", "0") 
+    def _est_personne(d: dict) -> bool:
+        return (
+            str(d.get("label")).lower() in ("person", "personne", "human", "0")
             or d.get("class_id") in (0, None)
-        ) 
-        and d.get("score", 0.0) >= 0.05
+        )
+
+    _t0 = time.time()
+    tous_candidats_personnes = _run_seg(models["person_seg"], frame, CONF_RODEUR_ANONYME, imgsz=IMGSZ_PERSONNES)
+    personnes = [
+        d for d in tous_candidats_personnes
+        if _est_personne(d) and d.get("score", 0.0) >= 0.05
     ]
 
-    # Si 0 personne trouvée et aucune orientation verrouillée, tester ponctuellement les 3 autres orientations
-    if not personnes and rot_candidat is None:
+    # Si 0 personne trouvée et aucune orientation verrouillée, tester les 3
+    # autres orientations — au plus une fois toutes les
+    # ORIENTATION_INTERVALLE_ESSAI_S secondes, avec un seuil de confiance
+    # plus exigeant, et verrouillage seulement après
+    # ORIENTATION_CONFIRMATIONS observations de la MÊME rotation.
+    if not personnes and rot_candidat is None and (
+        now - _orientations_dernier_essai.get(id_camera, 0.0) >= ORIENTATION_INTERVALLE_ESSAI_S
+    ):
+        _orientations_dernier_essai[id_camera] = now
+        meilleur = None  # (score, code, frame_rot, candidats, trouves)
         for rot_code in (cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE):
             frame_rot = cv2.rotate(frame, rot_code)
-            candidats_rot = _run_seg(models["person_seg"], frame_rot, CONF_RODEUR_ANONYME)
+            candidats_rot = _run_seg(models["person_seg"], frame_rot, CONF_RODEUR_ANONYME, imgsz=IMGSZ_PERSONNES)
             found_rot = [
-                d for d in candidats_rot 
-                if (str(d.get("label")).lower() in ("person", "personne", "human", "0") or d.get("class_id") in (0, None)) 
-                and d.get("score", 0.0) >= 0.05
+                d for d in candidats_rot
+                if _est_personne(d) and d.get("score", 0.0) >= ORIENTATION_CONF_MIN
             ]
             if found_rot:
-                frame = frame_rot
-                tous_candidats_personnes = candidats_rot
-                personnes = found_rot
+                score = max(d.get("score", 0.0) for d in found_rot)
+                if meilleur is None or score > meilleur[0]:
+                    meilleur = (score, rot_code, frame_rot, candidats_rot, found_rot)
+        if meilleur is not None:
+            _, rot_code, frame_rot, candidats_rot, found_rot = meilleur
+            precedent = _orientations_candidates.get(id_camera)
+            nb = precedent[1] + 1 if precedent and precedent[0] == rot_code else 1
+            _orientations_candidates[id_camera] = (rot_code, nb)
+            if nb >= ORIENTATION_CONFIRMATIONS:
                 _orientations_camera[id_camera] = rot_code
-                break
+                print(f"[on_voit_qui] orientation caméra {id_camera} verrouillée (rotation {rot_code})", flush=True)
+            frame = frame_rot
+            tous_candidats_personnes = candidats_rot
+            personnes = found_rot
+        else:
+            _orientations_candidates.pop(id_camera, None)
 
     # Si YOLO segmentation ne voit pas le corps entier (ex: selfie / visage de très près),
     # tenter une détection de visage directe avant d'abandonner
@@ -1358,7 +1438,7 @@ def analyser(id_camera: str, frame) -> dict:
 
     # PASSE 2 (Déclenchée UNIQUEMENT lorsqu'une présence humaine est confirmée) :
     # Exécution des modèles spécialisés (Visages, Pose, Vêtements)
-    fut_cloth = _inference_executor.submit(_run_seg, models["clothing"], frame, CONF_VETEMENT)
+    fut_cloth = _inference_executor.submit(_run_seg, models["clothing"], frame, CONF_VETEMENT, False)
     fut_pose = _inference_executor.submit(_run_pose, models["pose"], frame, CONF_POSE)
     fut_face = _inference_executor.submit(detect_faces, models["face"], frame, None)
 
@@ -1448,7 +1528,7 @@ def analyser(id_camera: str, frame) -> dict:
         pose_idx = assignation_poses.get(i)
         has_valid_pose = (pose_idx is not None and _is_valid_human_pose(poses[pose_idx]))
         high_score = p.get("score", 0.0) >= CONF_PERSONNE
-        if has_face or has_valid_pose or high_score or len(personnes) <= 3:
+        if has_face or has_valid_pose or high_score:
             personnes_valides.append(p)
 
     personnes = personnes_valides
@@ -1742,7 +1822,7 @@ def analyser(id_camera: str, frame) -> dict:
             diagonale_frame,
             frame.shape,
             now,
-            track_id=personne.get("track_id") or (i + 1),
+            track_id=personne.get("track_id"),
         )
 
         # Déterminer si la personne est suspecte ou autorisée (Face ID + Comportement)
@@ -1765,11 +1845,16 @@ def analyser(id_camera: str, frame) -> dict:
 
         # Détection explicite de dissimulation du visage (cagoule / masque / visage couvert) :
         # Si le corps d'une personne est clairement détecté mais que son visage est sciemment masqué/dissimulé
-        visage_dissimule = (face is None and personne.get("score", 0.0) >= 0.35 and items_confirmes.get("chapeau") or False)
+        # `items_confirmes` est une LISTE de {"type", "couleur"} (voir
+        # _vetements_confirmes) : l'appeler comme un dictionnaire (.get)
+        # levait AttributeError pour toute personne sans visage visible et
+        # faisait échouer toute l'analyse de l'image.
+        porte_chapeau = any(it.get("type") == "chapeau" for it in items_confirmes)
+        porte_noir = any(it.get("couleur") == "noir" for it in items_confirmes)
 
         # Évaluation des vraies anomalies comportementales et sécuritaires (s'applique à tous)
         if not est_suspect:
-            if face is None and (items_confirmes.get("chapeau") and "noir" in str(items_confirmes)):
+            if face is None and porte_chapeau and porte_noir:
                 est_suspect = True
                 motif_suspicion = "Visage dissimulé / Cagoule"
             elif comportement.get("intrusion_zone", {}).get("intrusion"):

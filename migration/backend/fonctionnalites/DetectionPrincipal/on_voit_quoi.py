@@ -36,6 +36,7 @@ jamais dans un état global partagé entre caméras."""
 import time
 from pathlib import Path
 
+import cv2
 import numpy as np
 from fonctionnalites.Infrastructure import rapport_cam
 try:
@@ -242,8 +243,22 @@ def _suivre_instances(id_camera: str, result, now: float, diagonale_frame: float
 
 def analyser(id_camera: str, frame) -> dict:
     """Détecte + suit avec le modèle IA sur CETTE image DE CETTE CAMÉRA."""
-    if frame is not None and frame.shape[0] > frame.shape[1]:
-        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    if frame is None or frame.size == 0:
+        return {"objets": {}, "alertes_feu_fumee": None}
+
+    # Pas de rotation forcée des images en portrait : un téléphone tenu
+    # droit produit des images portrait où les personnes sont DÉJÀ
+    # debout, les coucher à 90° dégradait la détection. Le redressement
+    # d'une caméra réellement montée de côté est décidé par on_voit_qui.py
+    # (orientation mémorisée par caméra) : on applique ici la MÊME
+    # rotation pour que /voir et /qui regardent la même image.
+    try:
+        from fonctionnalites.DetectionPrincipal import on_voit_qui as _qui
+        rot = _qui.orientation_verrouillee(id_camera)
+        if rot is not None:
+            frame = cv2.rotate(frame, rot)
+    except Exception as exc:
+        print(f"[on_voit_quoi] orientation caméra {id_camera} ignorée : {exc}", flush=True)
 
     model = _get_model(id_camera)
     if model is None:
