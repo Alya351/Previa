@@ -216,9 +216,9 @@ _orientations_camera: dict[str, int | None] = {}
 # toute la durée du processus), et la recherche des 3 autres orientations
 # n'est retentée qu'à intervalle espacé (avant : à CHAQUE image vide, soit
 # 3 inférences de plus par image).
-ORIENTATION_CONF_MIN = 0.35
+ORIENTATION_CONF_MIN = 0.20
 ORIENTATION_CONFIRMATIONS = 2
-ORIENTATION_INTERVALLE_ESSAI_S = 5.0
+ORIENTATION_INTERVALLE_ESSAI_S = 1.5
 _orientations_candidates: dict[str, tuple] = {}   # id_camera -> (code_rotation, nb_confirmations)
 _orientations_dernier_essai: dict[str, float] = {}
 _dernier_segformer_ts: dict[str, float] = {}
@@ -1497,13 +1497,10 @@ def analyser(id_camera: str, frame) -> dict:
         if _est_personne(d) and d.get("score", 0.0) >= 0.05
     ]
 
-    # Si aucune personne crédible n'est détectée (score < 0.25) et aucune orientation verrouillée,
-    # tester les 3 autres orientations — au plus une fois toutes les
-    # ORIENTATION_INTERVALLE_ESSAI_S secondes.
-    # Évite le piège où un faux positif à 0.06 sur une image couchée bloquait le redressement.
-    # IMPORTANT : suivre=False pour ne pas polluer l'état du tracker avec des rotations !
+    # Déclenchement de l'auto-redressement si le score actuel est insuffisant (< 0.60) ou si aucune personne
+    # n'est détectée avec certitude, afin de trouver l'angle optimal (90°, 180°, 270°).
     meilleur_score_actuel = max((d.get("score", 0.0) for d in personnes), default=0.0)
-    if not flux_deja_redresse and meilleur_score_actuel < 0.25 and rot_candidat is None and (
+    if not flux_deja_redresse and rot_candidat is None and meilleur_score_actuel < 0.60 and (
         now - _orientations_dernier_essai.get(id_camera, 0.0) >= ORIENTATION_INTERVALLE_ESSAI_S
     ):
         _orientations_dernier_essai[id_camera] = now
@@ -1519,14 +1516,24 @@ def analyser(id_camera: str, frame) -> dict:
                 score = max(d.get("score", 0.0) for d in found_rot)
                 if meilleur is None or score > meilleur[0]:
                     meilleur = (score, rot_code, frame_rot, candidats_rot, found_rot)
-        if meilleur is not None and meilleur[0] > meilleur_score_actuel:
+        if meilleur is not None and (meilleur[0] > meilleur_score_actuel + 0.10 or (meilleur_score_actuel < 0.25 and meilleur[0] >= 0.20)):
             score_m, rot_code, frame_rot, candidats_rot, found_rot = meilleur
             precedent = _orientations_candidates.get(id_camera)
             nb = precedent[1] + 1 if precedent and precedent[0] == rot_code else 1
             _orientations_candidates[id_camera] = (rot_code, nb)
-            if nb >= ORIENTATION_CONFIRMATIONS or score_m >= 0.60:
+            if nb >= ORIENTATION_CONFIRMATIONS or score_m >= 0.40:
                 _orientations_camera[id_camera] = rot_code
                 print(f"[on_voit_qui] orientation caméra {id_camera} verrouillée (rotation {rot_code}, score {score_m:.2f})", flush=True)
+                try:
+                    code_vers_deg = {
+                        cv2.ROTATE_90_CLOCKWISE: 90,
+                        cv2.ROTATE_180: 180,
+                        cv2.ROTATE_90_COUNTERCLOCKWISE: 270,
+                    }
+                    if rot_code in code_vers_deg:
+                        _camera_registre.definir_rotation(id_camera, code_vers_deg[rot_code])
+                except Exception:
+                    pass
             frame = frame_rot
             tous_candidats_personnes = candidats_rot
             personnes = found_rot
@@ -1606,7 +1613,7 @@ def analyser(id_camera: str, frame) -> dict:
     # avec mise en cache de 6 secondes pour soulager le processeur du Raspberry Pi 4
     _t_seg = time.time()
     maintenant_seg = time.time()
-    if (len(personnes) > 0 or len(faces) > 0) and models["clothing_processor"] is not None and models["clothing_model"] is not None:
+    if (len(personnes) > 0 or len(faces) > 0) and not profil_th.get("skip_segmentation_vetements", False) and models["clothing_processor"] is not None and models["clothing_model"] is not None:
         carte_cache = _derniere_carte_vetements.get(id_camera)
         if carte_cache is not None and (maintenant_seg - _dernier_segformer_ts.get(id_camera, 0)) < 6.0:
             if carte_cache.shape[:2] != frame.shape[:2]:

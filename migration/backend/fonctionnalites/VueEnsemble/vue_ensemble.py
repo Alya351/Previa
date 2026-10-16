@@ -54,6 +54,7 @@ def contexte_camera(id_camera: str) -> dict:
         "num": cam.get("num"),
         "est_entree": cam.get("est_entree", False),
         "url_flux": cam.get("url_flux"),
+        "rotation": cam.get("rotation", 0),
         "piece": p.get("nom") if p else None,
         "batiment": b.get("nom") if b else None,
     }

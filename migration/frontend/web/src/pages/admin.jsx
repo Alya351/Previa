@@ -4758,6 +4758,7 @@ export default function Admin() {
     name: c.num || c.id_camera,
     image: c.url_flux ? urlFluxCamera(c.id_camera) : `${API_BASE}/cameras/${c.id_camera}/image`,
     urlFlux: c.url_flux,
+    rotation: c.rotation || 0,
     location: [c.batiment, c.piece].filter(Boolean).join(' / ') || 'Emplacement inconnu',
     estEntree: c.est_entree,
     nombrePersonnes: c.nombre_personnes ?? 0,

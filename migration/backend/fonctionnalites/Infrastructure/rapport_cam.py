@@ -73,7 +73,7 @@ def enregistrer_etat(id_camera: str, cle: str, valeur) -> None:
             json.dump(etat, f, ensure_ascii=False, indent=2, default=_json_default)
 
 
-PEREMPTION_ETAT_S = float(os.environ.get("PREVIA_PEREMPTION_S", "60.0"))
+PEREMPTION_ETAT_S = float(os.environ.get("PREVIA_PEREMPTION_S", "180.0"))
 
 
 def lire_etat(id_camera: str, cle: str | None = None, peremption_s: float | None = None):

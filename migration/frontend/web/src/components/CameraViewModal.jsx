@@ -88,7 +88,9 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
           const personnesVues = etat.personnesVues?.personnes || [];
           const mapped = personnesVues.map((p, idx) => mapPersonneApi(p, idx, camCtx));
           setLiveDetections(mapped);
-          const cpt = etat.personnesVues?.nombre_personnes ?? etat.vueActuelle?.nombre_personnes ?? mapped.length;
+          const cpt = mapped.length > 0
+            ? mapped.length
+            : (etat.personnesVues?.nombre_personnes || etat.vueActuelle?.nombre_personnes || 0);
           setLivePersonCount(cpt);
         } else {
           setLiveDetections([]);
