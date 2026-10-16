@@ -491,26 +491,26 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                     if hote_ok:
                         cap = cv2.VideoCapture(url_test)
                         if cap.isOpened():
-                        while not evt_arret.is_set():
-                            ret, frame = cap.read()
-                            if ret and frame is not None:
-                                if rot_deg == 90:
-                                    frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-                                elif rot_deg == 180:
-                                    frame = cv2.rotate(frame, cv2.ROTATE_180)
-                                elif rot_deg == 270:
-                                    frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                                ok_enc, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
-                                if ok_enc:
-                                    jpg_bytes = buf.tobytes()
-                                    with _buffer_lock:
-                                        _buffer_derniere_frame[id_camera] = jpg_bytes
-                                    derniere_image.enregistrer(id_camera, jpg_bytes)
-                                time.sleep(0.04)  # ~25 FPS
-                            else:
-                                time.sleep(0.2)
-                                break
-                        cap.release()
+                            while not evt_arret.is_set():
+                                ret, frame = cap.read()
+                                if ret and frame is not None:
+                                    if rot_deg == 90:
+                                        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+                                    elif rot_deg == 180:
+                                        frame = cv2.rotate(frame, cv2.ROTATE_180)
+                                    elif rot_deg == 270:
+                                        frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+                                    ok_enc, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                                    if ok_enc:
+                                        jpg_bytes = buf.tobytes()
+                                        with _buffer_lock:
+                                            _buffer_derniere_frame[id_camera] = jpg_bytes
+                                        derniere_image.enregistrer(id_camera, jpg_bytes)
+                                    time.sleep(0.04)  # ~25 FPS
+                                else:
+                                    time.sleep(0.2)
+                                    break
+                            cap.release()
                 except Exception as e:
                     print(f"[rtsp_service] Erreur fallback OpenCV {id_camera} : {masquer_url_rtsp(str(e))}", flush=True)
 
