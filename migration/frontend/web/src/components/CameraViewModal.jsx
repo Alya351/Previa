@@ -294,7 +294,7 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
             </div>
             <div>
               <h3 id="camera-modal-title" style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#ffffff' }}>
-                {camera.name} : {camera.location}
+                {camera.name || camera.num || 'Caméra'}{camera.location ? ` : ${camera.location}` : ''}
               </h3>
               <span style={{ fontSize: '0.76rem', color: '#94a3b8' }}>
                 Flux vidéo direct en haute définition

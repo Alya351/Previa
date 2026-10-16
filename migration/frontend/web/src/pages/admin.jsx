@@ -4477,80 +4477,30 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
               )}
             </div>
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              {c.url_flux && (
-                <button
-                  type="button"
-                  onClick={() => setCameraFluxEnDirect(c)}
-                  style={{ ...btn, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', padding: '6px 12px', fontSize: '0.78rem' }}
-                  title="Voir le flux vidéo continu en direct"
-                >
-                  👁️ Voir le direct
-                </button>
-              )}
-                <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer la caméra"><Trash2 size={14} /></button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-      {/* Modal / Lecteur de flux direct RTSP */}
-      {cameraFluxEnDirect && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(4px)', padding: '20px' }}>
-          <div style={{ background: '#ffffff', borderRadius: '16px', maxWidth: '800px', width: '100%', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border-light)' }}>
-              <div>
-                <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--ink-primary)' }}>
-                  📺 Flux Vidéo en Direct — {cameraFluxEnDirect.num}
-                </h4>
-                <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--ink-muted)', fontFamily: 'monospace' }}>
-                  {cameraFluxEnDirect.url_flux ? cameraFluxEnDirect.url_flux.replace(/(rtsp:\/\/[^:]+:)[^@]+(@.+)/i, '$1••••••••$2') : ''}
-                </p>
-              </div>
               <button
                 type="button"
-                onClick={() => { setCameraFluxEnDirect(null); setDirectLoaded(false); }}
-                style={{ background: 'transparent', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: 'var(--ink-muted)' }}
+                onClick={() => setCameraFluxEnDirect(c)}
+                style={{ ...btn, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', padding: '6px 12px', fontSize: '0.78rem' }}
+                title="Voir le flux vidéo continu et tester avec la webcam"
               >
-                ✕
+                👁️ Voir le direct
               </button>
-            </div>
-            <div style={{ position: 'relative', background: '#0b132b', minHeight: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <img
-                src={urlFluxCamera(cameraFluxEnDirect.id)}
-                alt={`Flux direct ${cameraFluxEnDirect.num}`}
-                style={{ width: '100%', maxHeight: '550px', objectFit: 'contain', zIndex: 2, background: '#0b132b' }}
-                onLoad={() => {
-                  setDirectLoaded(true);
-                }}
-                onError={(e) => {
-                  setDirectLoaded(false);
-                  setTimeout(() => {
-                    if (e.target) {
-                      e.target.src = `${urlFluxCamera(cameraFluxEnDirect.id)}?t=${Date.now()}`;
-                    }
-                  }, 1500);
-                }}
-              />
-              {!directLoaded && (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: '#ffffff', padding: '30px', zIndex: 1, background: '#0b132b' }}>
-                  <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(2, 132, 199, 0.15)', border: '2px dashed #0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px' }}>
-                    <Cctv size={28} color="#38bdf8" />
-                  </div>
-                  <p style={{ fontSize: '1.05rem', fontWeight: 700, margin: '0 0 6px 0' }}>🔌 En attente de connexion de la caméra</p>
-                  <p style={{ fontSize: '0.82rem', color: '#94a3b8', maxWidth: '420px', margin: 0 }}>
-                    Branchez le routeur et la caméra sur le secteur. Dès que la caméra est allumée sur le réseau ({cameraFluxEnDirect.url_flux}), la vidéo apparaîtra automatiquement ici en direct.
-                  </p>
-                </div>
-              )}
-            </div>
-            <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', background: '#f8fafc', borderTop: '1px solid var(--border-light)' }}>
-              <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a', display: 'inline-block' }}></span>
-                Flux décodé en temps réel via FFmpeg MJPEG
-              </span>
+              <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer la caméra"><Trash2 size={14} /></button>
             </div>
           </div>
-        </div>
+        ))}
+      </div>
+
+      {/* Modal / Supervision et test webcam en direct */}
+      {cameraFluxEnDirect && (
+        <CameraViewModal
+          camera={{
+            ...cameraFluxEnDirect,
+            name: cameraFluxEnDirect.num || cameraFluxEnDirect.nom || 'Caméra',
+            location: nomPiece(cameraFluxEnDirect.piece_id) || 'Bâtiment',
+          }}
+          onClose={() => setCameraFluxEnDirect(null)}
+        />
       )}
     </div>
   );
