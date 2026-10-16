@@ -745,8 +745,21 @@ function SectionZones({ cameras, initialCameraId }) {
             ))}
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
-            <span>Cliquez sur l'image pour tracer les contours ({points.length}/3 min).</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '0.8rem', color: 'var(--ink-muted)', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              {points.length === 0 ? (
+                <span>Cliquez sur l'image pour commencer le tracé de la zone (3 points minimum requis).</span>
+              ) : points.length < 3 ? (
+                <span style={{ color: '#0369a1', fontWeight: 600 }}>
+                  Tracé en cours : {points.length} point{points.length > 1 ? 's' : ''} placé{points.length > 1 ? 's' : ''} (encore {3 - points.length} point{3 - points.length > 1 ? 's' : ''} minimum pour fermer la zone).
+                </span>
+              ) : (
+                <span style={{ color: '#059669', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                  <Check size={14} color="#059669" />
+                  Zone valide ({points.length} points) — Vous pouvez ajouter d'autres sommets ou enregistrer.
+                </span>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 onClick={() => {
