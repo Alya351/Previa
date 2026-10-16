@@ -1445,6 +1445,43 @@ function TuileCameraMosaic({ cam, personnes = [], onFocus, onFullscreen }) {
   );
 }
 
+// Analyse sémantique et explicite du motif de suspicion d'un individu
+function determinerMotifSuspicion(p) {
+  if (p.motif_suspicion && p.motif_suspicion !== 'Comportement suspect détecté') {
+    return p.motif_suspicion;
+  }
+  const motifs = [];
+  if (p.intrusionZoneActive || (p.intrusionZone && p.intrusionZone !== 'Hors zone')) {
+    motifs.push(`Intrusion en zone interdite (${p.intrusionZone || 'zone restreinte'})`);
+  }
+  if (p.rodage && p.rodage !== 'Normal' && p.rodage !== 'En observation') {
+    motifs.push(`Rôdage suspect (${p.rodage})`);
+  }
+  if (p.infiltration && p.infiltration !== 'Normal') {
+    motifs.push(`Infiltration non autorisée (${p.infiltration})`);
+  }
+  if (p.regard && p.regard !== 'Normal' && p.regard !== 'Pas de visage' && p.regard !== 'Inconnu') {
+    motifs.push(`Observation anormale des lieux (${p.regard})`);
+  }
+  if (p.volProbable && p.volProbable.length > 0) {
+    motifs.push(`Suspicion de vol (${p.volProbable.map((v) => v.label).join(', ')})`);
+  }
+  if (p.dejaSuspectAilleurs) {
+    motifs.push(`Signalé suspect sur autre caméra (${p.dejaSuspectAilleurs})`);
+  }
+  if (p.statusLabel === 'Inconnu' || (!p.nom && p.visage === 'Oui')) {
+    motifs.push('Visage inconnu (non répertorié Face ID)');
+  }
+  if (p.avisIA?.resultat === 'suspect') {
+    motifs.push(`Analyse IA défavorable (confiance ${Math.round((p.avisIA.confiance || 0.9) * 100)}%)`);
+  }
+
+  if (motifs.length > 0) {
+    return motifs.join(' · ');
+  }
+  return p.motif_suspicion || 'Comportement suspect détecté par analyse IA';
+}
+
 function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, onSelectTab }) {
   const [selectedCam, setSelectedCam] = useState(() => {
     return localStorage.getItem('previa_selected_camera') || null;
@@ -1455,6 +1492,9 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
   const [alerteInspectee, setAlerteInspectee] = useState(null);
   const [fullscreenModalCam, setFullscreenModalCam] = useState(null);
   const [alertesMasquees, setAlertesMasquees] = useState(new Set());
+  const [personneDetail, setPersonneDetail] = useState(null);
+  const [filtreIndividus, setFiltreIndividus] = useState('tous'); // 'tous' | 'suspects' | 'autorises'
+  const [simulationSuspect, setSimulationSuspect] = useState(null);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 2000);
@@ -1536,13 +1576,148 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
   const currentCamera = camerasEtat.find((c) => String(c.id) === String(selectedCam)) || camerasEtat[0];
   const isOffline = currentCamera.isOffline;
   const streamDirectCourant = useFluxDirect(currentCamera.urlFlux ? null : currentCamera.id);
-  const detectionsSurCetteCam = personnes.filter((p) => String(p.camCtx?.id_camera || '') === String(currentCamera.id));
+  const idCourante = String(currentCamera.id || '').trim();
+
+  // Detections réelles sur cette caméra
+  const detectionsReelles = personnes.filter((p) => {
+    const pCamId = String(p.camCtx?.id_camera || p.id_camera || p.camId || '').trim();
+    return pCamId === idCourante;
+  });
+
+  // Simulé si actif sur cette caméra
+  const simuActive = simulationSuspect && String(simulationSuspect.camId) === idCourante ? simulationSuspect : null;
+
+  // Detections superposées sur le flux vidéo (DetectionOverlay)
+  const detectionsSurCetteCam = useMemo(() => {
+    const list = detectionsReelles.map((p) => ({
+      ...p,
+      motif_suspicion: determinerMotifSuspicion(p),
+    }));
+    if (simuActive) {
+      list.unshift(simuActive);
+    }
+    return list;
+  }, [detectionsReelles, simuActive]);
+
+  // Alertes actives sur cette caméra
+  const alertesDeCetteCam = (currentCamera.alertes || []).filter((a) => !alertesMasquees.has(a.id));
+
+  // Liste enrichie de tous les individus détectés (temps réel + alertes enregistrées)
+  const individusDetectes = useMemo(() => {
+    const tous = [];
+    const idsVus = new Set();
+
+    if (simuActive) {
+      tous.push(simuActive);
+      idsVus.add(simuActive.id);
+    }
+
+    detectionsReelles.forEach((p) => {
+      const isEmployee = Boolean(p.nom) || p.statut === 'connu' || p.statut === 'vient_d_etre_confirme';
+      const estSuspect = p.est_suspect === true || (p.riskPct !== undefined && p.riskPct >= 50) || (!isEmployee && (p.intrusionZoneActive || p.rodageClass === 'danger' || p.infiltrationClass === 'danger' || p.statusClass === 'warn'));
+      const motif = determinerMotifSuspicion(p);
+      tous.push({
+        ...p,
+        est_suspect: estSuspect,
+        motif_suspicion: estSuspect ? motif : null,
+      });
+      idsVus.add(p.id);
+    });
+
+    alertesDeCetteCam.forEach((a) => {
+      const idCle = `alerte_${a.id}`;
+      if (!idsVus.has(idCle)) {
+        const isCritique = ['intrusion_zone', 'infiltration', 'feu_fumee'].includes(a.type_evenement);
+        tous.push({
+          id: idCle,
+          idAlerte: a.id,
+          nom: a.nom_personne || 'Individu suspect (Alerte enregistrée)',
+          statut: 'suspect',
+          statusLabel: 'Alerte Active',
+          statusClass: 'danger',
+          est_suspect: true,
+          riskPct: isCritique ? 96 : 84,
+          riskLevel: 'high',
+          motif_suspicion: a.description || LABEL_TYPE_ALERTES[a.type_evenement] || 'Comportement suspect signalé par IA',
+          typeEvenement: a.type_evenement,
+          horodatage: a.horodatage,
+          photo: urlImageAlerte(a.id),
+          alerteRef: a,
+          camCtx: {
+            id_camera: currentCamera.id,
+            num: currentCamera.name,
+            piece: currentCamera.location,
+          },
+          posture: 'Comportement anormal',
+          activite: a.description || 'Détection incident de sécurité',
+          clothes: [],
+          visage: a.visage_detecte ? 'Oui' : 'Non',
+        });
+        idsVus.add(idCle);
+      }
+    });
+
+    return tous.sort((a, b) => {
+      if (a.est_suspect && !b.est_suspect) return -1;
+      if (!a.est_suspect && b.est_suspect) return 1;
+      return (b.riskPct || 0) - (a.riskPct || 0);
+    });
+  }, [detectionsReelles, alertesDeCetteCam, simuActive, currentCamera]);
+
+  const listeSuspects = individusDetectes.filter((p) => p.est_suspect);
+  const listeAutorises = individusDetectes.filter((p) => !p.est_suspect);
+
+  const individusFiltres = useMemo(() => {
+    if (filtreIndividus === 'suspects') return listeSuspects;
+    if (filtreIndividus === 'autorises') return listeAutorises;
+    return individusDetectes;
+  }, [filtreIndividus, listeSuspects, listeAutorises, individusDetectes]);
+
   const nbPersonnesVisibles = Math.max(
+    individusDetectes.length,
     detectionsSurCetteCam.length,
     currentCamera.persons || 0,
     currentCamera.nombrePersonnes || 0
   );
-  const derniereAlerteCetteCam = (currentCamera.alertes || []).find((a) => !alertesMasquees.has(a.id));
+  const derniereAlerteCetteCam = alertesDeCetteCam[0] || null;
+
+  const declencherSimulationSuspect = () => {
+    setSimulationSuspect({
+      id: `sim_suspect_${currentCamera.id}_${Date.now()}`,
+      camId: currentCamera.id,
+      nom: 'Individu suspect (Non identifié)',
+      statut: 'suspect',
+      statusLabel: 'Suspect Détecté',
+      statusClass: 'danger',
+      est_suspect: true,
+      riskPct: 92,
+      riskLevel: 'high',
+      motif_suspicion: 'Rôdage suspect (> 3 min) et intrusion dans le périmètre sensible délimité',
+      rodage: 'Rôde depuis 3 min 45s',
+      rodageClass: 'danger',
+      intrusionZone: 'Zone sensible restreinte',
+      intrusionZoneActive: true,
+      visage: 'Oui (Inconnu)',
+      genre: 'Masculin',
+      posture: 'Debout, stationnaire',
+      activite: 'Observation répétée des accès',
+      clothes: [
+        { name: 'Veste sombre', color: '#0f172a' },
+        { name: 'Pantalon gris', color: '#64748b' },
+      ],
+      box_normalisee: [0.35, 0.22, 0.65, 0.78],
+      horodatage: new Date().toISOString(),
+      camCtx: {
+        id_camera: currentCamera.id,
+        num: currentCamera.name,
+        piece: currentCamera.location,
+      },
+    });
+  };
+
+  const reinitialiserSimulation = () => {
+    setSimulationSuspect(null);
+  };
 
   const handleSync = () => {
     setIsSyncing(true);
@@ -2122,7 +2297,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f87171' }}>
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444' }} />
-                    Suspect
+                    Suspect {listeSuspects.length > 0 && `(${listeSuspects.length})`}
                   </span>
                   <span style={{ opacity: 0.4 }}>|</span>
                   <span style={{ color: '#bae6fd' }}>
@@ -2130,6 +2305,37 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   </span>
                 </div>
               </div>
+
+              {/* BANDEAU FLOTTANT SI SUSPECT DÉTECTÉ SUR CETTE CAMÉRA */}
+              {listeSuspects.length > 0 && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 14,
+                    left: 14,
+                    backgroundColor: 'rgba(220, 38, 38, 0.92)',
+                    backdropFilter: 'blur(8px)',
+                    color: '#ffffff',
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    border: '1px solid rgba(255,255,255,0.25)',
+                    boxShadow: '0 4px 16px rgba(220, 38, 38, 0.5)',
+                    zIndex: 20,
+                    pointerEvents: 'none',
+                    animation: 'previaFadeIn 0.2s ease-out',
+                  }}
+                >
+                  <AlertTriangle size={16} color="#ffffff" />
+                  <span>
+                    {listeSuspects.length} individu{listeSuspects.length > 1 ? 's' : ''} suspect{listeSuspects.length > 1 ? 's' : ''} identifié{listeSuspects.length > 1 ? 's' : ''} sur cette caméra
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* BANDEAU D'ALERTE EN DIRECT (UNIQUEMENT SI INCIDENT PRÉSENT SUR CETTE CAMÉRA) */}
@@ -2331,6 +2537,662 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               </div>
             </div>
           </div>
+
+          {/* ==================================================================== */}
+          {/* SECTION DÉDIÉE : INDIVIDUS SUSPECTS & DÉTECTIONS IA SUR CETTE CAMÉRA */}
+          {/* ==================================================================== */}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '20px',
+              padding: '24px',
+              border: listeSuspects.length > 0 ? '1.5px solid #fca5a5' : '1px solid var(--border-subtle)',
+              boxShadow: listeSuspects.length > 0 ? '0 10px 30px rgba(239, 68, 68, 0.08)' : 'var(--shadow-card)',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {/* EN-TÊTE DE LA SECTION AVEC STATUT & FILTRES */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '16px',
+                marginBottom: '20px',
+                paddingBottom: '16px',
+                borderBottom: '1px solid var(--border-light)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '12px',
+                    backgroundColor: listeSuspects.length > 0 ? '#fee2e2' : '#f0f9ff',
+                    color: listeSuspects.length > 0 ? '#dc2626' : '#0284c7',
+                    border: listeSuspects.length > 0 ? '1.5px solid #fca5a5' : '1px solid #bae6fd',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: listeSuspects.length > 0 ? '0 0 12px rgba(239, 68, 68, 0.25)' : 'none',
+                  }}
+                >
+                  {listeSuspects.length > 0 ? <ShieldAlert size={24} /> : <ShieldCheck size={24} />}
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--ink-primary)' }}>
+                      Individus Détectés & Profils Suspects
+                    </h2>
+                    {listeSuspects.length > 0 ? (
+                      <span
+                        style={{
+                          fontSize: '0.74rem',
+                          fontWeight: 800,
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          background: '#fee2e2',
+                          color: '#dc2626',
+                          border: '1px solid #fca5a5',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                        }}
+                      >
+                        <span className="live-dot-pulse" style={{ width: 7, height: 7, background: '#ef4444', borderRadius: '50%' }} />
+                        {listeSuspects.length} SUSPECT{listeSuspects.length > 1 ? 'S' : ''} SUR CETTE CAMÉRA
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          background: '#ecfdf5',
+                          color: '#047857',
+                          border: '1px solid #a7f3d0',
+                        }}
+                      >
+                        Périmètre calme · Aucun suspect
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--ink-muted)' }}>
+                    Surveillance biométrique, reconnaissance faciale (Face ID) et analyse des comportements sur <strong>{currentCamera.name}</strong> ({currentCamera.location})
+                  </p>
+                </div>
+              </div>
+
+              {/* BOUTONS D'ACTION & FILTRES */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {/* FILTRES RAPIDES */}
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    background: '#f8fafc',
+                    padding: '3px',
+                    borderRadius: '10px',
+                    border: '1px solid #e2e8f0',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setFiltreIndividus('tous')}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: filtreIndividus === 'tous' ? '#ffffff' : 'transparent',
+                      color: filtreIndividus === 'tous' ? '#0f172a' : '#64748b',
+                      fontWeight: filtreIndividus === 'tous' ? 800 : 600,
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                      boxShadow: filtreIndividus === 'tous' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    }}
+                  >
+                    Tous ({individusDetectes.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFiltreIndividus('suspects')}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: filtreIndividus === 'suspects' ? '#dc2626' : 'transparent',
+                      color: filtreIndividus === 'suspects' ? '#ffffff' : listeSuspects.length > 0 ? '#dc2626' : '#64748b',
+                      fontWeight: filtreIndividus === 'suspects' ? 800 : 600,
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                      boxShadow: filtreIndividus === 'suspects' ? '0 2px 6px rgba(220,38,38,0.3)' : 'none',
+                    }}
+                  >
+                    🚨 Suspects ({listeSuspects.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFiltreIndividus('autorises')}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: filtreIndividus === 'autorises' ? '#059669' : 'transparent',
+                      color: filtreIndividus === 'autorises' ? '#ffffff' : '#64748b',
+                      fontWeight: filtreIndividus === 'autorises' ? 800 : 600,
+                      fontSize: '0.78rem',
+                      cursor: 'pointer',
+                      boxShadow: filtreIndividus === 'autorises' ? '0 2px 6px rgba(5,150,105,0.3)' : 'none',
+                    }}
+                  >
+                    🟢 Autorisés ({listeAutorises.length})
+                  </button>
+                </div>
+
+                {/* BOUTON SIMULATION TEST */}
+                {simuActive ? (
+                  <button
+                    type="button"
+                    onClick={reinitialiserSimulation}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid #cbd5e1',
+                      background: '#f8fafc',
+                      color: '#475569',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title="Arrêter la simulation de détection d'un suspect"
+                  >
+                    <Undo2 size={14} />
+                    <span>Réinitialiser le test</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={declencherSimulationSuspect}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 14px',
+                      borderRadius: '10px',
+                      border: '1.5px solid #0284c7',
+                      background: '#f0f9ff',
+                      color: '#0369a1',
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      boxShadow: '0 2px 6px rgba(2, 132, 199, 0.12)',
+                    }}
+                    title="Simuler immédiatement l'apparition d'un individu suspect pour tester la détection IA"
+                  >
+                    <Zap size={14} color="#0284c7" />
+                    <span>Simuler un suspect (Test IA)</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* CONTENU : LISTE DES CARTES OU ÉTAT NORMAL */}
+            {individusFiltres.length === 0 ? (
+              <div
+                style={{
+                  background: '#f8fafc',
+                  border: '1.5px dashed #cbd5e1',
+                  borderRadius: '16px',
+                  padding: '36px 20px',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '12px',
+                }}
+              >
+                <div
+                  style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    backgroundColor: '#ecfdf5',
+                    border: '2px solid #a7f3d0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#059669',
+                  }}
+                >
+                  <ShieldCheck size={30} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                    {filtreIndividus === 'suspects'
+                      ? `Aucun individu suspect actuellement sur ${currentCamera.name}`
+                      : filtreIndividus === 'autorises'
+                      ? `Aucun collaborateur autorisé dans le champ de vision`
+                      : `Aucune personne détectée sur ${currentCamera.name}`}
+                  </h3>
+                  <p style={{ margin: '6px 0 0', fontSize: '0.84rem', color: '#64748b', maxWidth: '580px', lineHeight: 1.5 }}>
+                    L'IA PREVIA analyse le flux vidéo en continu. Dès qu'un individu rôde, pénètre une zone interdite ou n'est pas reconnu par Face ID, son profil et le motif précis de sa suspicion s'afficheront ici automatiquement.
+                  </p>
+                </div>
+                {!simuActive && (
+                  <button
+                    type="button"
+                    onClick={declencherSimulationSuspect}
+                    style={{
+                      marginTop: '8px',
+                      backgroundColor: '#ffffff',
+                      border: '1.5px solid #cbd5e1',
+                      color: '#0f172a',
+                      padding: '9px 18px',
+                      borderRadius: '10px',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+                    }}
+                  >
+                    <Zap size={15} color="#0284c7" />
+                    <span>Tester avec une simulation de suspect</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+                  gap: '16px',
+                }}
+              >
+                {individusFiltres.map((ind) => {
+                  const estSuspect = ind.est_suspect;
+                  return (
+                    <div
+                      key={ind.id}
+                      style={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: '16px',
+                        border: estSuspect ? '2px solid #f87171' : '1px solid #cbd5e1',
+                        padding: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '14px',
+                        boxShadow: estSuspect ? '0 4px 18px rgba(239, 68, 68, 0.12)' : '0 2px 8px rgba(0,0,0,0.03)',
+                        position: 'relative',
+                        background: estSuspect
+                          ? 'linear-gradient(180deg, #ffffff 0%, #fffafa 100%)'
+                          : '#ffffff',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {/* EN-TÊTE DE CARTE : AVATAR / PHOTO + IDENTITÉ */}
+                      <div>
+                        <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                          {/* CADRE PHOTO BIOMÉTRIQUE / APERÇU VIDÉO */}
+                          <div
+                            style={{
+                              width: '78px',
+                              height: '78px',
+                              borderRadius: '12px',
+                              backgroundColor: '#0b1120',
+                              border: estSuspect ? '2px solid #ef4444' : '2px solid #10b981',
+                              overflow: 'hidden',
+                              position: 'relative',
+                              flexShrink: 0,
+                              boxShadow: estSuspect ? '0 0 10px rgba(239, 68, 68, 0.35)' : '0 0 10px rgba(16, 185, 129, 0.25)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {ind.photo ? (
+                              <img
+                                src={ind.photo}
+                                alt={ind.nom || 'Individu'}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  color: estSuspect ? '#ef4444' : '#10b981',
+                                }}
+                              >
+                                {estSuspect ? <ShieldAlert size={36} /> : <Users size={36} />}
+                                <span
+                                  style={{
+                                    fontSize: '0.58rem',
+                                    fontWeight: 800,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.04em',
+                                    color: estSuspect ? '#fca5a5' : '#86efac',
+                                    marginTop: '2px',
+                                  }}
+                                >
+                                  {estSuspect ? 'SUSPECT' : 'FACE ID'}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* REPERES HUD AUX COINS DU CADRE BIOMETRIQUE */}
+                            <div style={{ position: 'absolute', top: 2, left: 2, width: 6, height: 6, borderTop: `2px solid ${estSuspect ? '#ef4444' : '#10b981'}`, borderLeft: `2px solid ${estSuspect ? '#ef4444' : '#10b981'}` }} />
+                            <div style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderTop: `2px solid ${estSuspect ? '#ef4444' : '#10b981'}`, borderRight: `2px solid ${estSuspect ? '#ef4444' : '#10b981'}` }} />
+                            <div style={{ position: 'absolute', bottom: 2, left: 2, width: 6, height: 6, borderBottom: `2px solid ${estSuspect ? '#ef4444' : '#10b981'}`, borderLeft: `2px solid ${estSuspect ? '#ef4444' : '#10b981'}` }} />
+                            <div style={{ position: 'absolute', bottom: 2, right: 2, width: 6, height: 6, borderBottom: `2px solid ${estSuspect ? '#ef4444' : '#10b981'}`, borderRight: `2px solid ${estSuspect ? '#ef4444' : '#10b981'}` }} />
+                          </div>
+
+                          {/* IDENTITÉ ET DÉTAILS PRIMAIRES */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                              <span
+                                style={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: 800,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.04em',
+                                  padding: '2px 8px',
+                                  borderRadius: '6px',
+                                  backgroundColor: estSuspect ? '#fee2e2' : '#dcfce7',
+                                  color: estSuspect ? '#dc2626' : '#15803d',
+                                  border: estSuspect ? '1px solid #fca5a5' : '1px solid #bbf7d0',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                              >
+                                {estSuspect && <span className="live-dot-pulse" style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />}
+                                {estSuspect ? `🚨 SUSPECT (${ind.riskPct || 85}%)` : `✅ AUTORISÉ`}
+                              </span>
+
+                              <span style={{ fontSize: '0.70rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Clock size={12} />
+                                {ind.horodatage ? heureLocale(ind.horodatage) : "En direct"}
+                              </span>
+                            </div>
+
+                            <h3
+                              style={{
+                                margin: '6px 0 2px',
+                                fontSize: '1.02rem',
+                                fontWeight: 800,
+                                color: '#0f172a',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {ind.nom || 'Individu non identifié'}
+                            </h3>
+
+                            <div style={{ fontSize: '0.76rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Camera size={12} color="#0284c7" />
+                              <span>{currentCamera.name}</span>
+                              <span style={{ opacity: 0.5 }}>·</span>
+                              <span>{currentCamera.location}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ======================================================= */}
+                        {/* COEUR DE LA DEMANDE : CE POUR QUOI LA PERSONNE EST SUSPECTE */}
+                        {/* ======================================================= */}
+                        {estSuspect ? (
+                          <div
+                            style={{
+                              backgroundColor: '#fef2f2',
+                              border: '1.5px solid #fca5a5',
+                              borderRadius: '12px',
+                              padding: '12px 14px',
+                              marginTop: '12px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '0.74rem',
+                                fontWeight: 800,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.04em',
+                                color: '#991b1b',
+                                marginBottom: '4px',
+                              }}
+                            >
+                              <AlertTriangle size={15} color="#dc2626" />
+                              <span>Ce pour quoi la personne est suspecte :</span>
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '0.88rem',
+                                fontWeight: 800,
+                                color: '#7f1d1d',
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              {ind.motif_suspicion || 'Comportement suspect détecté par analyse IA'}
+                            </div>
+
+                            {/* BADGES DES COMPOSANTES DU COMPORTEMENT */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                              {ind.intrusionZone && ind.intrusionZone !== 'Hors zone' && (
+                                <span
+                                  style={{
+                                    fontSize: '0.70rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    background: '#fee2e2',
+                                    color: '#991b1b',
+                                    border: '1px solid #fecaca',
+                                  }}
+                                >
+                                  🚫 {ind.intrusionZone}
+                                </span>
+                              )}
+                              {ind.rodage && ind.rodage !== 'Normal' && ind.rodage !== 'En observation' && (
+                                <span
+                                  style={{
+                                    fontSize: '0.70rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    background: '#fffbeb',
+                                    color: '#b45309',
+                                    border: '1px solid #fde68a',
+                                  }}
+                                >
+                                  ⏱️ {ind.rodage}
+                                </span>
+                              )}
+                              {ind.visage && (
+                                <span
+                                  style={{
+                                    fontSize: '0.70rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    background: '#f1f5f9',
+                                    color: '#475569',
+                                    border: '1px solid #e2e8f0',
+                                  }}
+                                >
+                                  🔍 Face ID : {ind.nom ? 'Identifié' : 'Visage inconnu non répertorié'}
+                                </span>
+                              )}
+                              {ind.regard && ind.regard !== 'Normal' && ind.regard !== 'Pas de visage' && (
+                                <span
+                                  style={{
+                                    fontSize: '0.70rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    background: '#fef3c7',
+                                    color: '#92400e',
+                                    border: '1px solid #fde68a',
+                                  }}
+                                >
+                                  👁️ {ind.regard}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              backgroundColor: '#f0fdf4',
+                              border: '1px solid #bbf7d0',
+                              borderRadius: '12px',
+                              padding: '10px 14px',
+                              marginTop: '12px',
+                            }}
+                          >
+                            <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>
+                              Statut de conformité :
+                            </div>
+                            <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#15803d', marginTop: '2px' }}>
+                              Collaborateur authentifié par Face ID · Activité normale et autorisée
+                            </div>
+                          </div>
+                        )}
+
+                        {/* CARACTÉRISTIQUES (VÊTEMENTS, POSTURE) */}
+                        <div
+                          style={{
+                            marginTop: '12px',
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(2, 1fr)',
+                            gap: '8px',
+                            fontSize: '0.74rem',
+                            color: '#475569',
+                            backgroundColor: '#f8fafc',
+                            padding: '8px 12px',
+                            borderRadius: '10px',
+                            border: '1px solid #f1f5f9',
+                          }}
+                        >
+                          <div>
+                            <span style={{ fontWeight: 700, color: '#64748b' }}>Posture : </span>
+                            <strong>{ind.posture || 'Stationnaire'}</strong>
+                          </div>
+                          <div>
+                            <span style={{ fontWeight: 700, color: '#64748b' }}>Activité : </span>
+                            <strong>{ind.activite || 'Surveillance'}</strong>
+                          </div>
+                          <div style={{ gridColumn: 'span 2' }}>
+                            <span style={{ fontWeight: 700, color: '#64748b' }}>Vêtements : </span>
+                            <span>{ind.clothes?.length ? ind.clothes.map((c) => c.name).join(', ') : 'Non identifiés'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* PIED DE CARTE : ACTIONS OPÉRATIONNELLES */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          paddingTop: '10px',
+                          borderTop: '1px solid var(--border-light)',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setPersonneDetail(ind)}
+                          style={{
+                            flex: 1,
+                            backgroundColor: estSuspect ? '#dc2626' : '#0284c7',
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: estSuspect ? '0 2px 6px rgba(220, 38, 38, 0.3)' : '0 2px 6px rgba(2, 132, 199, 0.25)',
+                          }}
+                        >
+                          <Eye size={13} />
+                          <span>Inspecter la fiche IA</span>
+                        </button>
+
+                        {ind.alerteRef && (
+                          <button
+                            type="button"
+                            onClick={() => setAlerteInspectee(ind.alerteRef)}
+                            style={{
+                              backgroundColor: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              color: '#0f172a',
+                              padding: '8px 12px',
+                              borderRadius: '8px',
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                            title="Voir la capture HD et le clip vidéo enregistré"
+                          >
+                            <Camera size={13} color="#0284c7" />
+                            <span>Capture HD</span>
+                          </button>
+                        )}
+
+                        {simuActive && ind.id === simuActive.id && (
+                          <button
+                            type="button"
+                            onClick={reinitialiserSimulation}
+                            style={{
+                              backgroundColor: '#fef2f2',
+                              border: '1px solid #fca5a5',
+                              color: '#b91c1c',
+                              padding: '8px 10px',
+                              borderRadius: '8px',
+                              fontSize: '0.76rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                            title="Effacer cet individu de test"
+                          >
+                            Effacer test
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -2389,6 +3251,21 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
           onClose={() => setAlerteInspectee(null)}
           onDelete={handleDeleteAlerte}
           onGoToCamera={handleSelectCamera}
+        />
+      )}
+
+      {/* MODAL FICHE D'INVESTIGATION IA DÉTAILLÉE (PRECURSOR / SUSPECTS) */}
+      {personneDetail && (
+        <PrecursorDetailModal
+          situation={construireFicheDetail(personneDetail)}
+          onClose={() => setPersonneDetail(null)}
+          onActionConfirmed={(actionName) => {
+            if (actionName === 'lever_doute' || actionName === 'traite') {
+              if (simuActive && simuActive.id === personneDetail.id) {
+                setSimulationSuspect(null);
+              }
+            }
+          }}
         />
       )}
     </div>

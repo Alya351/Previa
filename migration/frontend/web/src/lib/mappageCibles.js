@@ -224,8 +224,8 @@ export function construireFicheDetail(item) {
   const lieu = `${item.camCtx?.batiment || '?'} / ${item.camCtx?.piece || '?'}`;
   const rawCam = item.camCtx?.num || item.camCtx?.id_camera || '';
   const camera = (rawCam && !/^[a-f0-9]{8,36}$/i.test(String(rawCam).trim())) ? rawCam : 'Caméra 1';
-  const image = item.camCtx?.id_camera ? `/cameras/${item.camCtx.id_camera}/image` : '';
-  const isUrgent = item.riskLevel === 'high';
+  const image = item.photo || (item.camCtx?.id_camera ? `/cameras/${item.camCtx.id_camera}/image` : '');
+  const isUrgent = item.riskLevel === 'high' || item.est_suspect;
   const status = isUrgent ? 'Danger Immédiat' : item.riskLevel === 'med' ? 'À surveiller' : 'Normal';
 
   if (item.isObject) {
@@ -247,24 +247,25 @@ export function construireFicheDetail(item) {
   }
 
   return {
-    title: item.id,
+    title: item.nom || item.label || item.id,
     subtitle: item.genre || 'Genre inconnu',
     camera, location: lieu,
     duration: item.rodage || '',
     status, isUrgent, image,
     idAlerte: item.idAlerte || item.id_alerte || (typeof item.id === 'string' && item.id.startsWith('alert-') ? item.id.replace('alert-', '') : null),
     idCamera: item.camCtx?.id_camera || null,
-    actionSummary: item.avisIA ? `Évaluation : ${item.avisIA.resultat} (${Math.round((item.avisIA.confiance || 0) * 100)}%)` : 'Aucune évaluation disponible pour l\'instant',
+    actionSummary: item.motif_suspicion ? `Motif de suspicion : ${item.motif_suspicion}` : (item.avisIA ? `Évaluation : ${item.avisIA.resultat} (${Math.round((item.avisIA.confiance || 0) * 100)}%)` : 'Aucune évaluation disponible pour l\'instant'),
     details: [
-      { label: 'Statut d\'identité', val: item.statusLabel },
+      { label: 'Statut d\'identité', val: item.statusLabel || (item.est_suspect ? 'Suspect' : 'Autorisé') },
+      { label: 'Motif de suspicion', val: item.motif_suspicion || 'Aucune anomalie signalée' },
       { label: 'Genre', val: item.genre || 'Inconnu' },
-      { label: 'Posture', val: item.posture },
-      { label: 'Activité', val: item.activite },
-      { label: 'Rôdage', val: item.rodage },
-      { label: 'Regard', val: item.regard },
-      { label: 'Infiltration', val: item.infiltration },
-      { label: 'Zone non autorisée', val: item.intrusionZone },
-      { label: 'Visage détecté', val: item.visage },
+      { label: 'Posture', val: item.posture || 'inconnue' },
+      { label: 'Activité', val: item.activite || 'inconnue' },
+      { label: 'Rôdage', val: item.rodage || 'Normal' },
+      { label: 'Regard', val: item.regard || 'Normal' },
+      { label: 'Infiltration', val: item.infiltration || 'Non' },
+      { label: 'Zone non autorisée', val: item.intrusionZone || 'Non' },
+      { label: 'Visage détecté', val: item.visage || 'Oui' },
       { label: 'Vêtements', val: item.clothes?.length ? item.clothes.map((c) => c.name).join(', ') : 'Non identifiés' },
     ],
   };
