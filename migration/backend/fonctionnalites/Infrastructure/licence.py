@@ -149,4 +149,7 @@ def etat() -> dict:
         return {"statut": "desactivee", "code_expire_le": expire_le}
 
     jours_restants = int((expire_le - maintenant) // 86400) if expire_le else None
+    if jours_restants is not None and jours_restants > 365:
+        # Une licence PREVIA est annuelle (1 an = 365 jours maximum)
+        jours_restants = 365
     return {"statut": "active", "code_expire_le": expire_le, "jours_restants": jours_restants}
