@@ -2555,12 +2555,119 @@ const LABEL_TYPE_EVENEMENTS = {
   intrusion_zone: 'Zone non autorisée',
 };
 
-// `alertesReelles` : branché sur GET /alertes (voir Admin() plus bas) —
-// remplace les 6 lignes fictives d'origine. "Prolongé" = type le plus
-// grave (feu_fumee/intrusion_zone/infiltration), "Confirmé" = le reste —
-// pas de distinction plus fine disponible côté backend pour l'instant.
-// "Action Validée" montre l'avis du comparateur IA (voir
-// Alertes/comparaison_ia.py) plutôt que des équipements physiques qu'on
+function EmptyHistoriqueState({ totalEvents, onResetFilters }) {
+  if (totalEvents === 0) {
+    return (
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '18px',
+        padding: '52px 24px',
+        textAlign: 'center',
+        border: '1.5px solid #e2e8f0',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.02)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <div style={{
+          width: '64px',
+          height: '64px',
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+          color: '#059669',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: '16px',
+          boxShadow: '0 6px 18px rgba(16, 185, 129, 0.18)',
+        }}>
+          <ShieldCheck size={34} strokeWidth={2.4} />
+        </div>
+        <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>
+          Journal Vierge — Aucun Incident à Signaler
+        </h3>
+        <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '480px', margin: '0 0 18px 0', lineHeight: 1.5 }}>
+          Toutes les zones sous vidéosurveillance sont calmes. Dès qu'une intrusion, un comportement suspect ou une anomalie est détecté par l'IA PREVIA, l'enregistrement apparaîtra ici en temps réel.
+        </p>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 14px',
+          borderRadius: '20px',
+          background: '#ecfdf5',
+          border: '1px solid #a7f3d0',
+          color: '#047857',
+          fontSize: '0.78rem',
+          fontWeight: 700,
+        }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+          <span>Surveillance IA active 24/7 · Caméras opérationnelles</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: '#ffffff',
+      borderRadius: '18px',
+      padding: '45px 24px',
+      textAlign: 'center',
+      border: '1.5px solid #e2e8f0',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.02)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}>
+      <div style={{
+        width: '56px',
+        height: '56px',
+        borderRadius: '50%',
+        background: '#f1f5f9',
+        color: '#64748b',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: '14px',
+      }}>
+        <Search size={26} strokeWidth={2.2} />
+      </div>
+      <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: '0 0 6px 0' }}>
+        Aucun incident ne correspond à votre filtre
+      </h3>
+      <p style={{ fontSize: '0.84rem', color: '#64748b', maxWidth: '420px', margin: '0 0 16px 0', lineHeight: 1.4 }}>
+        Aucun enregistrement ne correspond aux termes de recherche ou aux filtres sélectionnés.
+      </p>
+      {onResetFilters && (
+        <button
+          type="button"
+          onClick={onResetFilters}
+          style={{
+            background: '#0284c7',
+            color: '#ffffff',
+            border: 'none',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            fontSize: '0.82rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)',
+          }}
+        >
+          <RefreshCw size={14} />
+          <span>Réinitialiser les filtres</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 // `alertesReelles` : branché sur GET /alertes (voir Admin() plus bas)
 // Gestion complète de l'historique : tri multi-critères, filtre par caméra / sévérité,
 // pagination pour fluidifier les longues listes, suppression individuelle et purge complète.
@@ -2813,110 +2920,249 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
       </div>
 
       {/* KPI STATS SUMMARY */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '20px' }}>
-        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '16px', border: '1px solid var(--border-subtle)', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: 42, height: 42, borderRadius: '10px', background: '#f0f9ff', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
-            {events.length}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+        {/* TOTAL INCIDENTS */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '18px 20px',
+          border: '1.5px solid #e2e8f0',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '14px'
+        }}>
+          <div style={{
+            width: '46px',
+            height: '46px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)',
+            color: '#0284c7',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            boxShadow: '0 2px 8px rgba(2, 132, 199, 0.15)'
+          }}>
+            <Activity size={22} strokeWidth={2.4} />
           </div>
           <div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--ink-muted)', fontWeight: 600 }}>TOTAL ÉVÉNEMENTS</span>
-            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--ink-primary)' }}>{events.length} enregistrés</div>
+            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Total des Événements
+            </div>
+            <div style={{ fontSize: '1.55rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.1, margin: '2px 0' }}>
+              {events.length}
+            </div>
+            <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
+              {events.length > 0 ? 'Enregistrements archivés' : 'Journal sécurisé vierge'}
+            </div>
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '16px', border: '1px solid var(--border-subtle)', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: 42, height: 42, borderRadius: '10px', background: '#fef2f2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
-            {totalCritiques}
+        {/* INCIDENTS CRITIQUES */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '18px 20px',
+          border: totalCritiques > 0 ? '1.5px solid #fca5a5' : '1.5px solid #e2e8f0',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '14px'
+        }}>
+          <div style={{
+            width: '46px',
+            height: '46px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+            color: '#dc2626',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            boxShadow: '0 2px 8px rgba(220, 38, 38, 0.15)'
+          }}>
+            <ShieldAlert size={22} strokeWidth={2.4} />
           </div>
           <div>
-            <span style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 600 }}>INCIDENTS CRITIQUES</span>
-            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#b91c1c' }}>{totalCritiques} urgences</div>
+            <div style={{ fontSize: '0.72rem', color: '#dc2626', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Incidents Critiques
+            </div>
+            <div style={{ fontSize: '1.55rem', fontWeight: 800, color: totalCritiques > 0 ? '#b91c1c' : '#0f172a', lineHeight: 1.1, margin: '2px 0' }}>
+              {totalCritiques}
+            </div>
+            <div style={{ fontSize: '0.74rem', color: totalCritiques > 0 ? '#b91c1c' : '#64748b' }}>
+              {totalCritiques > 0 ? 'Intrusions & urgences' : 'Aucune urgence critique'}
+            </div>
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '14px', padding: '16px', border: '1px solid var(--border-subtle)', boxShadow: '0 2px 8px rgba(0,0,0,0.02)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: 42, height: 42, borderRadius: '10px', background: '#fffbeb', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
-            {totalSuspects}
+        {/* COMPORTEMENTS SUSPECTS */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '18px 20px',
+          border: totalSuspects > 0 ? '1.5px solid #fde68a' : '1.5px solid #e2e8f0',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '14px'
+        }}>
+          <div style={{
+            width: '46px',
+            height: '46px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+            color: '#d97706',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            boxShadow: '0 2px 8px rgba(217, 119, 6, 0.15)'
+          }}>
+            <Eye size={22} strokeWidth={2.4} />
           </div>
           <div>
-            <span style={{ fontSize: '0.75rem', color: '#d97706', fontWeight: 600 }}>COMPORTEMENTS SUSPECTS</span>
-            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#92400e' }}>{totalSuspects} observations</div>
+            <div style={{ fontSize: '0.72rem', color: '#d97706', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Comportements Suspects
+            </div>
+            <div style={{ fontSize: '1.55rem', fontWeight: 800, color: totalSuspects > 0 ? '#92400e' : '#0f172a', lineHeight: 1.1, margin: '2px 0' }}>
+              {totalSuspects}
+            </div>
+            <div style={{ fontSize: '0.74rem', color: totalSuspects > 0 ? '#92400e' : '#64748b' }}>
+              {totalSuspects > 0 ? 'Observations précurseurs IA' : 'Aucune anomalie signalée'}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* TOOLBAR AVANCÉE : FILTRES, TRI, CAMÉRAS, RECHERCHE, VUE */}
+      {/* COMMAND DECK : FILTRES, RECHERCHE, TRI, CAMÉRAS */}
       <div
         style={{
           background: '#ffffff',
           borderRadius: '16px',
           padding: '14px 18px',
-          border: '1px solid var(--border-subtle)',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+          border: '1.5px solid #e2e8f0',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
           display: 'flex',
           flexDirection: 'column',
           gap: '12px',
           marginBottom: '20px',
         }}
       >
-        {/* LIGNE 1 : FILTRES GRAVITÉ & RECHERCHE */}
+        {/* ROW 1 : SEVERITY TABS + SEARCH + VIEW SWITCHER */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-          {/* FILTER CHIPS */}
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {/* SEVERITY TABS */}
+          <div style={{
+            display: 'flex',
+            background: '#f1f5f9',
+            padding: '4px',
+            borderRadius: '12px',
+            gap: '4px',
+          }}>
             <button
+              type="button"
               onClick={() => setSelectedFilter('all')}
               style={{
-                background: selectedFilter === 'all' ? '#0284c7' : '#f8fafc',
-                color: selectedFilter === 'all' ? '#ffffff' : 'var(--ink-secondary)',
-                border: '1px solid ' + (selectedFilter === 'all' ? '#0284c7' : 'var(--border-light)'),
-                padding: '7px 14px',
-                borderRadius: '10px',
-                fontSize: '0.82rem',
-                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: selectedFilter === 'all' ? '#ffffff' : 'transparent',
+                color: selectedFilter === 'all' ? '#0284c7' : '#64748b',
+                boxShadow: selectedFilter === 'all' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                fontSize: '0.80rem',
+                fontWeight: 700,
                 cursor: 'pointer',
-                boxShadow: selectedFilter === 'all' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
+                transition: 'all 0.15s ease',
               }}
             >
-              Tous ({events.length})
+              <span>Tous</span>
+              <span style={{
+                background: selectedFilter === 'all' ? '#e0f2fe' : '#e2e8f0',
+                color: selectedFilter === 'all' ? '#0284c7' : '#64748b',
+                padding: '1px 7px',
+                borderRadius: '10px',
+                fontSize: '0.70rem',
+                fontWeight: 800,
+              }}>
+                {events.length}
+              </span>
             </button>
+
             <button
+              type="button"
               onClick={() => setSelectedFilter('critical')}
               style={{
-                background: selectedFilter === 'critical' ? '#ef4444' : '#f8fafc',
-                color: selectedFilter === 'critical' ? '#ffffff' : 'var(--ink-secondary)',
-                border: '1px solid ' + (selectedFilter === 'critical' ? '#ef4444' : 'var(--border-light)'),
-                padding: '7px 14px',
-                borderRadius: '10px',
-                fontSize: '0.82rem',
-                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: selectedFilter === 'critical' ? '#ffffff' : 'transparent',
+                color: selectedFilter === 'critical' ? '#dc2626' : '#64748b',
+                boxShadow: selectedFilter === 'critical' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                fontSize: '0.80rem',
+                fontWeight: 700,
                 cursor: 'pointer',
-                boxShadow: selectedFilter === 'critical' ? '0 2px 8px rgba(239,68,68,0.3)' : 'none',
+                transition: 'all 0.15s ease',
               }}
             >
-              🚨 Critiques ({totalCritiques})
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ef4444' }} />
+              <span>Critiques</span>
+              <span style={{
+                background: selectedFilter === 'critical' ? '#fee2e2' : '#e2e8f0',
+                color: selectedFilter === 'critical' ? '#dc2626' : '#64748b',
+                padding: '1px 7px',
+                borderRadius: '10px',
+                fontSize: '0.70rem',
+                fontWeight: 800,
+              }}>
+                {totalCritiques}
+              </span>
             </button>
+
             <button
+              type="button"
               onClick={() => setSelectedFilter('suspect')}
               style={{
-                background: selectedFilter === 'suspect' ? '#d97706' : '#f8fafc',
-                color: selectedFilter === 'suspect' ? '#ffffff' : 'var(--ink-secondary)',
-                border: '1px solid ' + (selectedFilter === 'suspect' ? '#d97706' : 'var(--border-light)'),
-                padding: '7px 14px',
-                borderRadius: '10px',
-                fontSize: '0.82rem',
-                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                background: selectedFilter === 'suspect' ? '#ffffff' : 'transparent',
+                color: selectedFilter === 'suspect' ? '#d97706' : '#64748b',
+                boxShadow: selectedFilter === 'suspect' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                fontSize: '0.80rem',
+                fontWeight: 700,
                 cursor: 'pointer',
-                boxShadow: selectedFilter === 'suspect' ? '0 2px 8px rgba(217,119,6,0.3)' : 'none',
+                transition: 'all 0.15s ease',
               }}
             >
-              ⚠️ Suspects ({totalSuspects})
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#f59e0b' }} />
+              <span>Suspects</span>
+              <span style={{
+                background: selectedFilter === 'suspect' ? '#fef3c7' : '#e2e8f0',
+                color: selectedFilter === 'suspect' ? '#b45309' : '#64748b',
+                padding: '1px 7px',
+                borderRadius: '10px',
+                fontSize: '0.70rem',
+                fontWeight: 800,
+              }}>
+                {totalSuspects}
+              </span>
             </button>
           </div>
 
-          {/* RECHERCHE & BASCULE VUE */}
+          {/* SEARCH & VIEW SWITCHER */}
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', width: '240px', maxWidth: '100%' }}>
-              <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-muted)' }} />
+            <div style={{ position: 'relative', width: '250px', maxWidth: '100%' }}>
+              <Search size={15} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
               <input
                 type="text"
                 placeholder="Rechercher caméra, zone..."
@@ -2924,71 +3170,111 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
                 onChange={(e) => setSearch(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '7px 12px 7px 34px',
+                  padding: '7px 28px 7px 32px',
                   borderRadius: '10px',
-                  border: '1px solid var(--border-light)',
+                  border: '1.5px solid #e2e8f0',
                   background: '#f8fafc',
                   fontSize: '0.82rem',
+                  fontWeight: 600,
+                  color: '#0f172a',
                   outline: 'none',
+                  transition: 'border-color 0.15s ease',
                 }}
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  style={{
+                    position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                    background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px', display: 'flex'
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
 
-            <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid var(--border-light)' }}>
+            <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
               <button
+                type="button"
                 onClick={() => setModeAffichage('timeline')}
                 style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
                   background: modeAffichage === 'timeline' ? '#ffffff' : 'transparent',
-                  color: modeAffichage === 'timeline' ? '#0284c7' : 'var(--ink-muted)',
+                  color: modeAffichage === 'timeline' ? '#0284c7' : '#64748b',
                   border: 'none',
                   padding: '6px 12px',
                   borderRadius: '8px',
                   fontSize: '0.78rem',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  boxShadow: modeAffichage === 'timeline' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                  boxShadow: modeAffichage === 'timeline' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
                 }}
               >
-                Chronologie
+                <Clock size={13} strokeWidth={2.4} />
+                <span>Chronologie</span>
               </button>
               <button
+                type="button"
                 onClick={() => setModeAffichage('table')}
                 style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
                   background: modeAffichage === 'table' ? '#ffffff' : 'transparent',
-                  color: modeAffichage === 'table' ? '#0284c7' : 'var(--ink-muted)',
+                  color: modeAffichage === 'table' ? '#0284c7' : '#64748b',
                   border: 'none',
                   padding: '6px 12px',
                   borderRadius: '8px',
                   fontSize: '0.78rem',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  boxShadow: modeAffichage === 'table' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                  boxShadow: modeAffichage === 'table' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
                 }}
               >
-                Tableau
+                <List size={13} strokeWidth={2.4} />
+                <span>Tableau</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* LIGNE 2 : SÉLECTEUR DE CAMÉRA, TRI ET ITEMS PAR PAGE */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', paddingTop: '8px', borderTop: '1px solid #f1f5f9', fontSize: '0.82rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            {/* FILTRE PAR CAMÉRA */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Cctv size={15} color="#0284c7" />
-              <span style={{ fontWeight: 600, color: 'var(--ink-muted)' }}>Caméra :</span>
+        {/* ROW 2 : INLINE CONTROLS (CAMERA, SORT, PAGE SIZE) */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '10px',
+          paddingTop: '10px',
+          borderTop: '1px solid #f1f5f9',
+          fontSize: '0.80rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {/* CAMERA FILTER */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              padding: '4px 10px',
+            }}>
+              <Camera size={13} color="#0284c7" strokeWidth={2.4} />
+              <span style={{ fontSize: '0.70rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Caméra</span>
               <select
                 value={selectedCamera}
                 onChange={(e) => setSelectedCamera(e.target.value)}
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid var(--border-light)',
-                  borderRadius: '8px',
-                  padding: '5px 10px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  color: 'var(--ink-primary)',
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '0.80rem',
+                  fontWeight: 700,
+                  color: '#0f172a',
                   cursor: 'pointer',
                   outline: 'none',
                 }}
@@ -3000,56 +3286,109 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
               </select>
             </div>
 
-            {/* TRI */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ArrowUpDown size={15} color="#0284c7" />
-              <span style={{ fontWeight: 600, color: 'var(--ink-muted)' }}>Trier par :</span>
+            {/* SORTING */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              padding: '4px 10px',
+            }}>
+              <ArrowUpDown size={13} color="#0284c7" strokeWidth={2.4} />
+              <span style={{ fontSize: '0.70rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Trier</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid var(--border-light)',
-                  borderRadius: '8px',
-                  padding: '5px 10px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  color: 'var(--ink-primary)',
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '0.80rem',
+                  fontWeight: 700,
+                  color: '#0f172a',
                   cursor: 'pointer',
                   outline: 'none',
                 }}
               >
-                <option value="newest">Plus récent d'abord (Chronologique inverse)</option>
+                <option value="newest">Plus récent d'abord</option>
                 <option value="oldest">Plus ancien d'abord</option>
-                <option value="severity">Criticité d'abord (🚨 Urgences en tête)</option>
+                <option value="severity">Gravité (Urgences en tête)</option>
                 <option value="camera">Par caméra (A-Z)</option>
               </select>
             </div>
+
+            {/* PAGE SIZE */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              padding: '4px 10px',
+            }}>
+              <SlidersHorizontal size={13} color="#0284c7" strokeWidth={2.4} />
+              <span style={{ fontSize: '0.70rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Afficher</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '0.80rem',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                <option value={10}>10 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
+              </select>
+            </div>
+
+            {/* RESET BUTTON IF ACTIVE */}
+            {(search || selectedFilter !== 'all' || selectedCamera !== 'all' || sortBy !== 'newest') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setSelectedFilter('all');
+                  setSelectedCamera('all');
+                  setSortBy('newest');
+                }}
+                style={{
+                  background: '#f1f5f9',
+                  border: '1px solid #cbd5e1',
+                  color: '#0284c7',
+                  padding: '4px 10px',
+                  borderRadius: '8px',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <RefreshCw size={12} />
+                <span>Réinitialiser</span>
+              </button>
+            )}
           </div>
 
-          {/* SÉLECTEUR DE TAILLE DE PAGE */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: 'var(--ink-muted)', fontSize: '0.78rem' }}>Afficher :</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => setItemsPerPage(Number(e.target.value))}
-              style={{
-                background: '#f8fafc',
-                border: '1px solid var(--border-light)',
-                borderRadius: '8px',
-                padding: '4px 8px',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                color: 'var(--ink-primary)',
-                cursor: 'pointer',
-                outline: 'none',
-              }}
-            >
-              <option value={10}>10 par page</option>
-              <option value={25}>25 par page</option>
-              <option value={50}>50 par page</option>
-              <option value={100}>100 par page</option>
-            </select>
+          {/* ACTIVE RECORD COUNT */}
+          <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>
+            {filteredAndSorted.length > 0 ? (
+              <span>
+                Affichage <strong>{(safeCurrentPage - 1) * itemsPerPage + 1}</strong>–<strong>{Math.min(safeCurrentPage * itemsPerPage, filteredAndSorted.length)}</strong> sur <strong>{filteredAndSorted.length}</strong>
+              </span>
+            ) : (
+              <span>0 incident trouvé</span>
+            )}
           </div>
         </div>
       </div>
@@ -3058,9 +3397,15 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
       {modeAffichage === 'timeline' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {paginatedEvents.length === 0 ? (
-            <div style={{ background: '#ffffff', borderRadius: '16px', padding: '40px', textAlign: 'center', border: '1px solid var(--border-subtle)', color: 'var(--ink-muted)' }}>
-              Aucun événement ne correspond à vos critères de recherche ou de filtre.
-            </div>
+            <EmptyHistoriqueState
+              totalEvents={events.length}
+              onResetFilters={() => {
+                setSearch('');
+                setSelectedFilter('all');
+                setSelectedCamera('all');
+                setSortBy('newest');
+              }}
+            />
           ) : (
             <div style={{ position: 'relative', paddingLeft: '28px' }}>
               {/* LIGNE VERTICALE DE LA TIMELINE */}
@@ -3262,9 +3607,15 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
         /* TABLEAU CLASSIQUE */
         <div style={{ background: '#ffffff', borderRadius: '18px', padding: '20px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', overflowX: 'auto' }}>
           {paginatedEvents.length === 0 ? (
-            <div style={{ padding: '30px', textAlign: 'center', color: 'var(--ink-muted)' }}>
-              Aucun événement ne correspond à vos critères de recherche ou de filtre.
-            </div>
+            <EmptyHistoriqueState
+              totalEvents={events.length}
+              onResetFilters={() => {
+                setSearch('');
+                setSelectedFilter('all');
+                setSelectedCamera('all');
+                setSortBy('newest');
+              }}
+            />
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
               <thead>
