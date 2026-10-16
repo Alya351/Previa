@@ -493,10 +493,22 @@ function SectionZones({ cameras, initialCameraId }) {
   const polygonePoints = points.map((p) => `${p.x * 100},${p.y * 100}`).join(' ');
   const joursNoms = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
   const modelesRapides = [
-    { nom: 'Nuit (20h–6h)', debut: '20:00', fin: '06:00', icon: <Moon size={13} strokeWidth={2.2} /> },
-    { nom: 'Hors bureau (18h–8h)', debut: '18:00', fin: '08:00', icon: <Building2 size={13} strokeWidth={2.2} /> },
-    { nom: 'Journée (8h–18h)', debut: '08:00', fin: '18:00', icon: <Sun size={13} strokeWidth={2.2} /> },
+    { id: 'nuit', nom: 'Nuit', heures: '20h – 06h', debut: '20:00', fin: '06:00', icon: <Moon size={15} strokeWidth={2.2} /> },
+    { id: 'bureau', nom: 'Hors bureau', heures: '18h – 08h', debut: '18:00', fin: '08:00', icon: <Building2 size={15} strokeWidth={2.2} /> },
+    { id: 'jour', nom: 'Journée', heures: '08h – 18h', debut: '08:00', fin: '18:00', icon: <Sun size={15} strokeWidth={2.2} /> },
   ];
+
+  function calculerDureePlage() {
+    if (active24h) return '24h / 24 — Surveillance permanente 7j/7';
+    const [hD, mD] = heureDebut.split(':').map(Number);
+    const [hF, mF] = heureFin.split(':').map(Number);
+    let diff = (hF * 60 + mF) - (hD * 60 + mD);
+    if (diff <= 0) diff += 24 * 60;
+    const h = Math.floor(diff / 60);
+    const m = diff % 60;
+    const passageMinuit = (hD * 60 + mD) > (hF * 60 + mF);
+    return `${h}h${m > 0 ? String(m).padStart(2, '0') : ''} actives / jour${passageMinuit ? ' (nocturne)' : ''}`;
+  }
 
   return (
     <div style={{ background: '#ffffff', borderRadius: '18px', padding: '24px 28px', border: '1px solid var(--border-subtle)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', marginTop: '24px' }}>
@@ -632,167 +644,243 @@ function SectionZones({ cameras, initialCameraId }) {
         </div>
 
         {/* Schedule & Activation Controls */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           {/* Card: Plage Horaire */}
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '20px', boxShadow: '0 4px 16px rgba(15, 23, 42, 0.03)' }}>
-            {/* Header: Title + Switch */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid #f1f5f9', paddingBottom: '14px', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Clock size={17} strokeWidth={2.4} />
+          <div style={{
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '16px',
+            padding: '22px',
+            boxShadow: '0 4px 20px rgba(15, 23, 42, 0.04)',
+          }}>
+            {/* Header: Title */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
+              <div style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '11px',
+                background: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)',
+                color: '#0284c7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 2px 6px rgba(2, 132, 199, 0.15)',
+              }}>
+                <Clock size={19} strokeWidth={2.4} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.96rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em' }}>
+                  Période de Surveillance
                 </div>
-                <div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
-                    Plage de Surveillance
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                    Moments d'alerte active
-                  </div>
+                <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '2px' }}>
+                  {active24h ? 'Surveillance active sans interruption' : 'Surveillance ciblée selon créneaux'}
                 </div>
               </div>
+            </div>
 
-              {/* Modern segmented pill toggle */}
+            {/* Segmented Control Switcher */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              background: '#f1f5f9',
+              borderRadius: '11px',
+              padding: '3px',
+              gap: '3px',
+              marginBottom: '20px',
+            }}>
               <button
                 type="button"
-                onClick={() => {
-                  setActive24h(!active24h);
-                  setEstModifie(true);
-                }}
+                onClick={() => { setActive24h(false); setEstModifie(true); }}
                 style={{
-                  display: 'inline-flex',
+                  display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'center',
                   gap: '7px',
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  border: active24h ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
-                  background: active24h ? '#e0f2fe' : '#f8fafc',
-                  color: active24h ? '#0369a1' : '#475569',
+                  padding: '9px 12px',
+                  borderRadius: '9px',
+                  border: 'none',
+                  background: !active24h ? '#ffffff' : 'transparent',
+                  color: !active24h ? '#0284c7' : '#64748b',
+                  boxShadow: !active24h ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                  fontWeight: !active24h ? 800 : 600,
+                  fontSize: '0.8rem',
                   cursor: 'pointer',
-                  fontSize: '0.75rem',
-                  fontWeight: 800,
-                  transition: 'all 0.2s ease',
-                  boxShadow: active24h ? '0 2px 6px rgba(2, 132, 199, 0.15)' : 'none',
+                  transition: 'all 0.15s ease',
                 }}
-                title="Basculer entre surveillance continue ou sur des plages définies"
               >
-                <span style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  background: active24h ? '#10b981' : '#94a3b8',
-                  boxShadow: active24h ? '0 0 6px #10b981' : 'none',
-                }} />
-                <span>{active24h ? 'Actif 24h / 24' : 'Horaires ciblés'}</span>
+                <Clock size={14} strokeWidth={2.2} />
+                <span>Horaires ciblés</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActive24h(true); setEstModifie(true); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '7px',
+                  padding: '9px 12px',
+                  borderRadius: '9px',
+                  border: 'none',
+                  background: active24h ? '#ffffff' : 'transparent',
+                  color: active24h ? '#059669' : '#64748b',
+                  boxShadow: active24h ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                  fontWeight: active24h ? 800 : 600,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <ShieldCheck size={14} strokeWidth={2.2} />
+                <span>Continu 24h / 24</span>
               </button>
             </div>
 
             {!active24h ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* Presets */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                {/* Symmetrical 3-Column Presets Grid */}
                 <div>
-                  <div style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b', marginBottom: '8px' }}>
-                    Modèles rapides
+                  <div style={{ fontSize: '0.71rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b', marginBottom: '8px' }}>
+                    Profils rapides
                   </div>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                     {modelesRapides.map((mod) => {
                       const isSel = heureDebut === mod.debut && heureFin === mod.fin;
                       return (
                         <button
-                          key={mod.nom}
+                          key={mod.id}
                           type="button"
                           onClick={() => appliquerPreset(mod.debut, mod.fin)}
                           style={{
-                            flex: '1 1 auto',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px',
-                            padding: '7px 11px',
-                            borderRadius: '9px',
-                            fontSize: '0.75rem',
-                            fontWeight: 700,
-                            cursor: 'pointer',
+                            padding: '11px 6px',
+                            borderRadius: '11px',
                             border: isSel ? '1.5px solid #0284c7' : '1px solid #e2e8f0',
-                            background: isSel ? '#f0f9ff' : '#ffffff',
-                            color: isSel ? '#0284c7' : '#334155',
-                            boxShadow: isSel ? '0 2px 6px rgba(2, 132, 199, 0.15)' : 'none',
+                            background: isSel ? 'linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%)' : '#ffffff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '4px',
                             transition: 'all 0.15s ease',
+                            boxShadow: isSel ? '0 2px 8px rgba(2, 132, 199, 0.15)' : 'none',
                           }}
                         >
-                          {mod.icon}
-                          <span>{mod.nom}</span>
+                          <div style={{ color: isSel ? '#0284c7' : '#64748b' }}>
+                            {mod.icon}
+                          </div>
+                          <span style={{ fontSize: '0.76rem', fontWeight: 800, color: isSel ? '#0284c7' : '#1e293b' }}>
+                            {mod.nom}
+                          </span>
+                          <span style={{ fontSize: '0.67rem', color: isSel ? '#0369a1' : '#64748b', fontWeight: 600 }}>
+                            {mod.heures}
+                          </span>
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Hours Range Selector */}
+                {/* Hours Range Selector with Dynamic Duration Insight */}
                 <div>
-                  <div style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b', marginBottom: '8px' }}>
-                    Heures d'activation quotidienne
+                  <div style={{ fontSize: '0.71rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b', marginBottom: '8px' }}>
+                    Créneau horaire actif
                   </div>
                   <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
                     background: '#f8fafc',
-                    padding: '12px 14px',
+                    border: '1px solid #e2e8f0',
                     borderRadius: '12px',
-                    border: '1px solid #e2e8f0'
+                    padding: '12px 14px',
                   }}>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                        Heure début
-                      </span>
-                      <input
-                        type="time"
-                        value={heureDebut}
-                        onChange={(e) => {
-                          setHeureDebut(e.target.value);
-                          setEstModifie(true);
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '7px 10px',
-                          borderRadius: '8px',
-                          border: '1px solid #cbd5e1',
-                          fontSize: '0.9rem',
-                          fontWeight: 800,
-                          background: '#ffffff',
-                          color: '#0f172a',
-                          outline: 'none',
-                        }}
-                      />
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr auto 1fr',
+                      alignItems: 'center',
+                      gap: '10px',
+                    }}>
+                      <div>
+                        <label style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'block', marginBottom: '4px' }}>
+                          Début
+                        </label>
+                        <input
+                          type="time"
+                          value={heureDebut}
+                          onChange={(e) => {
+                            setHeureDebut(e.target.value);
+                            setEstModifie(true);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 10px',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            background: '#ffffff',
+                            color: '#0f172a',
+                            fontSize: '0.92rem',
+                            fontWeight: 800,
+                            outline: 'none',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                          }}
+                        />
+                      </div>
+
+                      <div style={{
+                        width: '30px',
+                        height: '30px',
+                        borderRadius: '50%',
+                        background: '#e0f2fe',
+                        color: '#0284c7',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginTop: '16px',
+                        flexShrink: 0,
+                      }}>
+                        <ArrowRight size={15} strokeWidth={2.4} />
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', display: 'block', marginBottom: '4px' }}>
+                          Fin
+                        </label>
+                        <input
+                          type="time"
+                          value={heureFin}
+                          onChange={(e) => {
+                            setHeureFin(e.target.value);
+                            setEstModifie(true);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 10px',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            background: '#ffffff',
+                            color: '#0f172a',
+                            fontSize: '0.92rem',
+                            fontWeight: 800,
+                            outline: 'none',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                          }}
+                        />
+                      </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: '16px', color: '#94a3b8' }}>
-                      <ArrowRight size={16} strokeWidth={2.4} />
-                    </div>
-
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                        Heure fin
-                      </span>
-                      <input
-                        type="time"
-                        value={heureFin}
-                        onChange={(e) => {
-                          setHeureFin(e.target.value);
-                          setEstModifie(true);
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '7px 10px',
-                          borderRadius: '8px',
-                          border: '1px solid #cbd5e1',
-                          fontSize: '0.9rem',
-                          fontWeight: 800,
-                          background: '#ffffff',
-                          color: '#0f172a',
-                          outline: 'none',
-                        }}
-                      />
+                    {/* Calculated duration badge */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      marginTop: '10px',
+                      fontSize: '0.72rem',
+                      color: '#0369a1',
+                      background: '#f0f9ff',
+                      padding: '6px 10px',
+                      borderRadius: '7px',
+                      fontWeight: 700,
+                    }}>
+                      <Clock size={13} strokeWidth={2.4} />
+                      <span>{calculerDureePlage()}</span>
                     </div>
                   </div>
                 </div>
@@ -800,28 +888,65 @@ function SectionZones({ cameras, initialCameraId }) {
                 {/* Days Selector */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
-                      Jours de surveillance active
+                    <span style={{ fontSize: '0.71rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b' }}>
+                      Jours actifs ({joursActifs.length}/7)
                     </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ display: 'flex', gap: '3px', background: '#f1f5f9', padding: '2px', borderRadius: '7px' }}>
                       <button
                         type="button"
                         onClick={() => { setJoursActifs([0, 1, 2, 3, 4]); setEstModifie(true); }}
-                        style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0284c7', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px' }}
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          padding: '3px 8px',
+                          borderRadius: '5px',
+                          border: 'none',
+                          background: (joursActifs.length === 5 && !joursActifs.includes(5) && !joursActifs.includes(6)) ? '#ffffff' : 'transparent',
+                          color: (joursActifs.length === 5 && !joursActifs.includes(5) && !joursActifs.includes(6)) ? '#0284c7' : '#64748b',
+                          cursor: 'pointer',
+                          boxShadow: (joursActifs.length === 5 && !joursActifs.includes(5) && !joursActifs.includes(6)) ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                        }}
                       >
                         Semaine
                       </button>
-                      <span style={{ color: '#cbd5e1', fontSize: '0.7rem' }}>•</span>
                       <button
                         type="button"
                         onClick={() => { setJoursActifs([0, 1, 2, 3, 4, 5, 6]); setEstModifie(true); }}
-                        style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0284c7', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px' }}
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          padding: '3px 8px',
+                          borderRadius: '5px',
+                          border: 'none',
+                          background: joursActifs.length === 7 ? '#ffffff' : 'transparent',
+                          color: joursActifs.length === 7 ? '#0284c7' : '#64748b',
+                          cursor: 'pointer',
+                          boxShadow: joursActifs.length === 7 ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                        }}
                       >
                         Tous
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => { setJoursActifs([5, 6]); setEstModifie(true); }}
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          padding: '3px 8px',
+                          borderRadius: '5px',
+                          border: 'none',
+                          background: (joursActifs.length === 2 && joursActifs.includes(5) && joursActifs.includes(6)) ? '#ffffff' : 'transparent',
+                          color: (joursActifs.length === 2 && joursActifs.includes(5) && joursActifs.includes(6)) ? '#0284c7' : '#64748b',
+                          cursor: 'pointer',
+                          boxShadow: (joursActifs.length === 2 && joursActifs.includes(5) && joursActifs.includes(6)) ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                        }}
+                      >
+                        W-E
+                      </button>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '5px' }}>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
                     {joursNoms.map((nom, idx) => {
                       const sel = joursActifs.includes(idx);
                       return (
@@ -830,22 +955,28 @@ function SectionZones({ cameras, initialCameraId }) {
                           type="button"
                           onClick={() => basculerJour(idx)}
                           style={{
-                            height: '36px',
+                            height: '38px',
                             display: 'flex',
+                            flexDirection: 'column',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            borderRadius: '8px',
-                            fontSize: '0.74rem',
-                            fontWeight: 800,
+                            borderRadius: '9px',
                             cursor: 'pointer',
-                            background: sel ? 'linear-gradient(135deg, #0284c7, #0369a1)' : '#f8fafc',
-                            color: sel ? '#ffffff' : '#475569',
+                            background: sel ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : '#ffffff',
+                            color: sel ? '#ffffff' : '#64748b',
                             border: sel ? '1px solid #0284c7' : '1px solid #e2e8f0',
-                            boxShadow: sel ? '0 2px 6px rgba(2, 132, 199, 0.25)' : 'none',
+                            boxShadow: sel ? '0 2px 6px rgba(2, 132, 199, 0.22)' : 'none',
                             transition: 'all 0.15s ease',
                           }}
                         >
-                          {nom}
+                          <span style={{ fontSize: '0.74rem', fontWeight: 800 }}>{nom}</span>
+                          <span style={{
+                            width: '4px',
+                            height: '4px',
+                            borderRadius: '50%',
+                            background: sel ? '#7dd3fc' : 'transparent',
+                            marginTop: '2px',
+                          }} />
                         </button>
                       );
                     })}
@@ -857,24 +988,24 @@ function SectionZones({ cameras, initialCameraId }) {
                 background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)',
                 border: '1px solid #bbf7d0',
                 borderRadius: '12px',
-                padding: '16px',
+                padding: '18px',
                 display: 'flex',
                 alignItems: 'flex-start',
-                gap: '12px',
+                gap: '14px',
               }}>
                 <div style={{
-                  width: '36px', height: '36px', borderRadius: '10px',
+                  width: '38px', height: '38px', borderRadius: '10px',
                   background: '#dcfce7', color: '#16a34a',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                 }}>
-                  <ShieldCheck size={20} />
+                  <ShieldCheck size={22} strokeWidth={2.2} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#14532d', marginBottom: '3px' }}>
-                    Surveillance permanente active
+                  <div style={{ fontSize: '0.86rem', fontWeight: 800, color: '#14532d', marginBottom: '4px' }}>
+                    Protection continue 24h/24 & 7j/7
                   </div>
                   <div style={{ fontSize: '0.76rem', color: '#166534', lineHeight: 1.45 }}>
-                    La zone est surveillée sans interruption, <strong>24h/24 et 7j/7</strong>. Toute intrusion déclenchera instantanément une notification critique.
+                    La zone sensible est sous surveillance IA ininterrompue, jour et nuit. Toute intrusion humaine dans ce périmètre génère une alerte immédiate.
                   </div>
                 </div>
               </div>
@@ -893,102 +1024,156 @@ function SectionZones({ cameras, initialCameraId }) {
               fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '8px',
             }}>
               {message.ok ? <CheckCircle2 size={16} color="#059669" /> : <AlertTriangle size={16} color="#dc2626" />}
               <span>{message.texte}</span>
             </div>
           )}
 
-          {/* Drawing Status & Guidance if points < 3 */}
-          {points.length < 3 && (
-            <div style={{
-              background: '#f0f9ff',
-              border: '1px dashed #7dd3fc',
-              borderRadius: '12px',
-              padding: '12px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-            }}>
-              <div style={{
-                width: '34px', height: '34px', borderRadius: '9px',
-                background: '#0284c7', color: '#ffffff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-              }}>
-                <MousePointerClick size={17} />
+          {/* Unified Action Card: Progress, Guidance & Save */}
+          <div style={{
+            background: '#ffffff',
+            border: points.length >= 3 ? '1.5px solid #0284c7' : '1px solid #e2e8f0',
+            borderRadius: '16px',
+            padding: '18px 20px',
+            boxShadow: points.length >= 3 ? '0 4px 18px rgba(2, 132, 199, 0.1)' : '0 2px 10px rgba(0, 0, 0, 0.02)',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px',
+          }}>
+            {/* Step header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+                <div style={{
+                  width: '28px', height: '28px', borderRadius: '8px',
+                  background: points.length >= 3 ? '#ecfdf5' : '#e0f2fe',
+                  color: points.length >= 3 ? '#059669' : '#0284c7',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {points.length >= 3 ? <CheckCircle2 size={16} /> : <Target size={16} />}
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#0f172a' }}>
+                    {points.length >= 3 ? 'Périmètre tracé avec succès' : 'Délimitation de la zone'}
+                  </div>
+                  <div style={{ fontSize: '0.71rem', color: '#64748b' }}>
+                    {points.length >= 3 ? `${points.length} points enregistrés sur l'image` : `${points.length}/3 points minimaux requis`}
+                  </div>
+                </div>
               </div>
-              <div style={{ flex: 1, fontSize: '0.78rem' }}>
-                <div style={{ fontWeight: 800, color: '#0369a1' }}>
-                  {points.length === 0 ? 'Tracez votre zone sur la caméra' : `${points.length}/3 points minimaux tracés`}
-                </div>
-                <div style={{ color: '#0284c7', fontSize: '0.73rem', marginTop: '2px', lineHeight: 1.35 }}>
-                  {points.length === 0 
-                    ? 'Cliquez directement sur l\'image vidéo à gauche pour délimiter les contours.'
-                    : `Ajoutez encore ${3 - points.length} point${3 - points.length > 1 ? 's' : ''} sur l'image pour pouvoir enregistrer.`
-                  }
-                </div>
+
+              {/* Visual step pills */}
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {[0, 1, 2].map((s) => (
+                  <div
+                    key={s}
+                    style={{
+                      width: '16px',
+                      height: '6px',
+                      borderRadius: '3px',
+                      background: points.length > s ? '#0284c7' : '#e2e8f0',
+                      transition: 'all 0.2s ease',
+                    }}
+                  />
+                ))}
               </div>
             </div>
-          )}
 
-          {/* Save & Delete Buttons */}
-          {zoneExistante && !estModifie ? (
-            <div
-              style={{
+            {/* Guidance message */}
+            {points.length < 3 ? (
+              <div style={{
+                fontSize: '0.74rem',
+                color: '#0369a1',
+                background: '#f0f9ff',
+                border: '1px solid #bae6fd',
+                padding: '9px 12px',
+                borderRadius: '9px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '9px',
+                lineHeight: 1.35,
+              }}>
+                <MousePointerClick size={16} color="#0284c7" style={{ flexShrink: 0 }} />
+                <span>
+                  {points.length === 0
+                    ? 'Cliquez directement sur l\'aperçu vidéo à gauche pour tracer les contours de la zone.'
+                    : `Ajoutez encore ${3 - points.length} point${3 - points.length > 1 ? 's' : ''} sur l'image pour pouvoir enregistrer.`
+                  }
+                </span>
+              </div>
+            ) : (
+              <div style={{
+                fontSize: '0.74rem',
+                color: '#065f46',
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                padding: '9px 12px',
+                borderRadius: '9px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <Check size={15} color="#16a34a" />
+                <span>Zone complète. Vous pouvez maintenant enregistrer la configuration.</span>
+              </div>
+            )}
+
+            {/* Save Button */}
+            {zoneExistante && !estModifie ? (
+              <div style={{
                 background: '#ecfdf5',
                 border: '1px solid #a7f3d0',
                 color: '#065f46',
-                padding: '12px 16px',
+                padding: '11px 16px',
                 borderRadius: '10px',
-                fontSize: '0.85rem',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                justifyContent: 'center',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-              }}
-            >
-              <CheckCircle2 size={16} color="#10b981" />
-              <span>Zone enregistrée & surveillance active</span>
-            </div>
-          ) : (
-            <button
-              onClick={enregistrer}
-              disabled={enregistrement || points.length < 3}
-              style={{
-                width: '100%',
-                background: (enregistrement || points.length < 3)
-                  ? '#cbd5e1'
-                  : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                border: 'none',
-                color: (enregistrement || points.length < 3) ? '#64748b' : '#ffffff',
-                padding: '12px 18px',
-                borderRadius: '10px',
-                fontSize: '0.86rem',
+                fontSize: '0.84rem',
                 fontWeight: 800,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
                 gap: '8px',
-                boxShadow: (enregistrement || points.length < 3)
-                  ? 'none'
-                  : '0 4px 14px rgba(2, 132, 199, 0.35)',
-                cursor: (enregistrement || points.length < 3) ? 'not-allowed' : 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {enregistrement ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              <span>{zoneExistante ? 'Enregistrer les modifications' : 'Enregistrer la zone & les plages horaires'}</span>
-            </button>
-          )}
+                justifyContent: 'center',
+              }}>
+                <CheckCircle2 size={16} color="#10b981" />
+                <span>Zone active & enregistrée</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={enregistrer}
+                disabled={enregistrement || points.length < 3}
+                style={{
+                  width: '100%',
+                  background: (enregistrement || points.length < 3)
+                    ? '#f1f5f9'
+                    : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                  border: (enregistrement || points.length < 3) ? '1px solid #e2e8f0' : 'none',
+                  color: (enregistrement || points.length < 3) ? '#94a3b8' : '#ffffff',
+                  padding: '12px 18px',
+                  borderRadius: '10px',
+                  fontSize: '0.86rem',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: (enregistrement || points.length < 3) ? 'none' : '0 4px 14px rgba(2, 132, 199, 0.35)',
+                  cursor: (enregistrement || points.length < 3) ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {enregistrement ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                <span>{zoneExistante ? 'Enregistrer les modifications' : 'Enregistrer la zone & les horaires'}</span>
+              </button>
+            )}
 
-          {zoneExistante && (
-            <button onClick={supprimer} disabled={enregistrement} style={btnSecondaire}>
-              <Trash2 size={15} /> Supprimer la zone enregistrée
-            </button>
-          )}
+            {zoneExistante && (
+              <button onClick={supprimer} disabled={enregistrement} style={btnSecondaire}>
+                <Trash2 size={14} /> Supprimer la zone enregistrée
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
