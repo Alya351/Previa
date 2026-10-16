@@ -1174,36 +1174,41 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
   return (
     <div className="content-body" style={{ maxWidth: '1440px', margin: '0 auto', paddingBottom: '60px' }}>
       {/* EN-TÊTE ÉPURÉ & SÉLECTEUR DE MODE DE VUE */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '16px',
-          marginBottom: '20px',
-        }}
-      >
-        <div>
-          <h1 className="welcome-heading" style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>
-            Supervision des <span>Caméras</span>
-          </h1>
-          <p className="welcome-sub" style={{ fontSize: '0.9rem', color: 'var(--ink-muted)', marginTop: '4px' }}>
-            Flux vidéo temps réel, cadrage IA et délimitation de zones
-          </p>
-        </div>
-
-        {/* COMMUTATEUR DE MODE DE VUE (SEGMENTED PILL) */}
+      <div style={{ marginBottom: '22px' }}>
         <div
           style={{
             display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+            gap: '16px',
+            paddingRight: '220px',
+          }}
+        >
+          <div>
+            <h1 className="welcome-heading" style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>
+              Supervision des <span>Caméras</span>
+            </h1>
+            <p className="welcome-sub" style={{ fontSize: '0.9rem', color: 'var(--ink-muted)', marginTop: '4px' }}>
+              Flux vidéo temps réel, cadrage IA et délimitation de zones sensibles
+            </p>
+          </div>
+        </div>
+
+        {/* COMMUTATEUR DE MODE DE VUE (SEGMENTED PILL) DÉGAGÉ DU BANDEAU VAGUE */}
+        <div
+          style={{
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '8px',
             backgroundColor: '#ffffff',
-            padding: '4px',
+            padding: '5px',
             borderRadius: '14px',
             border: '1px solid var(--border-light)',
             boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+            marginTop: '16px',
+            maxWidth: '100%',
+            overflowX: 'auto',
           }}
         >
           <button
@@ -1213,7 +1218,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '7px 14px',
+              padding: '8px 16px',
               borderRadius: '10px',
               border: 'none',
               backgroundColor: subTab === 'hero' ? '#0284c7' : 'transparent',
@@ -1235,7 +1240,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '7px 14px',
+              padding: '8px 16px',
               borderRadius: '10px',
               border: 'none',
               backgroundColor: subTab === 'mosaic' ? '#0284c7' : 'transparent',
@@ -1257,7 +1262,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '7px 14px',
+              padding: '8px 16px',
               borderRadius: '10px',
               border: 'none',
               backgroundColor: subTab === 'zones' ? '#0284c7' : 'transparent',
@@ -1269,7 +1274,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
             }}
           >
             <Shield size={15} />
-            <span>Zones de Sécurité</span>
+            <span>Zones Sensibles</span>
           </button>
         </div>
       </div>
@@ -1672,7 +1677,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   title="Délimiter une zone non autorisée sur cette caméra"
                 >
                   <Shield size={14} color="#0284c7" />
-                  <span>Zone de Sécurité</span>
+                  <span>Zones Sensibles</span>
                 </button>
 
                 <button
