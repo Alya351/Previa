@@ -168,8 +168,8 @@ function DashboardView({
   return (
     <div className="content-body">
       {/* WELCOME BANNER HEADER */}
-      <div className="welcome-header" style={{ marginBottom: '16px' }}>
-        <div className="welcome-title-group">
+      <div className="welcome-header" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="welcome-title-group" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <button
             className="hamburger-btn"
             onClick={onToggleSidebar}
@@ -178,101 +178,105 @@ function DashboardView({
             <Menu size={24} strokeWidth={2.2} />
           </button>
           <div>
-            <h1 className="welcome-heading">
-              Bienvenue sur <span>Previa</span>
-            </h1>
-            <p className="welcome-sub">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <h1 className="welcome-heading" style={{ margin: 0 }}>
+                Bienvenue sur <span>Previa</span>
+              </h1>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  color: '#15803d',
+                  padding: '4px 10px',
+                  borderRadius: '20px',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                }}
+              >
+                <span
+                  style={{
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    background: '#16a34a',
+                    boxShadow: '0 0 6px #16a34a',
+                    display: 'inline-block',
+                  }}
+                />
+                Surveillance Active 24h/24
+              </span>
+            </div>
+            <p className="welcome-sub" style={{ margin: '4px 0 0 0' }}>
               Surveillance intelligente et protection des locaux
             </p>
           </div>
         </div>
       </div>
 
-      {/* BANDEAU D'ÉTAT SÉCURITÉ */}
-      <div
-        style={{
-          background: alerteEnCours ? '#fef2f2' : '#f0fdf4',
-          border: alerteEnCours ? '2px solid #ef4444' : '1px solid #bbf7d0',
-          borderRadius: '14px',
-          padding: '14px 20px',
-          marginBottom: '20px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '12px',
-          boxShadow: alerteEnCours ? '0 8px 24px rgba(239, 68, 68, 0.15)' : '0 2px 10px rgba(0,0,0,0.02)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span
-            style={{
-              width: '12px',
-              height: '12px',
-              borderRadius: '50%',
-              background: alerteEnCours ? '#ef4444' : '#16a34a',
-              boxShadow: alerteEnCours ? '0 0 12px #ef4444' : '0 0 8px #16a34a',
-              flexShrink: 0,
-            }}
-          />
-          <div>
-            <div style={{ fontSize: '0.92rem', fontWeight: 800, color: alerteEnCours ? '#991b1b' : '#166534' }}>
-              {alerteEnCours
-                ? `🚨 ALERTE CRITIQUE EN COURS : ${alerteEnCours.titre} — ${alerteEnCours.lieu}`
-                : '🟢 SYSTÈME DE SÉCURITÉ ARMÉ — Surveillance active 24h/24'
-              }
-            </div>
-            <div style={{ fontSize: '0.78rem', color: alerteEnCours ? '#b91c1c' : '#15803d', marginTop: '2px' }}>
-              {alerteEnCours
-                ? 'Sirène et projecteurs activés. Vérification immédiate requise.'
-                : 'Tous les flux et zones de surveillance sont opérationnels.'
-              }
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {alerteEnCours ? (
-            <button
-              type="button"
-              onClick={() => onSelectTab('alerts')}
-              style={{
-                background: '#ef4444',
-                color: '#ffffff',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '8px',
-                fontSize: '0.82rem',
-                fontWeight: 800,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
-              }}
-            >
-              <ShieldAlert size={15} /> Gérer l'Urgence
-            </button>
-          ) : (
+      {/* BANDEAU D'URGENCE (AFFICHÉ UNIQUEMENT LORS D'UN INCIDENT CRITIQUE EN COURS) */}
+      {alerteEnCours && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+            border: '2px solid #ef4444',
+            borderRadius: '14px',
+            padding: '14px 20px',
+            marginBottom: '20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px',
+            boxShadow: '0 8px 24px rgba(239, 68, 68, 0.2)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span
               style={{
-                fontSize: '0.76rem',
-                color: '#15803d',
-                fontWeight: 800,
-                background: '#dcfce7',
-                padding: '5px 12px',
-                borderRadius: '20px',
-                border: '1px solid #86efac',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
+                width: '12px',
+                height: '12px',
+                borderRadius: '50%',
+                background: '#ef4444',
+                boxShadow: '0 0 12px #ef4444',
+                flexShrink: 0,
               }}
-            >
-              <ShieldCheck size={14} color="#16a34a" /> Surveillance Active
-            </span>
-          )}
+            />
+            <div>
+              <div style={{ fontSize: '0.94rem', fontWeight: 800, color: '#991b1b' }}>
+                🚨 ALERTE CRITIQUE EN COURS : {alerteEnCours.titre} — {alerteEnCours.lieu}
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#b91c1c', marginTop: '2px' }}>
+                Vérification immédiate requise. Sirène et notifications actives.
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onSelectTab('alerts')}
+            style={{
+              background: '#ef4444',
+              color: '#ffffff',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              fontSize: '0.82rem',
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+            }}
+          >
+            <ShieldAlert size={15} /> Gérer l'Urgence
+          </button>
         </div>
-      </div>
+      )}
 
       {/* 4 TOP KPI CARDS WITH DIRECT VIEW NAVIGATION */}
       <KpiCards
