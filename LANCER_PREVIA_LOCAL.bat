@@ -7,7 +7,7 @@ echo          PREVIA - DEMARRAGE DE LA SUITE LOCALE COMPLETE (PC)
 echo ======================================================================
 echo.
 echo [1/3] Demarrage du Backend d'analyse IA (Port 8012 HTTPS)...
-start "PREVIA - Backend FastAPI (Port 8012)" cmd /c "cd /d "%~dp0migration\backend" && set "PYTHONPATH=%~dp0migration\backend" && python -m uvicorn fonctionnalites.main.main:app --host 0.0.0.0 --port 8012 --ssl-certfile certs/cert.pem --ssl-keyfile certs/key.pem"
+start "PREVIA - Backend FastAPI (Port 8012)" cmd /c "cd /d "%~dp0migration\backend" && set "PYTHONPATH=%~dp0migration\backend" && set "PREVIA_MODE_DEV=1" && python -m uvicorn fonctionnalites.main.main:app --host 0.0.0.0 --port 8012 --ssl-certfile certs/cert.pem --ssl-keyfile certs/key.pem"
 
 timeout /t 3 /nobreak >nul
 

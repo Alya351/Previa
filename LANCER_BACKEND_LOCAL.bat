@@ -2,6 +2,7 @@
 title PREVIA - BACKEND LOCAL (FASTAPI)
 cd /d "%~dp0migration\backend"
 set "PYTHONPATH=%~dp0migration\backend"
+set "PREVIA_MODE_DEV=1"
 
 echo ======================================================================
 echo       PREVIA - DEMARRAGE DU BACKEND LOCAL (PORT 8012 HTTPS)
