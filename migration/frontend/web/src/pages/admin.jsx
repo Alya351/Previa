@@ -5210,6 +5210,8 @@ export default function Admin() {
         return <EventsView alertesReelles={alertes} cameras={camerasReelles} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
       case 'alerts':
         return <AlertsView alertesReelles={alertes} cameras={camerasReelles} camerasParId={camerasParId} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
+      case 'reports':
+        return <ReportsView alertesReelles={alertes} kpis={kpis} />;
       case 'organisation':
         return <OrganisationView />;
       default:
