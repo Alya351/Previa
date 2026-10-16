@@ -3653,51 +3653,34 @@ function EmptyHistoriqueState({ totalEvents, onResetFilters }) {
     return (
       <div style={{
         background: '#ffffff',
-        borderRadius: '18px',
-        padding: '52px 24px',
+        borderRadius: '16px',
+        padding: '38px 24px',
         textAlign: 'center',
-        border: '1.5px solid #e2e8f0',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.02)',
+        border: '1px solid var(--border-light)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
       }}>
         <div style={{
-          width: '64px',
-          height: '64px',
+          width: '46px',
+          height: '46px',
           borderRadius: '50%',
-          background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
-          color: '#059669',
+          background: '#f0fdf4',
+          color: '#16a34a',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: '16px',
-          boxShadow: '0 6px 18px rgba(16, 185, 129, 0.18)',
+          marginBottom: '12px',
         }}>
-          <ShieldCheck size={34} strokeWidth={2.4} />
+          <ShieldCheck size={24} strokeWidth={2} />
         </div>
-        <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>
-          Journal Vierge — Aucun Incident à Signaler
+        <h3 style={{ fontSize: '1.02rem', fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0' }}>
+          Aucun incident à signaler
         </h3>
-        <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '480px', margin: '0 0 18px 0', lineHeight: 1.5 }}>
-          Toutes les zones sous vidéosurveillance sont calmes. Dès qu'une intrusion, un comportement suspect ou une anomalie est détecté par l'IA PREVIA, l'enregistrement apparaîtra ici en temps réel.
+        <p style={{ fontSize: '0.84rem', color: '#64748b', margin: 0 }}>
+          Toutes les zones sous vidéosurveillance sont calmes.
         </p>
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '6px 14px',
-          borderRadius: '20px',
-          background: '#ecfdf5',
-          border: '1px solid #a7f3d0',
-          color: '#047857',
-          fontSize: '0.78rem',
-          fontWeight: 700,
-        }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
-          <span>Surveillance IA active 24/7 · Caméras opérationnelles</span>
-        </div>
       </div>
     );
   }
@@ -3705,55 +3688,53 @@ function EmptyHistoriqueState({ totalEvents, onResetFilters }) {
   return (
     <div style={{
       background: '#ffffff',
-      borderRadius: '18px',
-      padding: '45px 24px',
+      borderRadius: '16px',
+      padding: '38px 24px',
       textAlign: 'center',
-      border: '1.5px solid #e2e8f0',
-      boxShadow: '0 4px 16px rgba(0,0,0,0.02)',
+      border: '1px solid var(--border-light)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
     }}>
       <div style={{
-        width: '56px',
-        height: '56px',
+        width: '46px',
+        height: '46px',
         borderRadius: '50%',
-        background: '#f1f5f9',
+        background: '#f8fafc',
         color: '#64748b',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: '14px',
+        marginBottom: '12px',
       }}>
-        <Search size={26} strokeWidth={2.2} />
+        <Search size={22} strokeWidth={2} />
       </div>
-      <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', margin: '0 0 6px 0' }}>
-        Aucun incident ne correspond à votre filtre
+      <h3 style={{ fontSize: '1.02rem', fontWeight: 700, color: '#0f172a', margin: '0 0 4px 0' }}>
+        Aucun incident trouvé
       </h3>
-      <p style={{ fontSize: '0.84rem', color: '#64748b', maxWidth: '420px', margin: '0 0 16px 0', lineHeight: 1.4 }}>
-        Aucun enregistrement ne correspond aux termes de recherche ou aux filtres sélectionnés.
+      <p style={{ fontSize: '0.84rem', color: '#64748b', margin: '0 0 14px 0' }}>
+        Aucun enregistrement ne correspond aux filtres appliqués.
       </p>
       {onResetFilters && (
         <button
           type="button"
           onClick={onResetFilters}
           style={{
-            background: '#0284c7',
-            color: '#ffffff',
-            border: 'none',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            fontSize: '0.82rem',
-            fontWeight: 700,
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            color: '#0f172a',
+            padding: '7px 16px',
+            borderRadius: '9px',
+            fontSize: '0.80rem',
+            fontWeight: 600,
             cursor: 'pointer',
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)',
           }}
         >
-          <RefreshCw size={14} />
+          <RefreshCw size={13} />
           <span>Réinitialiser les filtres</span>
         </button>
       )}
