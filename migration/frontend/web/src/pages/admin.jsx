@@ -6137,14 +6137,14 @@ function SectionBatiments({ batiments = [], comptes = [], onChange }) {
         Bâtiments & Sites Surveillés ({(batiments || []).length})
       </h3>
       <p style={{ margin: '0 0 16px 0', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
-        Créez les bâtiments de votre entreprise et assignez un responsable ou gardien référent.
+        Créez les bâtiments de votre entreprise et assignez un responsable référent.
       </p>
 
       <form onSubmit={creer} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '18px', background: '#f8fafc', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
         <input style={{ ...champ, flex: 1, minWidth: '180px' }} placeholder="Nom du bâtiment (ex: Siège Principal)" value={nom} onChange={(e) => setNom(e.target.value)} required />
         <input style={{ ...champ, flex: 1, minWidth: '160px' }} placeholder="Lieu / Ville (ex: Abidjan)" value={lieu} onChange={(e) => setLieu(e.target.value)} required />
-        <select style={{ ...champ, flex: 1, minWidth: '200px' }} value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
-          <option value="">👤 Responsable / Gardien assigné (Optionnel)</option>
+        <select style={{ ...champ, flex: 1, minWidth: '210px' }} value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
+          <option value="">Choisir un responsable</option>
           {(comptes || []).map((c) => (
             <option key={c.id} value={c.id}>
               {c.prenom} {c.nom} ({c.role === 'admin' ? 'Admin' : 'Opérateur'})
