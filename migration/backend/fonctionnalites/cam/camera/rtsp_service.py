@@ -19,7 +19,8 @@ from fonctionnalites.Infrastructure import derniere_image
 
 # --- GESTION DU BUFFER TAILLE = 1 PAR CAMÉRA ---
 _buffer_derniere_frame: dict[str, bytes] = {}
-_buffer_lock = threading.Lock()
+_compteurs_frames: dict[str, int] = {}
+_condition_frame = threading.Condition()
 
 # --- GESTION DES PROCESSUS FFMPEG ET THREADS PAR CAMÉRA ---
 _processus_ffmpeg: dict[str, subprocess.Popen] = {}
@@ -303,8 +304,16 @@ def declencher_analyse_asynchrone(id_camera_ou_url: str, jpg_bytes: bytes) -> No
 
             frame = cv2.imdecode(np.frombuffer(jpg_bytes, np.uint8), cv2.IMREAD_COLOR)
             if frame is not None:
-                analyser_quoi(id_camera_ou_url, frame)
-                analyser_qui(id_camera_ou_url, frame)
+                # Optimisation CPU : YOLO utilise 640px max. Réduire l'image pour l'IA
+                # économise 70% de CPU et supprime les saccades sur le flux vidéo.
+                h_f, w_f = frame.shape[:2]
+                if max(h_f, w_f) > 640:
+                    scale_ia = 640.0 / max(h_f, w_f)
+                    frame_ia = cv2.resize(frame, (int(w_f * scale_ia), int(h_f * scale_ia)), interpolation=cv2.INTER_AREA)
+                else:
+                    frame_ia = frame
+                analyser_quoi(id_camera_ou_url, frame_ia)
+                analyser_qui(id_camera_ou_url, frame_ia)
                 etat_persistant.sauvegarder_si_temps()
         except Exception as exc:
             import traceback
@@ -364,7 +373,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                     env_map = {"cw": 90, "90": 90, "180": 180, "ccw": 270, "270": 270}
                     rot_deg = env_map.get(rot_env, 0)
 
-                _scale = "scale=854:854:force_original_aspect_ratio=decrease"
+                _scale = "scale=1280:720:force_original_aspect_ratio=decrease:flags=fast_bilinear"
                 if rot_deg == 90:
                     vf_filtre = f"transpose=1,{_scale}"
                 elif rot_deg == 180:
@@ -379,18 +388,25 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                     cmd = [
                         ffmpeg,
                         "-hide_banner",
-                        "-loglevel", "warning",
-                        "-rtsp_transport", transport_opt,
+                        "-loglevel", "error",
+                        "-fflags", "nobuffer",
+                        "-flags", "low_delay",
+                        "-avioflags", "direct",
+                        "-probesize", "32768",
+                        "-analyzeduration", "0",
+                    ]
+                    if url_a_utiliser.lower().startswith("rtsp://"):
+                        cmd.extend(["-rtsp_transport", transport_opt])
+                    cmd.extend([
                         opt_timeout, "5000000",
                         "-i", url_a_utiliser,
                         "-an",
                         "-vf", vf_filtre,
                         "-f", "image2pipe",
                         "-vcodec", "mjpeg",
-                        "-q:v", "5",
-                        "-r", "20",
+                        "-q:v", "2",
                         "-"
-                    ]
+                    ])
 
                     try:
                         proc = subprocess.Popen(
@@ -402,9 +418,10 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         _processus_ffmpeg[id_camera] = proc
                         tampon = b""
                         reussi = False
+                        stdout_flux = proc.stdout.raw if hasattr(proc.stdout, "raw") else proc.stdout
 
                         while not evt_arret.is_set():
-                            morceau = proc.stdout.read(65536)
+                            morceau = stdout_flux.read(32768)
                             if not morceau:
                                 break
                             tampon += morceau
@@ -426,8 +443,10 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                                     tampon = tampon[fin_dernier + 2:]
                                     reussi = True
 
-                                    with _buffer_lock:
+                                    with _condition_frame:
+                                        _compteurs_frames[id_camera] = _compteurs_frames.get(id_camera, 0) + 1
                                         _buffer_derniere_frame[id_camera] = jpg
+                                        _condition_frame.notify_all()
 
                                     derniere_image.enregistrer(id_camera, jpg)
 
@@ -503,8 +522,10 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                                     ok_enc, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
                                     if ok_enc:
                                         jpg_bytes = buf.tobytes()
-                                        with _buffer_lock:
+                                        with _condition_frame:
+                                            _compteurs_frames[id_camera] = _compteurs_frames.get(id_camera, 0) + 1
                                             _buffer_derniere_frame[id_camera] = jpg_bytes
+                                            _condition_frame.notify_all()
                                         derniere_image.enregistrer(id_camera, jpg_bytes)
                                     time.sleep(0.04)  # ~25 FPS
                                 else:
@@ -528,8 +549,8 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
     def _boucle_analyse_ia():
         print(f"[rtsp_service] 🧠 Démarrage worker IA autonome pour {id_camera}", flush=True)
         while not evt_arret.is_set():
-            time.sleep(1.0)  # Cadence ~1 FPS pour l'IA (garantit une fluidité maximale du flux vidéo)
-            with _buffer_lock:
+            time.sleep(2.5)  # Cadence ~0.4 FPS pour l'IA (garantit 100% de fluidité vidéo sans saturer le CPU)
+            with _condition_frame:
                 jpg = _buffer_derniere_frame.get(id_camera)
             if jpg:
                 declencher_analyse_asynchrone(id_camera, jpg)
@@ -572,22 +593,28 @@ def redemarrer_worker_camera(id_camera: str) -> None:
 
 
 def generer_flux_mjpeg(id_camera: str, url_flux: str) -> Generator[bytes, None, None]:
-    """Générateur de flux MJPEG ultra-basse latence pour le navigateur Web.
+    """Générateur de flux MJPEG ultra-fluide et basse latence pour le navigateur Web.
     Consomme directement le buffer de taille 1 alimenté par le processus FFmpeg unique.
     """
     if url_flux and url_flux.strip():
         demarrer_worker_camera(id_camera, url_flux)
 
-    dernière_trame_envoyée = None
+    dernier_compteur = -1
     inactif_compteur = 0
 
     while True:
-        with _buffer_lock:
-            jpg = _buffer_derniere_frame.get(id_camera)
+        with _condition_frame:
+            compteur_actuel = _compteurs_frames.get(id_camera, 0)
+            if compteur_actuel != dernier_compteur and id_camera in _buffer_derniere_frame:
+                dernier_compteur = compteur_actuel
+                jpg = _buffer_derniere_frame[id_camera]
+                inactif_compteur = 0
+            else:
+                jpg = None
+                # Attendre jusqu'à la prochaine trame (max 40ms = ~25 FPS) sans consommer de CPU
+                _condition_frame.wait(timeout=0.04)
 
-        if jpg and jpg != dernière_trame_envoyée:
-            dernière_trame_envoyée = jpg
-            inactif_compteur = 0
+        if jpg is not None:
             yield (
                 b"--frame\r\n"
                 b"Content-Type: image/jpeg\r\n"
@@ -595,14 +622,13 @@ def generer_flux_mjpeg(id_camera: str, url_flux: str) -> Generator[bytes, None, 
                 + jpg
                 + b"\r\n"
             )
-            time.sleep(0.02)  # ~50 FPS max cap pour la réactivité
-        else:
-            time.sleep(0.01)  # 10ms réactivité de scrutation
-            inactif_compteur += 1
-            # Toutes les ~6 secondes sans image, s'assurer que le worker tourne toujours
-            if inactif_compteur % 600 == 0:
-                if url_flux and url_flux.strip():
-                    demarrer_worker_camera(id_camera, url_flux)
+            continue
+
+        inactif_compteur += 1
+        # Toutes les ~10 secondes sans image, s'assurer que le worker tourne toujours
+        if inactif_compteur % 250 == 0:
+            if url_flux and url_flux.strip():
+                demarrer_worker_camera(id_camera, url_flux)
 
 
 

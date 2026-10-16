@@ -52,17 +52,20 @@ class PreviaWebHandler(http.server.SimpleHTTPRequestHandler):
             body = self.rfile.read(content_length)
 
         dernier_erreur = None
+        is_stream = "/flux" in self.path or "/stream" in self.path
+        timeout_val = None if is_stream else 30
         for target_url in target_urls:
             try:
                 req = urllib.request.Request(target_url, data=body, headers=headers, method=method)
-                with urllib.request.urlopen(req, context=ssl_ctx, timeout=30) as resp:
+                with urllib.request.urlopen(req, context=ssl_ctx, timeout=timeout_val) as resp:
                     self.send_response(resp.status)
                     for k, v in resp.getheaders():
                         if k.lower() not in ("transfer-encoding", "content-encoding"):
                             self.send_header(k, v)
                     self.end_headers()
+                    chunk_size = 65536 if is_stream else 8192
                     while True:
-                        chunk = resp.read(8192)
+                        chunk = resp.read(chunk_size)
                         if not chunk:
                             break
                         try:

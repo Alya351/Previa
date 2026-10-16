@@ -4481,7 +4481,7 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
                 type="button"
                 onClick={() => setCameraFluxEnDirect(c)}
                 style={{ ...btn, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', padding: '6px 12px', fontSize: '0.78rem' }}
-                title="Voir le flux vidéo continu et tester avec la webcam"
+                title="Voir le flux vidéo continu en direct"
               >
                 👁️ Voir le direct
               </button>
