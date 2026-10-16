@@ -16,14 +16,15 @@ export function CameraViewModal({ camera, onClose }) {
   const [livePersonCount, setLivePersonCount] = useState(isOffline ? 0 : (camera.nombrePersonnes ?? 0));
   const [toast, setToast] = useState(null);
   const [tick, setTick] = useState(0);
-  const streamDirect = useFluxDirect(camera.urlFlux ? null : camera.id);
+  const aUnFluxReseau = Boolean(camera.urlFlux || camera.url_flux);
+  const streamDirect = useFluxDirect(aUnFluxReseau ? null : camera.id);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 2000);
     return () => clearInterval(id);
   }, []);
 
-  const imageUrlRepli = camera.urlFlux
+  const imageUrlRepli = aUnFluxReseau
     ? `${API_BASE}/cameras/${camera.id}/flux`
     : (camera.image?.includes('?') ? `${camera.image}&t=${tick}` : `${camera.image}?t=${tick}`);
 

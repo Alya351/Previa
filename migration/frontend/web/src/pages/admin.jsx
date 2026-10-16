@@ -4356,40 +4356,64 @@ function SectionPieces({ pieces = [], batiments = [], onChange }) {
 function SectionCameras({ cameras = [], pieces = [], onChange }) {
   const [num, setNum] = useState('');
   const [pieceId, setPieceId] = useState('');
-  const [typeCamera, setTypeCamera] = useState('ip'); // 'ip' | 'webcam'
+  const [typeCamera, setTypeCamera] = useState('ip'); // 'ip' | 'telephone' | 'webcam'
   const [ipUrl, setIpUrl] = useState('');
   const [estEntree, setEstEntree] = useState(false);
   const [testConnexionMsg, setTestConnexionMsg] = useState(null);
   const [testEnCours, setTestEnCours] = useState(false);
   const [cameraFluxEnDirect, setCameraFluxEnDirect] = useState(null);
-  const [directLoaded, setDirectLoaded] = useState(false);
   const [err, setErr] = useState('');
 
-  const appliquerPreset = (nomCamera, urlRTSP) => {
-    setTypeCamera('ip');
-    setNum(nomCamera);
-    setIpUrl(urlRTSP);
-    if (!pieceId && (pieces || []).length > 0) {
-      setPieceId(pieces[0].id);
+  // Normalisation intelligente de l'adresse saisie par l'utilisateur
+  const normaliserUrl = (u, type) => {
+    let brut = (u || '').trim();
+    if (!brut) return '';
+    if (type === 'telephone') {
+      // Nettoie si l'utilisateur a collé http:// ou https://
+      brut = brut.replace(/^https?:\/\//i, 'rtsp://');
+      if (!brut.startsWith('rtsp://')) {
+        brut = `rtsp://${brut}`;
+      }
+      // Si c'est un port 8080 typique d'app smartphone sans chemin, ajouter /h264_pcm.sdp
+      if (brut.includes(':8080') && !brut.includes('/', 8)) {
+        brut = `${brut}/h264_pcm.sdp`;
+      }
+    } else if (type === 'ip') {
+      if (!brut.startsWith('rtsp://') && !brut.startsWith('http://') && !brut.startsWith('https://')) {
+        brut = `rtsp://${brut}`;
+      }
     }
+    return brut;
   };
 
   const testerConnexionIp = async () => {
-    if (!ipUrl.trim()) {
-      setTestConnexionMsg({ ok: false, texte: 'Veuillez saisir une adresse IP ou URL de flux RTSP.' });
+    const urlAtester = normaliserUrl(ipUrl, typeCamera);
+    if (!urlAtester) {
+      setTestConnexionMsg({
+        ok: false,
+        texte: typeCamera === 'telephone'
+          ? "Veuillez saisir l'adresse affichée sur l'écran de votre téléphone."
+          : "Veuillez saisir l'adresse de votre caméra de surveillance."
+      });
       return;
     }
     setTestEnCours(true);
-    setTestConnexionMsg({ ok: true, texte: '⏳ Connexion au flux RTSP en cours...' });
+    setTestConnexionMsg({ ok: true, texte: '⏳ Vérification de la caméra en cours...' });
     try {
-      const res = await testerFluxRtsp(ipUrl.trim());
+      const res = await testerFluxRtsp(urlAtester);
       if (res.ok) {
-        setTestConnexionMsg({ ok: true, texte: `✅ Flux RTSP connecté avec succès (${res.taille_image || 'Image'} reçue).` });
+        setTestConnexionMsg({
+          ok: true,
+          texte: `✅ Connexion réussie ! Vidéo reçue en direct (${res.taille_image || 'OK'}). La caméra fonctionne.`
+        });
       } else {
-        setTestConnexionMsg({ ok: false, texte: `❌ Échec connexion : ${res.erreur || 'Flux injoignable'}` });
+        setTestConnexionMsg({
+          ok: false,
+          texte: `❌ Caméra injoignable : ${res.erreur || 'Vérifiez que la caméra/le téléphone est allumé et sur le même Wi-Fi.'}`
+        });
       }
     } catch (e) {
-      setTestConnexionMsg({ ok: false, texte: `❌ Erreur de test : ${e.message}` });
+      setTestConnexionMsg({ ok: false, texte: `❌ Erreur : ${e.message}` });
     } finally {
       setTestEnCours(false);
       setTimeout(() => setTestConnexionMsg(null), 8000);
@@ -4399,12 +4423,19 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
   const creer = async (e) => {
     e.preventDefault(); setErr('');
     try {
+      const urlFinale = typeCamera === 'webcam' ? null : (normaliserUrl(ipUrl, typeCamera) || null);
+      const nomParDefaut = typeCamera === 'telephone'
+        ? `Caméra Smartphone ${cameras.length + 1}`
+        : typeCamera === 'webcam'
+          ? 'Webcam PC'
+          : `Caméra ${cameras.length + 1}`;
+
       await creerCamera({
         idAdmin: idAdmin(),
-        num: num.trim(),
+        num: num.trim() || nomParDefaut,
         pieceId: pieceId || (pieces || [])[0]?.id,
         estEntree,
-        urlFlux: typeCamera === 'ip' ? (ipUrl.trim() || null) : null,
+        urlFlux: urlFinale,
       });
       setNum(''); setIpUrl(''); setEstEntree(false); onChange();
     } catch (e2) { setErr(e2.message); }
@@ -4425,46 +4456,185 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
             Caméras de Surveillance ({(cameras || []).length})
           </h3>
           <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
-            Connectez vos caméras IP de sécurité (RTSP) ou vos téléphones/webcams aux pièces du bâtiment.
+            Ajoutez vos caméras et associez-les aux pièces surveillées du bâtiment.
           </p>
         </div>
       </div>
 
-      <form onSubmit={creer} style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '18px' }}>
+      <form onSubmit={creer} style={{ background: '#f8fafc', padding: '18px', borderRadius: '14px', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '18px' }}>
+        
+        {/* SÉLECTEUR DE TYPE DE CAMÉRA VISUEL ET COMPRÉHENSIBLE */}
+        <div>
+          <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--ink-secondary)', display: 'block', marginBottom: '8px' }}>
+            Quel type d'appareil souhaitez-vous connecter ?
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => { setTypeCamera('ip'); setIpUrl(''); setTestConnexionMsg(null); }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                border: typeCamera === 'ip' ? '2px solid #0284c7' : '1px solid var(--border-light)',
+                background: typeCamera === 'ip' ? '#f0f9ff' : '#ffffff',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span style={{ fontSize: '1.4rem' }}>📹</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '0.86rem', color: typeCamera === 'ip' ? '#0369a1' : 'var(--ink-primary)' }}>
+                  Caméra de surveillance
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--ink-muted)' }}>
+                  Caméra de sécurité (Wi-Fi / Câble)
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setTypeCamera('telephone'); setIpUrl(''); setTestConnexionMsg(null); }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                border: typeCamera === 'telephone' ? '2px solid #0284c7' : '1px solid var(--border-light)',
+                background: typeCamera === 'telephone' ? '#f0f9ff' : '#ffffff',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span style={{ fontSize: '1.4rem' }}>📱</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '0.86rem', color: typeCamera === 'telephone' ? '#0369a1' : 'var(--ink-primary)' }}>
+                  Smartphone comme caméra
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--ink-muted)' }}>
+                  Redmi, iPhone, Android (Wi-Fi)
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setTypeCamera('webcam'); setIpUrl(''); setTestConnexionMsg(null); }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                border: typeCamera === 'webcam' ? '2px solid #0284c7' : '1px solid var(--border-light)',
+                background: typeCamera === 'webcam' ? '#f0f9ff' : '#ffffff',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span style={{ fontSize: '1.4rem' }}>💻</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '0.86rem', color: typeCamera === 'webcam' ? '#0369a1' : 'var(--ink-primary)' }}>
+                  Webcam de cet ordinateur
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--ink-muted)' }}>
+                  Caméra USB ou intégrée au PC
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* GUIDE CONTEXTUEL COMPRÉHENSIBLE */}
+        {typeCamera === 'telephone' && (
+          <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '10px', padding: '10px 14px', fontSize: '0.82rem', color: '#065f46', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+            <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>💡</span>
+            <div>
+              <strong>Comment connecter votre téléphone :</strong> Connectez votre smartphone au même Wi-Fi que cet ordinateur, ouvrez votre application caméra (ex: <em>RTSP Camera</em> ou <em>IP Webcam</em>), puis recopiez l'adresse qui s'affiche sur votre téléphone ci-dessous.
+            </div>
+          </div>
+        )}
+
+        {typeCamera === 'ip' && (
+          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '10px', padding: '10px 14px', fontSize: '0.82rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.1rem' }}>ℹ️</span>
+            <div>
+              <strong>Caméra de sécurité réseau :</strong> Convient pour Hikvision, Dahua, Imou, TP-Link Tapo ou enregistreur NVR connecté à votre réseau local.
+            </div>
+          </div>
+        )}
+
+        {typeCamera === 'webcam' && (
+          <div style={{ background: '#f8fafc', border: '1px solid var(--border-light)', borderRadius: '10px', padding: '10px 14px', fontSize: '0.82rem', color: 'var(--ink-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.1rem' }}>💻</span>
+            <div>
+              <strong>Webcam locale :</strong> La caméra directement branchée à cet ordinateur sera utilisée. Aucune configuration réseau n'est nécessaire.
+            </div>
+          </div>
+        )}
+
+        {/* CHAMPS DE CONFIGURATION */}
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <select style={{ ...champ, fontWeight: 700 }} value={typeCamera} onChange={(e) => setTypeCamera(e.target.value)}>
-            <option value="ip">📹 Caméra IP Réseau (RTSP / ONVIF)</option>
-            <option value="webcam">📱 Téléphone / Webcam Locale</option>
-          </select>
+          <input
+            style={{ ...champ, flex: 1, minWidth: '180px' }}
+            placeholder={typeCamera === 'telephone' ? "Nom (ex: Téléphone Redmi)" : typeCamera === 'webcam' ? "Nom (ex: Webcam Accueil)" : "Nom (ex: Caméra Entrée)"}
+            value={num}
+            onChange={(e) => setNum(e.target.value)}
+            required
+          />
 
-          <input style={{ ...champ, minWidth: '160px' }} placeholder="Nom / Numéro (ex: Caméra 2)" value={num} onChange={(e) => setNum(e.target.value)} required />
-
-          <select style={champ} value={pieceId} onChange={(e) => setPieceId(e.target.value)} required>
+          <select style={{ ...champ, minWidth: '180px' }} value={pieceId} onChange={(e) => setPieceId(e.target.value)} required>
             <option value="">Sélectionner une pièce...</option>
             {(pieces || []).map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
           </select>
 
-          <label style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+          <label style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', userSelect: 'none' }}>
             <input type="checkbox" checked={estEntree} onChange={(e) => setEstEntree(e.target.checked)} /> Point de contrôle d'accès (Entrée)
           </label>
         </div>
 
-        {typeCamera === 'ip' && (
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              style={{ ...champ, flex: 1, minWidth: '280px', fontFamily: 'monospace', fontSize: '0.85rem' }}
-              placeholder="Flux RTSP (ex: rtsp://utilisateur:motdepasse@IP:554/Streaming/Channels/102)"
-              value={ipUrl}
-              onChange={(e) => setIpUrl(e.target.value)}
-            />
-            <button
-              type="button"
-              onClick={testerConnexionIp}
-              disabled={testEnCours}
-              style={{ ...btn, background: '#f1f5f9', color: '#0284c7', border: '1px solid var(--border-light)', minWidth: '130px' }}
-            >
-              {testEnCours ? 'Test en cours...' : 'Tester le flux RTSP'}
-            </button>
+        {/* CHAMP ADRESSE RÉSEAU (POUR CAMÉRA IP OU TÉLÉPHONE) */}
+        {typeCamera !== 'webcam' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                style={{ ...champ, flex: 1, minWidth: '280px', fontFamily: 'monospace', fontSize: '0.85rem' }}
+                placeholder={
+                  typeCamera === 'telephone'
+                    ? "Adresse du téléphone (ex: rtsp://192.168.1.110:8080/h264_pcm.sdp)"
+                    : "Adresse de la caméra (ex: rtsp://admin:motdepasse@192.168.1.50:554/live)"
+                }
+                value={ipUrl}
+                onChange={(e) => setIpUrl(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={testerConnexionIp}
+                disabled={testEnCours}
+                style={{ ...btn, background: '#f1f5f9', color: '#0284c7', border: '1px solid var(--border-light)', minWidth: '150px' }}
+              >
+                {testEnCours ? 'Test en cours...' : typeCamera === 'telephone' ? '🔍 Tester le téléphone' : '🔍 Tester la caméra'}
+              </button>
+            </div>
+            {typeCamera === 'telephone' && (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.74rem', color: 'var(--ink-muted)' }}>
+                <span>Exemples fréquents :</span>
+                <button
+                  type="button"
+                  onClick={() => setIpUrl('rtsp://192.168.1.50:8080/h264_pcm.sdp')}
+                  style={{ background: 'none', border: 'none', color: '#0284c7', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: '0.74rem' }}
+                >
+                  App RTSP Camera (:8080/h264_pcm.sdp)
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -4483,40 +4653,48 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
       {err && <p style={{ color: '#dc2626', fontSize: '0.8rem' }}>{err}</p>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {(cameras || []).map((c) => (
-          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <strong style={{ color: 'var(--ink-primary)', fontSize: '0.92rem' }}>{c.num}</strong>
-              <span style={{ color: 'var(--ink-muted)', fontSize: '0.84rem' }}>· Pièce : {nomPiece(c.piece_id)}</span>
-              {c.est_entree && <span style={{ fontSize: '0.7rem', fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '999px' }}>ENTRÉE PRINCIPALE</span>}
-              {c.url_flux && (
-                <span style={{ fontSize: '0.74rem', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '2px 8px', borderRadius: '6px', fontFamily: 'monospace' }}>
-                  🟢 RTSP : {c.url_flux}
-                </span>
-              )}
+        {(cameras || []).map((c) => {
+          const estTel = Boolean(c.url_flux && (c.url_flux.includes(':8080') || c.url_flux.includes('h264_pcm') || (c.num && /phone|redmi|mobile/i.test(c.num))));
+          return (
+            <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <strong style={{ color: 'var(--ink-primary)', fontSize: '0.92rem' }}>{c.num}</strong>
+                <span style={{ color: 'var(--ink-muted)', fontSize: '0.84rem' }}>· Pièce : {nomPiece(c.piece_id)}</span>
+                {c.est_entree && <span style={{ fontSize: '0.7rem', fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '999px' }}>ENTRÉE PRINCIPALE</span>}
+                {c.url_flux ? (
+                  <span style={{ fontSize: '0.74rem', background: estTel ? '#ecfdf5' : '#f0fdf4', border: `1px solid ${estTel ? '#a7f3d0' : '#bbf7d0'}`, color: estTel ? '#065f46' : '#166534', padding: '2px 8px', borderRadius: '6px', fontFamily: 'monospace' }}>
+                    {estTel ? '📱 Smartphone :' : '📹 Caméra Réseau :'} {c.url_flux}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '0.74rem', background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', padding: '2px 8px', borderRadius: '6px' }}>
+                    💻 Webcam locale du PC
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setCameraFluxEnDirect(c)}
+                  style={{ ...btn, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', padding: '6px 12px', fontSize: '0.78rem' }}
+                  title="Voir le flux vidéo continu en direct"
+                >
+                  👁️ Voir le direct
+                </button>
+                <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer la caméra"><Trash2 size={14} /></button>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={() => setCameraFluxEnDirect(c)}
-                style={{ ...btn, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', padding: '6px 12px', fontSize: '0.78rem' }}
-                title="Voir le flux vidéo continu en direct"
-              >
-                👁️ Voir le direct
-              </button>
-              <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer la caméra"><Trash2 size={14} /></button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Modal / Supervision et test webcam en direct */}
+      {/* Modal / Supervision en direct */}
       {cameraFluxEnDirect && (
         <CameraViewModal
           camera={{
             ...cameraFluxEnDirect,
             name: cameraFluxEnDirect.num || cameraFluxEnDirect.nom || 'Caméra',
             location: nomPiece(cameraFluxEnDirect.piece_id) || 'Bâtiment',
+            urlFlux: cameraFluxEnDirect.url_flux,
           }}
           onClose={() => setCameraFluxEnDirect(null)}
         />
