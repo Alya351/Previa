@@ -937,7 +937,7 @@ def modifier_camera(id_camera: str, demande: DemandeModificationCamera):
 
 @app.post(
     "/cameras/{id_camera}/rotation",
-    dependencies=[Depends(session.exiger_authentification)],
+    dependencies=[Depends(session.exiger_admin)],
     tags=["Caméras"],
     summary="Pivoter une caméra (0°, 90°, 180°, 270°)",
     description="Met à jour l'orientation physique de la caméra, redémarre le worker vidéo et synchronise l'IA.",
