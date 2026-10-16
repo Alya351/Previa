@@ -11,7 +11,8 @@ import {
   Radio,
   Play,
   Pause,
-  RotateCcw
+  RotateCcw,
+  Video
 } from 'lucide-react';
 import { useFluxDirect } from '../lib/useFluxDirect.js';
 import { FluxCamera } from './FluxCamera.jsx';
@@ -166,6 +167,8 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
     return () => clearInterval(intervalId);
   }, [useWebcam, camera.id, camera.name, camera.location]);
 
+  const webcamStreamRef = useRef(null);
+
   // Basculer sur la webcam locale
   const toggleWebcam = async () => {
     if (!useWebcam) {
@@ -174,18 +177,19 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
           video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
           audio: false
         });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
+        webcamStreamRef.current = stream;
         setUseWebcam(true);
         showToast("Flux vidéo de votre webcam connecté en direct.");
       } catch (err) {
         showToast("Impossible d'accéder à la webcam : " + err.message);
       }
     } else {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const tracks = videoRef.current.srcObject.getTracks();
+      if (webcamStreamRef.current) {
+        const tracks = webcamStreamRef.current.getTracks();
         tracks.forEach(track => track.stop());
+        webcamStreamRef.current = null;
+      }
+      if (videoRef.current) {
         videoRef.current.srcObject = null;
       }
       setUseWebcam(false);
@@ -195,9 +199,15 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
   };
 
   useEffect(() => {
+    if (useWebcam && videoRef.current && webcamStreamRef.current) {
+      videoRef.current.srcObject = webcamStreamRef.current;
+    }
+  }, [useWebcam]);
+
+  useEffect(() => {
     return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const tracks = videoRef.current.srcObject.getTracks();
+      if (webcamStreamRef.current) {
+        const tracks = webcamStreamRef.current.getTracks();
         tracks.forEach(track => track.stop());
       }
     };
@@ -317,34 +327,47 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
 
         {/* HUD VIDEO VIEWPORT */}
         <div style={{ position: 'relative', background: '#000000', aspectRatio: '16/9', overflow: 'hidden' }}>
-          <FluxCamera
-            stream={streamDirect}
-            imageRepli={imageUrlRepli}
-            alt={camera.name}
-            detections={liveDetections}
-            onVideoRef={(el) => { fluxVideoRef.current = el; }}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
+          {useWebcam ? (
+            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+              <DetectionOverlay detections={webcamDetections} />
+            </div>
+          ) : (
+            <FluxCamera
+              stream={streamDirect}
+              imageRepli={imageUrlRepli}
+              alt={camera.name}
+              detections={liveDetections}
+              onVideoRef={(el) => { fluxVideoRef.current = el; }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          )}
 
           {/* STREAM OVERLAY */}
           <div style={{ position: 'absolute', top: '14px', left: '16px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ background: isOffline ? 'rgba(239, 68, 68, 0.95)' : 'rgba(2, 132, 199, 0.85)', color: '#ffffff', fontSize: '0.72rem', fontWeight: 800, padding: '3px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isOffline ? '#ef4444' : '#ffffff' }} />
-              {isOffline ? '⚠️ HORS-LIGNE' : 'EN DIRECT'}
+            <span style={{ background: isOffline && !useWebcam ? 'rgba(239, 68, 68, 0.95)' : 'rgba(2, 132, 199, 0.85)', color: '#ffffff', fontSize: '0.72rem', fontWeight: 800, padding: '3px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isOffline && !useWebcam ? '#ef4444' : '#ffffff' }} />
+              {useWebcam ? '📹 WEBCAM PC' : (isOffline ? '⚠️ HORS-LIGNE' : 'EN DIRECT')}
             </span>
             <span style={{ background: 'rgba(9, 17, 36, 0.75)', color: '#ffffff', fontSize: '0.72rem', padding: '3px 8px', borderRadius: '4px', fontWeight: 600 }}>
-              {camera.location}
+              {useWebcam ? 'Webcam locale (Test direct)' : camera.location}
             </span>
           </div>
 
           {/* COMPTEUR EN DIRECT DE PERSONNES DÉTECTÉES */}
-          {!isOffline && (
+          {(!isOffline || useWebcam) && (
             <div
               style={{
                 position: 'absolute',
                 bottom: '54px',
                 right: '16px',
-                background: livePersonCount > 0 ? 'rgba(2, 132, 199, 0.9)' : 'rgba(9, 17, 36, 0.75)',
+                background: (useWebcam ? webcamDetections.length : livePersonCount) > 0 ? 'rgba(2, 132, 199, 0.9)' : 'rgba(9, 17, 36, 0.75)',
                 color: '#ffffff',
                 fontSize: '0.72rem',
                 fontWeight: 700,
@@ -352,7 +375,7 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
                 borderRadius: '6px'
               }}
             >
-              {livePersonCount} personne(s) détectée(s)
+              {useWebcam ? webcamDetections.length : livePersonCount} personne(s) détectée(s)
             </div>
           )}
         </div>
@@ -361,6 +384,28 @@ export function CameraViewModal({ camera, onClose, onSignalAlert }) {
         <div style={{ padding: '14px 20px', background: '#091124', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={toggleWebcam}
+              title={useWebcam ? "Désactiver la webcam et revenir au flux caméra" : "Tester la détection avec la webcam intégrée de ce PC"}
+              style={{
+                background: useWebcam ? 'rgba(16, 185, 129, 0.25)' : 'rgba(2, 132, 199, 0.25)',
+                border: useWebcam ? '1px solid #10b981' : '1px solid #0284c7',
+                color: '#ffffff',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Video size={14} color={useWebcam ? "#10b981" : "#38bdf8"} />
+              <span>{useWebcam ? "Désactiver Webcam" : "Tester avec Webcam"}</span>
+            </button>
+
             <button
               onClick={takeSnapshot}
               style={{

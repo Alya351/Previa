@@ -4,13 +4,13 @@ cd /d "%~dp0migration\backend"
 set "PYTHONPATH=%~dp0migration\backend"
 
 echo ======================================================================
-echo       PREVIA - DEMARRAGE DU BACKEND LOCAL (PORT 8080)
+echo       PREVIA - DEMARRAGE DU BACKEND LOCAL (PORT 8012 HTTPS)
 echo ======================================================================
 echo.
 echo [*] Chargement des fonctionnalites backend PREVIA...
-echo [*] API accessible sur http://localhost:8080 et http://192.168.1.101:8080
+echo [*] API accessible sur https://localhost:8012 et https://127.0.0.1:8012
 echo.
 
-python -m uvicorn fonctionnalites.main.main:app --host 0.0.0.0 --port 8080
+python -m uvicorn fonctionnalites.main.main:app --host 0.0.0.0 --port 8012 --ssl-certfile certs/cert.pem --ssl-keyfile certs/key.pem
 
 pause
