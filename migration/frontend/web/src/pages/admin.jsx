@@ -4128,8 +4128,8 @@ function ReportsView({ alertesReelles = [], kpis = {} }) {
 
   const maintenant = new Date().toLocaleString('fr-FR');
   const reports = [
-    { id: 'rep-01', title: `Rapport d'Activité — ${new Date().toLocaleDateString('fr-FR')}`, size: `${alertesReelles.length} événement(s)`, date: maintenant, type: 'PDF' },
-    { id: 'rep-03', title: 'Export des Alertes (toutes caméras)', size: `${alertesReelles.length} ligne(s)`, date: maintenant, type: 'CSV' },
+    { id: 'rep-01', title: `Rapport d'Activité — ${new Date().toLocaleDateString('fr-FR')}`, date: maintenant, type: 'PDF' },
+    { id: 'rep-03', title: 'Export des Alertes (toutes caméras)', date: maintenant, type: 'CSV' },
   ];
 
   // Rapport PDF : vrai document PDF (via jsPDF, chargé à la demande — voir
@@ -4379,11 +4379,30 @@ function ReportsView({ alertesReelles = [], kpis = {} }) {
           >
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#e0f2fe', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {rep.type === 'PDF' ? <FileText size={22} /> : <FileSpreadsheet size={22} />}
+                <div style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '12px',
+                  background: rep.type === 'PDF' ? '#fee2e2' : '#e0f2fe',
+                  color: rep.type === 'PDF' ? '#dc2626' : '#0284c7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+                }}>
+                  {rep.type === 'PDF' ? <FileText size={22} strokeWidth={2.2} /> : <FileSpreadsheet size={22} strokeWidth={2.2} />}
                 </div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '3px 8px', borderRadius: '4px', background: '#f1f5f9', color: 'var(--ink-secondary)' }}>
-                  {rep.type} ({rep.size})
+                <span style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 800,
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  background: rep.type === 'PDF' ? '#fef2f2' : '#f0fdf4',
+                  color: rep.type === 'PDF' ? '#b91c1c' : '#15803d',
+                  border: `1px solid ${rep.type === 'PDF' ? '#fecaca' : '#bbf7d0'}`,
+                  letterSpacing: '0.04em',
+                }}>
+                  {rep.type}
                 </span>
               </div>
 
@@ -4423,7 +4442,7 @@ function ReportsView({ alertesReelles = [], kpis = {} }) {
               ) : (
                 <>
                   <Download size={16} />
-                  Télécharger le fichier ({rep.type})
+                  Télécharger ({rep.type})
                 </>
               )}
             </button>
