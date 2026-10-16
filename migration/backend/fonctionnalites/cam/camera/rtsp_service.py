@@ -465,13 +465,32 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                             tenter_hw = False
                         time.sleep(5.0)
 
-                # Tentative 2 : Fallback OpenCV cv2.VideoCapture (Compatibilité maximale tous protocoles, Qualité HD 90%)
+                # Tentative 2 : Fallback OpenCV cv2.VideoCapture (uniquement si l'hôte réseau répond)
                 if evt_arret.is_set():
                     break
 
                 try:
-                    cap = cv2.VideoCapture(url_flux.strip())
-                    if cap.isOpened():
+                    import socket
+                    url_test = url_flux.strip()
+                    hote_ok = False
+                    try:
+                        scheme, reste = url_test.split("://", 1)
+                        autorite = reste.split("/", 1)[0]
+                        _, _, hote_port = autorite.rpartition("@")
+                        hote_port = hote_port or autorite
+                        hote = hote_port.split(":", 1)[0]
+                        port = int(hote_port.split(":", 1)[1]) if ":" in hote_port else (554 if scheme.lower() == "rtsp" else 80)
+                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        s.settimeout(0.6)
+                        if s.connect_ex((hote, port)) == 0:
+                            hote_ok = True
+                        s.close()
+                    except Exception:
+                        pass
+
+                    if hote_ok:
+                        cap = cv2.VideoCapture(url_test)
+                        if cap.isOpened():
                         while not evt_arret.is_set():
                             ret, frame = cap.read()
                             if ret and frame is not None:
