@@ -218,6 +218,37 @@ export function urlClipAlerte(idAlerte) {
   return `${API_BASE}/alertes/${idAlerte}/clip`;
 }
 
+/**
+ * Télécharge un fichier binaire (clip vidéo MP4, capture photo) de manière fiable
+ * via un objet Blob en mémoire, évitant les blocages Chrome sur les certificats auto-signés
+ * ("Impossible de télécharger - Problème de réseau").
+ */
+export async function telechargerFichierBlob(url, nomFichier) {
+  const urlAvecParam = url.includes('?') ? `${url}&telecharger=true` : `${url}?telecharger=true`;
+  const reponse = await fetch(urlAvecParam, {
+    headers: entetesAuth(),
+  });
+  if (!reponse.ok) {
+    throw new Error(`Échec du téléchargement (${reponse.status})`);
+  }
+  const blob = await reponse.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = blobUrl;
+  a.download = nomFichier;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    try {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      /* ignorer */
+    }
+  }, 2000);
+}
+
 // Config des ESP32 alarme
 export function listerEsp() {
   return fetchAvecAuth(`${API_BASE}/systeme/esp`).then(jsonOuErreur);

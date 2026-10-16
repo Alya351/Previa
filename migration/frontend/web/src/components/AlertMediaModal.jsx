@@ -1,11 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { X, Camera, Film, Download, Trash2, ShieldAlert, AlertTriangle, Check, ExternalLink } from 'lucide-react';
-import { urlImageAlerte, urlClipAlerte } from '../api.js';
+import { urlImageAlerte, urlClipAlerte, telechargerFichierBlob } from '../api.js';
 
 export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
   const [activeTab, setActiveTab] = useState('photo'); // 'photo' | 'video'
   const [imgError, setImgError] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  const [telechargement, setTelechargement] = useState(false);
+  const [telechargementSucces, setTelechargementSucces] = useState(false);
+
+  const handleTelecharger = async (type) => {
+    try {
+      setTelechargement(true);
+      setTelechargementSucces(false);
+      if (type === 'photo') {
+        await telechargerFichierBlob(imageUrl, `capture_${id}.jpg`);
+      } else {
+        await telechargerFichierBlob(clipUrl, `video_intrusion_${id}.mp4`);
+      }
+      setTelechargementSucces(true);
+      setTimeout(() => setTelechargementSucces(false), 2500);
+    } catch (err) {
+      console.error("Erreur téléchargement média:", err);
+      alert("Impossible de télécharger le fichier. Vérifiez que la preuve a bien été enregistrée sur le serveur.");
+    } finally {
+      setTelechargement(false);
+    }
+  };
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -155,54 +176,60 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
             </button>
           </div>
 
-          {/* LIENS DE TÉLÉCHARGEMENT */}
+          {/* BOUTON DE TÉLÉCHARGEMENT DIRECT & FIABLE (BLOB) */}
           <div style={{ display: 'flex', gap: '8px' }}>
             {activeTab === 'photo' ? (
-              <a
-                href={imageUrl}
-                download={`capture_${id}.jpg`}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => handleTelecharger('photo')}
+                disabled={telechargement || imgError}
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid var(--border-light)',
-                  color: 'var(--ink-secondary)',
+                  background: telechargementSucces ? '#ecfdf5' : '#f8fafc',
+                  border: `1px solid ${telechargementSucces ? '#10b981' : 'var(--border-light)'}`,
+                  color: telechargementSucces ? '#047857' : 'var(--ink-secondary)',
                   padding: '6px 12px',
                   borderRadius: '8px',
                   fontSize: '0.78rem',
                   fontWeight: 600,
-                  textDecoration: 'none',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '5px',
+                  gap: '6px',
+                  cursor: telechargement || imgError ? 'not-allowed' : 'pointer',
+                  opacity: telechargement || imgError ? 0.6 : 1,
+                  transition: 'all 0.15s ease',
                 }}
               >
-                <Download size={13} />
-                <span>Télécharger la photo</span>
-              </a>
+                {telechargementSucces ? <Check size={13} /> : <Download size={13} />}
+                <span>
+                  {telechargement ? 'Téléchargement...' : telechargementSucces ? 'Photo enregistrée !' : 'Télécharger la photo'}
+                </span>
+              </button>
             ) : (
-              <a
-                href={clipUrl}
-                download={`video_intrusion_${id}.mp4`}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => handleTelecharger('video')}
+                disabled={telechargement || videoError}
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid var(--border-light)',
-                  color: 'var(--ink-secondary)',
+                  background: telechargementSucces ? '#ecfdf5' : '#f8fafc',
+                  border: `1px solid ${telechargementSucces ? '#10b981' : 'var(--border-light)'}`,
+                  color: telechargementSucces ? '#047857' : 'var(--ink-secondary)',
                   padding: '6px 12px',
                   borderRadius: '8px',
                   fontSize: '0.78rem',
                   fontWeight: 600,
-                  textDecoration: 'none',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '5px',
+                  gap: '6px',
+                  cursor: telechargement || videoError ? 'not-allowed' : 'pointer',
+                  opacity: telechargement || videoError ? 0.6 : 1,
+                  transition: 'all 0.15s ease',
                 }}
               >
-                <Download size={13} />
-                <span>Télécharger la vidéo</span>
-              </a>
+                {telechargementSucces ? <Check size={13} /> : <Download size={13} />}
+                <span>
+                  {telechargement ? 'Téléchargement...' : telechargementSucces ? 'Vidéo enregistrée !' : 'Télécharger la vidéo'}
+                </span>
+              </button>
             )}
           </div>
         </div>

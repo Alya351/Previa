@@ -38,6 +38,8 @@ def trouver_ffmpeg() -> Optional[str]:
     if dans_path:
         return dans_path
     chemins_connus = [
+        os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links\ffmpeg.exe"),
+        r"C:\Users\alyak\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe",
         r"C:\Users\alyak\.vscode\extensions\kilocode.kilo-code-7.5.15-win32-x64\bin\ffmpeg.exe",
         r"C:\ffmpeg\bin\ffmpeg.exe",
         r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",

@@ -1360,11 +1360,20 @@ def lister_alertes(id_camera: str | None = None, pid: str | None = None):
     ),
     responses={404: {"description": "Aucun instantané enregistré pour cette alerte"}},
 )
-def image_alerte(id_alerte: str):
+def image_alerte(id_alerte: str, telecharger: bool = False):
     contenu = alertes_module.lire_instantane(id_alerte)
     if contenu is None:
         raise HTTPException(404, "Aucun instantané enregistré pour cette alerte.")
-    return Response(content=contenu, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+    disp = "attachment" if telecharger else "inline"
+    return Response(
+        content=contenu,
+        media_type="image/jpeg",
+        headers={
+            "Content-Disposition": f'{disp}; filename="capture_{id_alerte}.jpg"',
+            "Content-Length": str(len(contenu)),
+            "Cache-Control": "public, max-age=31536000, immutable",
+        },
+    )
 
 
 @app.get(
@@ -1374,14 +1383,20 @@ def image_alerte(id_alerte: str):
     description="Extrait vidéo probant capturé automatiquement au déclenchement de l'alerte d'incident.",
     responses={404: {"description": "Aucun clip vidéo disponible pour cette alerte"}},
 )
-def clip_alerte(id_alerte: str):
+def clip_alerte(id_alerte: str, telecharger: bool = False):
     contenu = clips_service.lire_clip(id_alerte)
     if contenu is None:
         raise HTTPException(404, "Aucun clip vidéo enregistré pour cette alerte.")
+    disp = "attachment" if telecharger else "inline"
     return Response(
         content=contenu,
         media_type="video/mp4",
-        headers={"Content-Disposition": f'inline; filename="incident_{id_alerte}.mp4"'}
+        headers={
+            "Content-Disposition": f'{disp}; filename="incident_{id_alerte}.mp4"',
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(len(contenu)),
+            "Cache-Control": "public, max-age=3600",
+        },
     )
 
 

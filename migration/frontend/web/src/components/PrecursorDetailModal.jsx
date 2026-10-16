@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Package, Eye, ShieldAlert, CheckCircle, AlertTriangle, Download, ShieldCheck, Volume2, Lightbulb, Users, Check, Video, Film } from 'lucide-react';
-import { urlClipAlerte } from '../api.js';
+import { urlClipAlerte, telechargerFichierBlob } from '../api.js';
 
 // `situation` : construit par le parent (DashboardView) à partir d'une
 // vraie cible (personne ou objet, voir mappageCibles.js) — remplace les
@@ -11,6 +11,8 @@ export function PrecursorDetailModal({ situation, onClose, onActionConfirmed }) 
   const [activeAction, setActiveAction] = useState(null);
   const [actionDone, setActionDone] = useState(null);
   const [afficherVideo, setAfficherVideo] = useState(false);
+  const [telechargement, setTelechargement] = useState(false);
+  const [telechargementSucces, setTelechargementSucces] = useState(false);
 
   // Fermeture accessible avec la touche Echap
   React.useEffect(() => {
@@ -27,6 +29,22 @@ export function PrecursorDetailModal({ situation, onClose, onActionConfirmed }) 
   if (!current) return null;
 
   const clipUrl = current.idAlerte ? urlClipAlerte(current.idAlerte) : null;
+
+  const handleTelechargerClip = async () => {
+    if (!clipUrl) return;
+    try {
+      setTelechargement(true);
+      setTelechargementSucces(false);
+      await telechargerFichierBlob(clipUrl, `preuve_alerte_${current.idAlerte || 'incident'}.mp4`);
+      setTelechargementSucces(true);
+      setTimeout(() => setTelechargementSucces(false), 2500);
+    } catch (err) {
+      console.error("Erreur téléchargement clip:", err);
+      alert("Impossible de télécharger le clip vidéo.");
+    } finally {
+      setTelechargement(false);
+    }
+  };
 
   const handleConfirmAction = (actionName) => {
     setActionDone(actionName);
@@ -188,28 +206,29 @@ export function PrecursorDetailModal({ situation, onClose, onActionConfirmed }) 
         {/* ACTION BUTTONS */}
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', alignItems: 'center' }}>
           {clipUrl && (
-            <a
-              href={clipUrl}
-              download={`preuve_alerte_${current.idAlerte || 'incident'}.mp4`}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={handleTelechargerClip}
+              disabled={telechargement}
               style={{
-                background: '#f1f5f9',
-                color: '#334155',
-                border: '1px solid #cbd5e1',
+                background: telechargementSucces ? '#ecfdf5' : '#f1f5f9',
+                color: telechargementSucces ? '#047857' : '#334155',
+                border: `1px solid ${telechargementSucces ? '#10b981' : '#cbd5e1'}`,
                 padding: '10px 16px',
                 borderRadius: '8px',
                 fontSize: '0.85rem',
                 fontWeight: 600,
-                textDecoration: 'none',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                gap: '6px',
+                cursor: telechargement ? 'not-allowed' : 'pointer',
+                opacity: telechargement ? 0.7 : 1,
+                transition: 'all 0.15s ease'
               }}
             >
-              <Download size={15} />
-              <span>Télécharger la preuve MP4</span>
-            </a>
+              {telechargementSucces ? <Check size={15} /> : <Download size={15} />}
+              <span>{telechargement ? 'Téléchargement...' : telechargementSucces ? 'Preuve enregistrée !' : 'Télécharger la preuve MP4'}</span>
+            </button>
           )}
 
           <button
