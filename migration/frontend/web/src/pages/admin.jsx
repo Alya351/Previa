@@ -903,6 +903,142 @@ function heureLocale(horodatage) {
 // ============================================================================
 // SECTION : CAMÉRAS (SUPERVISION ÉPURÉE, MULTI-VUES ET ZONES DE SÉCURITÉ)
 // ============================================================================
+function TuileCameraMosaic({ cam, personnes = [], onFocus, onFullscreen }) {
+  const streamDirectTuile = useFluxDirect(cam.urlFlux ? null : cam.id);
+  const detectionsTuile = personnes.filter((p) => String(p.camCtx?.id_camera || '') === String(cam.id));
+
+  return (
+    <div
+      style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '18px',
+        padding: '14px',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-card)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        transition: 'transform 0.15s ease',
+      }}
+    >
+      <div
+        onClick={onFocus}
+        style={{
+          position: 'relative',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          backgroundColor: '#05070d',
+          aspectRatio: '16/9',
+          cursor: 'pointer',
+        }}
+        title="Cliquer pour passer en vue focus"
+      >
+        <FluxCamera
+          stream={streamDirectTuile}
+          imageRepli={cam.image}
+          alt={cam.name}
+          detections={detectionsTuile}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            filter: cam.isOffline ? 'grayscale(100%) opacity(0.5)' : 'none',
+          }}
+        />
+
+        {/* BADGE LIVE */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 10,
+            left: 10,
+            backgroundColor: cam.isOffline ? '#ef4444' : '#0284c7',
+            color: '#ffffff',
+            fontSize: '0.68rem',
+            fontWeight: 800,
+            padding: '3px 8px',
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            zIndex: 10,
+          }}
+        >
+          {!cam.isOffline && <span className="live-dot-pulse" />}
+          <span>{cam.isOffline ? 'HORS-LIGNE' : 'LIVE'}</span>
+        </div>
+
+        {/* COMPTEUR DE PERSONNES */}
+        {detectionsTuile.length > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              backgroundColor: 'rgba(15, 23, 42, 0.8)',
+              color: '#bae6fd',
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              padding: '3px 8px',
+              borderRadius: '6px',
+              zIndex: 10,
+            }}
+          >
+            👤 {detectionsTuile.length}
+          </div>
+        )}
+      </div>
+
+      {/* PIED DE CARTE */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--ink-primary)' }}>
+            {cam.name}
+          </div>
+          <div style={{ fontSize: '0.76rem', color: 'var(--ink-muted)' }}>
+            {cam.location} · {cam.frameAge}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button
+            type="button"
+            onClick={onFocus}
+            style={{
+              backgroundColor: '#f0f9ff',
+              border: '1px solid #bae6fd',
+              color: '#0284c7',
+              padding: '5px 10px',
+              borderRadius: '8px',
+              fontSize: '0.76rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Focus
+          </button>
+
+          <button
+            type="button"
+            onClick={onFullscreen}
+            style={{
+              backgroundColor: '#f8fafc',
+              border: '1px solid var(--border-light)',
+              color: 'var(--ink-secondary)',
+              padding: '5px 8px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+            }}
+            title="Plein écran"
+          >
+            <Maximize2 size={13} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, onSelectTab }) {
   const [selectedCam, setSelectedCam] = useState(() => {
     return localStorage.getItem('previa_selected_camera') || null;
@@ -921,9 +1057,17 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
 
   useEffect(() => {
     const saved = localStorage.getItem('previa_selected_camera');
-    if (saved && cameras.some((c) => String(c.id) === String(saved))) {
+    const camSauvee = saved ? cameras.find((c) => String(c.id) === String(saved)) : null;
+    const camRtsp = cameras.find((c) => c.urlFlux);
+
+    if (camSauvee && (camSauvee.urlFlux || !camRtsp)) {
       if (String(selectedCam) !== String(saved)) setSelectedCam(saved);
-    } else if ((!selectedCam || !cameras.some((c) => String(c.id) === String(selectedCam))) && cameras.length > 0) {
+    } else if (camRtsp) {
+      if (String(selectedCam) !== String(camRtsp.id)) {
+        setSelectedCam(camRtsp.id);
+        localStorage.setItem('previa_selected_camera', camRtsp.id);
+      }
+    } else if (cameras.length > 0 && (!selectedCam || !cameras.some((c) => String(c.id) === String(selectedCam)))) {
       setSelectedCam(cameras[0].id);
       localStorage.setItem('previa_selected_camera', cameras[0].id);
     }
@@ -1588,148 +1732,18 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               gap: '18px',
             }}
           >
-            {camerasEtat.map((cam) => {
-              const streamDirectTuile = useFluxDirect(cam.urlFlux ? null : cam.id);
-              const detectionsTuile = personnes.filter((p) => String(p.camCtx?.id_camera || '') === String(cam.id));
-
-              return (
-                <div
-                  key={cam.id}
-                  style={{
-                    backgroundColor: '#ffffff',
-                    borderRadius: '18px',
-                    padding: '14px',
-                    border: '1px solid var(--border-subtle)',
-                    boxShadow: 'var(--shadow-card)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px',
-                    transition: 'transform 0.15s ease',
-                  }}
-                >
-                  <div
-                    onClick={() => {
-                      setSelectedCam(cam.id);
-                      setSubTab('hero');
-                    }}
-                    style={{
-                      position: 'relative',
-                      borderRadius: '12px',
-                      overflow: 'hidden',
-                      backgroundColor: '#05070d',
-                      aspectRatio: '16/9',
-                      cursor: 'pointer',
-                    }}
-                    title="Cliquer pour passer en vue focus"
-                  >
-                    <FluxCamera
-                      stream={streamDirectTuile}
-                      imageRepli={cam.image}
-                      alt={cam.name}
-                      detections={detectionsTuile}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        filter: cam.isOffline ? 'grayscale(100%) opacity(0.5)' : 'none',
-                      }}
-                    />
-
-                    {/* BADGE LIVE */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 10,
-                        left: 10,
-                        backgroundColor: cam.isOffline ? '#ef4444' : '#0284c7',
-                        color: '#ffffff',
-                        fontSize: '0.68rem',
-                        fontWeight: 800,
-                        padding: '3px 8px',
-                        borderRadius: '6px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        zIndex: 10,
-                      }}
-                    >
-                      {!cam.isOffline && <span className="live-dot-pulse" />}
-                      <span>{cam.isOffline ? 'HORS-LIGNE' : 'LIVE'}</span>
-                    </div>
-
-                    {/* COMPTEUR DE PERSONNES */}
-                    {detectionsTuile.length > 0 && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: 10,
-                          right: 10,
-                          backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                          color: '#bae6fd',
-                          fontSize: '0.7rem',
-                          fontWeight: 700,
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          zIndex: 10,
-                        }}
-                      >
-                        👤 {detectionsTuile.length}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* PIED DE CARTE */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--ink-primary)' }}>
-                        {cam.name}
-                      </div>
-                      <div style={{ fontSize: '0.76rem', color: 'var(--ink-muted)' }}>
-                        {cam.location} · {cam.frameAge}
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCam(cam.id);
-                          setSubTab('hero');
-                        }}
-                        style={{
-                          backgroundColor: '#f0f9ff',
-                          border: '1px solid #bae6fd',
-                          color: '#0284c7',
-                          padding: '5px 10px',
-                          borderRadius: '8px',
-                          fontSize: '0.76rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Focus
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setFullscreenModalCam(cam)}
-                        style={{
-                          backgroundColor: '#f8fafc',
-                          border: '1px solid var(--border-light)',
-                          color: 'var(--ink-secondary)',
-                          padding: '5px 8px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                        }}
-                        title="Plein écran"
-                      >
-                        <Maximize2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {camerasEtat.map((cam) => (
+              <TuileCameraMosaic
+                key={cam.id}
+                cam={cam}
+                personnes={personnes}
+                onFocus={() => {
+                  setSelectedCam(cam.id);
+                  setSubTab('hero');
+                }}
+                onFullscreen={() => setFullscreenModalCam(cam)}
+              />
+            ))}
           </div>
         </div>
       )}

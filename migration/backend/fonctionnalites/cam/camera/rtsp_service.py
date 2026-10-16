@@ -592,6 +592,34 @@ def redemarrer_worker_camera(id_camera: str) -> None:
         print(f"[rtsp_service] Erreur redemarrage worker {id_camera}: {exc}", flush=True)
 
 
+_cache_frame_attente: dict[str, bytes] = {}
+
+
+def _generer_frame_attente(id_camera: str, nom_camera: str = "Caméra IP") -> bytes:
+    """Génère une trame visuelle HD 720p informative lorsque la caméra est en cours de connexion."""
+    if id_camera in _cache_frame_attente:
+        return _cache_frame_attente[id_camera]
+    try:
+        import numpy as np
+        import cv2
+        img = np.zeros((720, 1280, 3), dtype=np.uint8)
+        img[:] = (36, 17, 9)  # Fond sombre PREVIA (#091124)
+        cv2.rectangle(img, (0, 0), (1280, 8), (248, 189, 56), -1)
+        cv2.putText(img, "PREVIA - SURVEILLANCE HD", (380, 260), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(img, f"EN ATTENTE DU SIGNAL : {nom_camera.upper()}", (300, 330), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (248, 189, 56), 2, cv2.LINE_AA)
+        cv2.putText(img, "1. Verifiez que l'application IP Webcam est ouverte sur le telephone", (250, 410), cv2.FONT_HERSHEY_SIMPLEX, 0.72, (220, 220, 220), 1, cv2.LINE_AA)
+        cv2.putText(img, "2. Appuyez sur 'Start server' tout en bas dans l'application", (250, 455), cv2.FONT_HERSHEY_SIMPLEX, 0.72, (220, 220, 220), 1, cv2.LINE_AA)
+        cv2.putText(img, "3. Laissez l'ecran du telephone allume sur la vue camera", (250, 500), cv2.FONT_HERSHEY_SIMPLEX, 0.72, (180, 180, 180), 1, cv2.LINE_AA)
+        ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        if ok:
+            res = buf.tobytes()
+            _cache_frame_attente[id_camera] = res
+            return res
+    except Exception:
+        pass
+    return b""
+
+
 def generer_flux_mjpeg(id_camera: str, url_flux: str) -> Generator[bytes, None, None]:
     """Générateur de flux MJPEG ultra-fluide et basse latence pour le navigateur Web.
     Consomme directement le buffer de taille 1 alimenté par le processus FFmpeg unique.
@@ -601,6 +629,31 @@ def generer_flux_mjpeg(id_camera: str, url_flux: str) -> Generator[bytes, None, 
 
     dernier_compteur = -1
     inactif_compteur = 0
+
+    # Résolution du nom de la caméra pour le message d'attente
+    nom_cam = "Caméra"
+    try:
+        from fonctionnalites.cam.camera import camera as _c_reg
+        c_obj = _c_reg.trouver_par_id(id_camera)
+        if c_obj:
+            nom_cam = c_obj.get("num") or nom_cam
+    except Exception:
+        pass
+
+    # Si aucune trame n'est disponible au premier affichage, envoyer immédiatement la trame d'attente
+    with _condition_frame:
+        a_deja_frame = id_camera in _buffer_derniere_frame
+    if not a_deja_frame:
+        sauv = derniere_image.lire(id_camera)
+        frame_debut = sauv if sauv else _generer_frame_attente(id_camera, nom_cam)
+        if frame_debut:
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n"
+                b"Content-Length: " + str(len(frame_debut)).encode() + b"\r\n\r\n"
+                + frame_debut
+                + b"\r\n"
+            )
 
     while True:
         with _condition_frame:
@@ -625,10 +678,22 @@ def generer_flux_mjpeg(id_camera: str, url_flux: str) -> Generator[bytes, None, 
             continue
 
         inactif_compteur += 1
-        # Toutes les ~10 secondes sans image, s'assurer que le worker tourne toujours
+        # Toutes les ~10 secondes sans image, renvoyer la trame d'attente et vérifier le worker
         if inactif_compteur % 250 == 0:
             if url_flux and url_flux.strip():
                 demarrer_worker_camera(id_camera, url_flux)
+            with _condition_frame:
+                a_frame = id_camera in _buffer_derniere_frame
+            if not a_frame:
+                frame_attente = _generer_frame_attente(id_camera, nom_cam)
+                if frame_attente:
+                    yield (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n"
+                        b"Content-Length: " + str(len(frame_attente)).encode() + b"\r\n\r\n"
+                        + frame_attente
+                        + b"\r\n"
+                    )
 
 
 

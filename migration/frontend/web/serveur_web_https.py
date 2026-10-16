@@ -64,8 +64,9 @@ class PreviaWebHandler(http.server.SimpleHTTPRequestHandler):
                             self.send_header(k, v)
                     self.end_headers()
                     chunk_size = 65536 if is_stream else 8192
+                    read_fn = resp.read1 if hasattr(resp, "read1") else resp.read
                     while True:
-                        chunk = resp.read(chunk_size)
+                        chunk = read_fn(chunk_size)
                         if not chunk:
                             break
                         try:
