@@ -2246,9 +2246,9 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   type="button"
                   onClick={handleDownloadSnapshot}
                   style={{
-                    backgroundColor: '#f8fafc',
-                    border: '1px solid var(--border-light)',
-                    color: 'var(--ink-secondary)',
+                    backgroundColor: '#ffffff',
+                    border: '1.5px solid #cbd5e1',
+                    color: '#0f172a',
                     padding: '8px 14px',
                     borderRadius: '10px',
                     fontSize: '0.82rem',
@@ -2257,12 +2257,13 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
                     transition: 'all 0.15s ease',
                   }}
-                  title="Télécharger une capture instantanée"
+                  title="Télécharger une photo instantanée du flux en direct (cliché JPEG)"
                 >
-                  <Download size={14} />
-                  <span>Snapshot</span>
+                  <Camera size={14} color="#0284c7" strokeWidth={2.4} />
+                  <span>Capture d'écran</span>
                 </button>
 
                 <button
