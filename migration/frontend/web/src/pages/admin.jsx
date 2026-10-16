@@ -468,8 +468,10 @@ function SectionZones({ cameras, initialCameraId }) {
       setNomZone(data.nom_zone || savedName);
       setEstModifie(false);
       setMessage({ ok: true, texte: 'Zone & plage horaire enregistrées avec succès.' });
+      setTimeout(() => setMessage(null), 3500);
     } catch (e) {
       setMessage({ ok: false, texte: e.message });
+      setTimeout(() => setMessage(null), 5000);
     } finally {
       setEnregistrement(false);
     }
@@ -481,8 +483,10 @@ function SectionZones({ cameras, initialCameraId }) {
       await supprimerZoneCamera(idCamera);
       setZoneExistante(null); setPoints([]); setNomZone(''); setEstModifie(false);
       setMessage({ ok: true, texte: 'Zone supprimée.' });
+      setTimeout(() => setMessage(null), 3500);
     } catch (e) {
       setMessage({ ok: false, texte: e.message });
+      setTimeout(() => setMessage(null), 5000);
     } finally {
       setEnregistrement(false);
     }
@@ -1024,72 +1028,245 @@ function SectionZones({ cameras, initialCameraId }) {
               fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'space-between',
               gap: '8px',
             }}>
-              {message.ok ? <CheckCircle2 size={16} color="#059669" /> : <AlertTriangle size={16} color="#dc2626" />}
-              <span>{message.texte}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {message.ok ? <CheckCircle2 size={16} color="#059669" /> : <AlertTriangle size={16} color="#dc2626" />}
+                <span>{message.texte}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMessage(null)}
+                style={{ background: 'transparent', border: 'none', color: message.ok ? '#047857' : '#b91c1c', cursor: 'pointer', padding: '0 4px', display: 'flex', alignItems: 'center' }}
+              >
+                <X size={14} />
+              </button>
             </div>
           )}
 
-          {/* Unified Action Card: Progress, Guidance & Save */}
-          <div style={{
-            background: '#ffffff',
-            border: points.length >= 3 ? '1.5px solid #0284c7' : '1px solid #e2e8f0',
-            borderRadius: '16px',
-            padding: '18px 20px',
-            boxShadow: points.length >= 3 ? '0 4px 18px rgba(2, 132, 199, 0.1)' : '0 2px 10px rgba(0, 0, 0, 0.02)',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '14px',
-          }}>
-            {/* Step header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                <div style={{
-                  width: '28px', height: '28px', borderRadius: '8px',
-                  background: points.length >= 3 ? '#ecfdf5' : '#e0f2fe',
-                  color: points.length >= 3 ? '#059669' : '#0284c7',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {points.length >= 3 ? <CheckCircle2 size={16} /> : <Target size={16} />}
+          {/* Unified Action Card: Distinct States (Active vs Modified vs Drawing) */}
+          {zoneExistante && !estModifie ? (
+            /* STATE A : ZONE SAVED & ACTIVE (Clean, reassuring, zero redundant boxes) */
+            <div style={{
+              background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)',
+              border: '1.5px solid #a7f3d0',
+              borderRadius: '16px',
+              padding: '20px',
+              boxShadow: '0 4px 16px rgba(16, 185, 129, 0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '36px', height: '36px', borderRadius: '10px',
+                    background: '#dcfce7', color: '#059669',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    boxShadow: '0 2px 6px rgba(16, 185, 129, 0.2)'
+                  }}>
+                    <ShieldCheck size={20} strokeWidth={2.4} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#065f46' }}>
+                      Zone active & surveillée
+                    </div>
+                    <div style={{ fontSize: '0.73rem', color: '#047857', marginTop: '1px' }}>
+                      {nomZone ? nomZone : 'Zone sans nom'} · {points.length} points enregistrés
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#0f172a' }}>
-                    {points.length >= 3 ? 'Périmètre tracé avec succès' : 'Délimitation de la zone'}
-                  </div>
-                  <div style={{ fontSize: '0.71rem', color: '#64748b' }}>
-                    {points.length >= 3 ? `${points.length} points enregistrés sur l'image` : `${points.length}/3 points minimaux requis`}
-                  </div>
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '4px 10px', borderRadius: '20px',
+                  background: '#dcfce7', color: '#047857',
+                  fontSize: '0.72rem', fontWeight: 800
+                }}>
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
+                  <span>Opérationnel</span>
                 </div>
               </div>
 
-              {/* Visual step pills */}
-              <div style={{ display: 'flex', gap: '4px' }}>
-                {[0, 1, 2].map((s) => (
-                  <div
-                    key={s}
-                    style={{
-                      width: '16px',
-                      height: '6px',
-                      borderRadius: '3px',
-                      background: points.length > s ? '#0284c7' : '#e2e8f0',
-                      transition: 'all 0.2s ease',
-                    }}
-                  />
-                ))}
+              <div style={{ fontSize: '0.75rem', color: '#047857', background: 'rgba(255,255,255,0.7)', padding: '10px 12px', borderRadius: '10px', border: '1px solid #bbf7d0', lineHeight: 1.45 }}>
+                🛡️ Cette zone est synchronisée avec l'IA en temps réel. Pour ajuster son périmètre ou ses plages horaires, modifiez les contrôles ci-dessus ou cliquez sur l'image.
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={supprimer}
+                  disabled={enregistrement}
+                  style={{
+                    flex: 1,
+                    background: '#ffffff',
+                    border: '1px solid #fecaca',
+                    color: '#dc2626',
+                    padding: '9px 14px',
+                    borderRadius: '9px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <Trash2 size={13} />
+                  <span>Supprimer cette zone</span>
+                </button>
               </div>
             </div>
+          ) : points.length >= 3 ? (
+            /* STATE B : MODIFICATIONS PENDING / READY TO SAVE */
+            <div style={{
+              background: '#ffffff',
+              border: '1.5px solid #0284c7',
+              borderRadius: '16px',
+              padding: '20px',
+              boxShadow: '0 4px 18px rgba(2, 132, 199, 0.12)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '36px', height: '36px', borderRadius: '10px',
+                    background: '#e0f2fe', color: '#0284c7',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                  }}>
+                    <CheckCircle2 size={19} strokeWidth={2.4} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a' }}>
+                      {zoneExistante ? 'Modifications prêtes' : 'Nouveau périmètre complet'}
+                    </div>
+                    <div style={{ fontSize: '0.73rem', color: '#64748b' }}>
+                      {points.length} points tracés sur la caméra
+                    </div>
+                  </div>
+                </div>
+                <div style={{
+                  fontSize: '0.72rem', fontWeight: 800,
+                  background: '#fef3c7', color: '#92400e',
+                  padding: '4px 10px', borderRadius: '20px'
+                }}>
+                  Non enregistré
+                </div>
+              </div>
 
-            {/* Guidance message */}
-            {points.length < 3 ? (
+              <div style={{ fontSize: '0.75rem', color: '#334155', background: '#f8fafc', padding: '9px 12px', borderRadius: '10px', border: '1px solid #e2e8f0', lineHeight: 1.4 }}>
+                Cliquez sur le bouton ci-dessous pour valider et synchroniser immédiatement la zone et ses horaires sur l'analyse IA.
+              </div>
+
+              <button
+                type="button"
+                onClick={enregistrer}
+                disabled={enregistrement}
+                style={{
+                  width: '100%',
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '12px 18px',
+                  borderRadius: '10px',
+                  fontSize: '0.86rem',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {enregistrement ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                <span>{zoneExistante ? 'Enregistrer les modifications' : 'Enregistrer la zone & les plages horaires'}</span>
+              </button>
+
+              {zoneExistante && (
+                <button
+                  type="button"
+                  onClick={supprimer}
+                  disabled={enregistrement}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    padding: '6px',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Trash2 size={13} />
+                  <span>Supprimer la zone enregistrée</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            /* STATE C : DRAFTING / POINTS < 3 REQUIRED */
+            <div style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '16px',
+              padding: '20px',
+              boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '36px', height: '36px', borderRadius: '10px',
+                    background: '#f1f5f9', color: '#64748b',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                  }}>
+                    <Target size={19} strokeWidth={2.4} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a' }}>
+                      Tracé de la zone requis
+                    </div>
+                    <div style={{ fontSize: '0.73rem', color: '#64748b' }}>
+                      {points.length}/3 points minimaux tracés
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step dots */}
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[0, 1, 2].map((s) => (
+                    <div
+                      key={s}
+                      style={{
+                        width: '16px',
+                        height: '6px',
+                        borderRadius: '3px',
+                        background: points.length > s ? '#0284c7' : '#e2e8f0',
+                        transition: 'all 0.2s ease',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
               <div style={{
-                fontSize: '0.74rem',
+                fontSize: '0.75rem',
                 color: '#0369a1',
                 background: '#f0f9ff',
                 border: '1px solid #bae6fd',
                 padding: '9px 12px',
-                borderRadius: '9px',
+                borderRadius: '10px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '9px',
@@ -1099,81 +1276,35 @@ function SectionZones({ cameras, initialCameraId }) {
                 <span>
                   {points.length === 0
                     ? 'Cliquez directement sur l\'aperçu vidéo à gauche pour tracer les contours de la zone.'
-                    : `Ajoutez encore ${3 - points.length} point${3 - points.length > 1 ? 's' : ''} sur l'image pour pouvoir enregistrer.`
+                    : `Ajoutez encore ${3 - points.length} point${3 - points.length > 1 ? 's' : ''} sur l'image pour valider.`
                   }
                 </span>
               </div>
-            ) : (
-              <div style={{
-                fontSize: '0.74rem',
-                color: '#065f46',
-                background: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                padding: '9px 12px',
-                borderRadius: '9px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}>
-                <Check size={15} color="#16a34a" />
-                <span>Zone complète. Vous pouvez maintenant enregistrer la configuration.</span>
-              </div>
-            )}
 
-            {/* Save Button */}
-            {zoneExistante && !estModifie ? (
-              <div style={{
-                background: '#ecfdf5',
-                border: '1px solid #a7f3d0',
-                color: '#065f46',
-                padding: '11px 16px',
-                borderRadius: '10px',
-                fontSize: '0.84rem',
-                fontWeight: 800,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                justifyContent: 'center',
-              }}>
-                <CheckCircle2 size={16} color="#10b981" />
-                <span>Zone active & enregistrée</span>
-              </div>
-            ) : (
               <button
                 type="button"
-                onClick={enregistrer}
-                disabled={enregistrement || points.length < 3}
+                disabled
                 style={{
                   width: '100%',
-                  background: (enregistrement || points.length < 3)
-                    ? '#f1f5f9'
-                    : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                  border: (enregistrement || points.length < 3) ? '1px solid #e2e8f0' : 'none',
-                  color: (enregistrement || points.length < 3) ? '#94a3b8' : '#ffffff',
-                  padding: '12px 18px',
+                  background: '#f1f5f9',
+                  border: '1px solid #e2e8f0',
+                  color: '#94a3b8',
+                  padding: '11px 18px',
                   borderRadius: '10px',
-                  fontSize: '0.86rem',
-                  fontWeight: 800,
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
-                  boxShadow: (enregistrement || points.length < 3) ? 'none' : '0 4px 14px rgba(2, 132, 199, 0.35)',
-                  cursor: (enregistrement || points.length < 3) ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s ease',
+                  cursor: 'not-allowed',
                 }}
               >
-                {enregistrement ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                <span>{zoneExistante ? 'Enregistrer les modifications' : 'Enregistrer la zone & les horaires'}</span>
+                <Save size={15} color="#94a3b8" />
+                <span>Enregistrer ({3 - points.length} point{3 - points.length > 1 ? 's' : ''} requis)</span>
               </button>
-            )}
-
-            {zoneExistante && (
-              <button onClick={supprimer} disabled={enregistrement} style={btnSecondaire}>
-                <Trash2 size={14} /> Supprimer la zone enregistrée
-              </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
