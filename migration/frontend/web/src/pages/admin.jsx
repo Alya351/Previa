@@ -528,18 +528,10 @@ function SectionZones({ cameras, initialCameraId }) {
         borderBottom: '1px solid #f1f5f9'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '40px', height: '40px', borderRadius: '12px',
-            background: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)',
-            color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            boxShadow: '0 2px 8px rgba(2, 132, 199, 0.15)'
-          }}>
-            <MapPin size={22} strokeWidth={2.4} />
-          </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <h3 style={{ fontSize: '1.12rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                Zones Sensibles & Périmètres IA
+                Zones Sensibles
               </h3>
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '20px',
@@ -1740,11 +1732,11 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
             Supervision des <span>Caméras</span>
           </h1>
           <p className="welcome-sub" style={{ fontSize: '0.88rem', color: 'var(--ink-muted)', marginTop: '4px', marginBottom: 0 }}>
-            Flux vidéo temps réel, cadrage IA et délimitation de zones sensibles
+            Flux vidéo en direct, multi-vues et délimitation de zones sensibles
           </p>
         </div>
 
-        {/* COMMUTATEUR DE MODE DE VUE (SEGMENTED PILL) 100% VISIBLE & DÉGAGÉ DE LA VAGUE */}
+        {/* COMMUTATEUR DE MODE DE VUE (SEGMENTED PILL ÉPURÉ SANS ICÔNES SUPERFLUES) */}
         <div
           style={{
             position: 'relative',
@@ -1753,8 +1745,8 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
             alignItems: 'center',
             gap: '4px',
             backgroundColor: '#ffffff',
-            padding: '5px',
-            borderRadius: '14px',
+            padding: '4px',
+            borderRadius: '12px',
             border: '1px solid var(--border-light)',
             boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
             marginTop: '14px',
@@ -1766,11 +1758,8 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
             type="button"
             onClick={() => setSubTab('hero')}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '10px',
+              padding: '8px 18px',
+              borderRadius: '9px',
               border: 'none',
               backgroundColor: subTab === 'hero' ? '#0284c7' : 'transparent',
               color: subTab === 'hero' ? '#ffffff' : 'var(--ink-secondary)',
@@ -1782,19 +1771,15 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               boxShadow: subTab === 'hero' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
           >
-            <Camera size={15} />
-            <span>Focus Caméra</span>
+            Focus Caméra
           </button>
 
           <button
             type="button"
             onClick={() => setSubTab('mosaic')}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '10px',
+              padding: '8px 18px',
+              borderRadius: '9px',
               border: 'none',
               backgroundColor: subTab === 'mosaic' ? '#0284c7' : 'transparent',
               color: subTab === 'mosaic' ? '#ffffff' : 'var(--ink-secondary)',
@@ -1806,19 +1791,15 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               boxShadow: subTab === 'mosaic' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
           >
-            <LayoutGrid size={15} />
-            <span>Mosaïque Multi-Vues ({camerasEtat.length})</span>
+            Mosaïque Multi-Vues ({camerasEtat.length})
           </button>
 
           <button
             type="button"
             onClick={() => setSubTab('zones')}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '10px',
+              padding: '8px 18px',
+              borderRadius: '9px',
               border: 'none',
               backgroundColor: subTab === 'zones' ? '#0284c7' : 'transparent',
               color: subTab === 'zones' ? '#ffffff' : 'var(--ink-secondary)',
@@ -1830,8 +1811,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               boxShadow: subTab === 'zones' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
           >
-            <Shield size={15} />
-            <span>Zones Sensibles</span>
+            Zones Sensibles
           </button>
         </div>
       </div>
@@ -2487,7 +2467,6 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   }}
                   title="Délimiter une zone non autorisée sur cette caméra"
                 >
-                  <Shield size={14} color="#0284c7" />
                   <span>Zones Sensibles</span>
                 </button>
 
