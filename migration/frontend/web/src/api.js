@@ -136,6 +136,11 @@ export function urlFluxCamera(idCamera) {
   return `${API_BASE}/cameras/${idCamera}/flux`;
 }
 
+// 7b-bis. URL de téléchargement d'un instantané JPEG autonome (snapshot propre)
+export function urlSnapshotCamera(idCamera) {
+  return `${API_BASE}/cameras/${idCamera}/snapshot`;
+}
+
 // 7c. Tester un flux RTSP
 export function testerFluxRtsp(urlFlux) {
   return fetchAvecAuth(`${API_BASE}/cameras/tester_flux`, {

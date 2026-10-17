@@ -20,7 +20,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import {
   API_BASE, entetesAuth, chargerEtatAlarme, arreterAlarme, chargerEtatLicence, activerLicence,
   chargerZoneCamera, enregistrerZoneCamera, supprimerZoneCamera, listerCameras,
-  creerCamera, supprimerCamera, testerFluxRtsp, urlFluxCamera, urlImageAlerte, urlClipAlerte,
+  creerCamera, supprimerCamera, testerFluxRtsp, urlFluxCamera, urlSnapshotCamera, urlImageAlerte, urlClipAlerte,
   supprimerAlerte, supprimerToutesAlertes,
 } from '../api.js';
 import { useFluxDirect } from '../lib/useFluxDirect.js';
@@ -1508,6 +1508,8 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
   const [personneDetail, setPersonneDetail] = useState(null);
   const [filtreIndividus, setFiltreIndividus] = useState('tous'); // 'tous' | 'suspects' | 'autorises'
   const [simulationSuspect, setSimulationSuspect] = useState(null);
+  const [isDownloadingSnapshot, setIsDownloadingSnapshot] = useState(false);
+  const playerContainerRef = useRef(null);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 2000);
@@ -1575,6 +1577,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
       fullName: `${c.name} · ${c.location || 'Site principal'}`,
       location: c.location || 'Zone principale',
       image: c.urlFlux ? c.image : `${c.image}?t=${tick}`,
+      snapshotUrl: c.snapshotUrl || `${API_BASE}/cameras/${c.id}/snapshot`,
       urlFlux: c.urlFlux,
       status: isOff ? 'Hors-ligne' : 'En ligne',
       isOffline: isOff,
@@ -1771,14 +1774,69 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
     }
   };
 
-  const handleDownloadSnapshot = () => {
-    const link = document.createElement('a');
-    link.href = currentCamera.image;
-    link.download = `previa_snapshot_${currentCamera.id}_${Date.now()}.jpg`;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadSnapshot = async () => {
+    if (isDownloadingSnapshot) return;
+    setIsDownloadingSnapshot(true);
+    const nomFichier = `previa_snapshot_${currentCamera.id}_${Date.now()}.jpg`;
+
+    const declencherTelechargementBlob = (blob) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nomFichier;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+    };
+
+    try {
+      // 1. Capture locale instantanée du pixel affiché dans le lecteur (Canvas)
+      const container = playerContainerRef.current;
+      const mediaEl = container ? (container.querySelector('video') || container.querySelector('img')) : null;
+
+      if (mediaEl) {
+        const w = mediaEl.videoWidth || mediaEl.naturalWidth || mediaEl.clientWidth;
+        const h = mediaEl.videoHeight || mediaEl.naturalHeight || mediaEl.clientHeight;
+        if (w > 0 && h > 0) {
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(mediaEl, 0, 0, w, h);
+
+          const blob = await new Promise((resolve) => {
+            try {
+              canvas.toBlob(resolve, 'image/jpeg', 0.95);
+            } catch (canvasErr) {
+              resolve(null);
+            }
+          });
+
+          if (blob && blob.size > 0) {
+            declencherTelechargementBlob(blob);
+            setTimeout(() => setIsDownloadingSnapshot(false), 600);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Snapshot] Capture locale canvas impossible, bascule vers backend:', err);
+    }
+
+    // 2. Repli serveur : requête vers l'endpoint JPEG autonome /cameras/{id}/snapshot
+    try {
+      const res = await fetch(`${API_BASE}/cameras/${currentCamera.id}/snapshot?t=${Date.now()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      declencherTelechargementBlob(blob);
+    } catch (err) {
+      console.error('[Snapshot] Échec téléchargement backend:', err);
+      // Repli ultime via URL directe snapshot (jamais flux vidéo infini)
+      window.open(`${API_BASE}/cameras/${currentCamera.id}/snapshot?t=${Date.now()}`, '_blank');
+    } finally {
+      setTimeout(() => setIsDownloadingSnapshot(false), 600);
+    }
   };
 
   return (
@@ -2200,6 +2258,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
             }}
           >
             <div
+              ref={playerContainerRef}
               style={{
                 position: 'relative',
                 borderRadius: '14px',
@@ -2493,6 +2552,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                 <button
                   type="button"
                   onClick={handleDownloadSnapshot}
+                  disabled={isDownloadingSnapshot}
                   style={{
                     backgroundColor: '#ffffff',
                     border: '1.5px solid #cbd5e1',
@@ -2501,17 +2561,22 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                     borderRadius: '10px',
                     fontSize: '0.82rem',
                     fontWeight: 700,
-                    cursor: 'pointer',
+                    cursor: isDownloadingSnapshot ? 'wait' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
                     transition: 'all 0.15s ease',
+                    opacity: isDownloadingSnapshot ? 0.7 : 1,
                   }}
                   title="Télécharger une photo instantanée du flux en direct (cliché JPEG)"
                 >
-                  <Camera size={14} color="#0284c7" strokeWidth={2.4} />
-                  <span>Capture d'écran</span>
+                  {isDownloadingSnapshot ? (
+                    <Loader2 size={14} color="#0284c7" className="animate-spin" />
+                  ) : (
+                    <Camera size={14} color="#0284c7" strokeWidth={2.4} />
+                  )}
+                  <span>{isDownloadingSnapshot ? 'Enregistrement...' : "Capture d'écran"}</span>
                 </button>
 
                 <button
@@ -6623,6 +6688,7 @@ export default function Admin() {
     id: c.id_camera,
     name: c.num || c.id_camera,
     image: c.url_flux ? urlFluxCamera(c.id_camera) : `${API_BASE}/cameras/${c.id_camera}/image`,
+    snapshotUrl: urlSnapshotCamera(c.id_camera),
     urlFlux: c.url_flux,
     rotation: c.rotation || 0,
     location: [c.batiment, c.piece].filter(Boolean).join(' / ') || 'Emplacement inconnu',

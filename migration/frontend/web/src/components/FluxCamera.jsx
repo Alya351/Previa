@@ -45,6 +45,7 @@ export function FluxCamera({ stream, imageRepli, alt, className, style, onError,
       {hasActiveWebRtcTrack ? (
         <video
           ref={videoRef}
+          crossOrigin="anonymous"
           autoPlay
           playsInline
           muted
@@ -55,6 +56,7 @@ export function FluxCamera({ stream, imageRepli, alt, className, style, onError,
         />
       ) : (
         <img
+          crossOrigin="anonymous"
           src={imgSrc || imageRepli}
           alt={alt}
           className={className}

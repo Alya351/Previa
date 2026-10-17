@@ -178,10 +178,18 @@ else:
         "http://localhost:5174",
         "http://localhost:5175",
         "http://localhost:5176",
+        "https://localhost:5173",
+        "https://localhost:5174",
+        "https://localhost:5175",
+        "https://localhost:5176",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://127.0.0.1:5175",
         "http://127.0.0.1:5176",
+        "https://127.0.0.1:5173",
+        "https://127.0.0.1:5174",
+        "https://127.0.0.1:5175",
+        "https://127.0.0.1:5176",
         "http://localhost:8012",
         "http://127.0.0.1:8012",
         "https://localhost:8012",
@@ -1153,6 +1161,47 @@ def flux_camera_mjpeg(id_camera: str):
     return StreamingResponse(
         rtsp_service.generer_flux_mjpeg(id_camera, url_flux),
         media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+@app.get(
+    "/cameras/{id_camera}/snapshot",
+    tags=["Caméras"],
+    summary="Télécharger un instantané JPEG autonome de la caméra",
+    description="Fournit un cliché JPEG unique prêt au téléchargement direct, sans flux continu.",
+)
+def snapshot_camera(id_camera: str):
+    cam = camera.trouver_par_id(id_camera)
+    if cam is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+
+    # 1. Vérifier si une trame récente existe en mémoire
+    contenu = derniere_image.lire(id_camera)
+
+    # 2. Si absence d'image en mémoire et caméra RTSP, chercher dans le buffer RTSP actif
+    if contenu is None and cam.get("url_flux"):
+        with rtsp_service._condition_frame:
+            contenu = rtsp_service._buffer_derniere_frame.get(id_camera)
+
+    # 3. Si toujours rien et caméra RTSP, tenter capture fraîche
+    if contenu is None and cam.get("url_flux"):
+        contenu = rtsp_service.capturer_snapshot_unique(cam["url_flux"])
+        if contenu:
+            derniere_image.enregistrer(id_camera, contenu)
+
+    # 4. Si toujours rien, générer la trame d'attente informative
+    if contenu is None:
+        nom_cam = cam.get("num") or "Caméra"
+        contenu = rtsp_service._generer_frame_attente(id_camera, nom_cam)
+
+    nom_fichier = f"previa_snapshot_{id_camera}_{int(time.time())}.jpg"
+    return Response(
+        content=contenu,
+        media_type="image/jpeg",
+        headers={
+            "Content-Disposition": f'attachment; filename="{nom_fichier}"',
+            "Cache-Control": "no-store",
+        },
     )
 
 

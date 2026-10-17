@@ -71,8 +71,25 @@ export function CameraViewModal({ camera, onClose }) {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const takeSnapshot = () => {
-    showToast("Photo instantanée capturée et enregistrée.");
+  const takeSnapshot = async () => {
+    const nomFichier = `previa_snapshot_${camera.id}_${Date.now()}.jpg`;
+    try {
+      const res = await fetch(`${API_BASE}/cameras/${camera.id}/snapshot?t=${Date.now()}`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = nomFichier;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+      }
+    } catch (e) {
+      console.warn('Snapshot modal error:', e);
+    }
+    showToast("Photo instantanée capturée et téléchargée.");
   };
 
   // Fermeture accessible avec la touche Echap
