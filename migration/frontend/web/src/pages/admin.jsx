@@ -1783,40 +1783,37 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
 
   return (
     <div className="content-body" style={{ maxWidth: '1440px', margin: '0 auto', paddingBottom: '60px' }}>
-      {/* EN-TÊTE ÉPURÉ & SÉLECTEUR DE MODE DE VUE */}
-      <div style={{ marginBottom: '22px' }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            flexWrap: 'wrap',
-            gap: '16px',
-            paddingRight: '220px',
-          }}
-        >
-          <div>
-            <h1 className="welcome-heading" style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>
-              Supervision des <span>Caméras</span>
-            </h1>
-            <p className="welcome-sub" style={{ fontSize: '0.9rem', color: 'var(--ink-muted)', marginTop: '4px' }}>
-              Flux vidéo temps réel, cadrage IA et délimitation de zones sensibles
-            </p>
-          </div>
+      {/* EN-TÊTE ÉPURÉ & SÉLECTEUR DE MODE DE VUE EN UN SEUL BANDEAU FLUIDE */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '16px',
+          marginBottom: '20px',
+        }}
+      >
+        <div>
+          <h1 className="welcome-heading" style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>
+            Supervision des <span>Caméras</span>
+          </h1>
+          <p className="welcome-sub" style={{ fontSize: '0.88rem', color: 'var(--ink-muted)', marginTop: '4px', marginBottom: 0 }}>
+            Flux vidéo temps réel, cadrage IA et délimitation de zones sensibles
+          </p>
         </div>
 
-        {/* COMMUTATEUR DE MODE DE VUE (SEGMENTED PILL) DÉGAGÉ DU BANDEAU VAGUE */}
+        {/* COMMUTATEUR DE MODE DE VUE (SEGMENTED PILL) */}
         <div
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '4px',
             backgroundColor: '#ffffff',
             padding: '5px',
             borderRadius: '14px',
             border: '1px solid var(--border-light)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-            marginTop: '16px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
             maxWidth: '100%',
             overflowX: 'auto',
           }}
@@ -1837,6 +1834,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               fontWeight: 700,
               cursor: 'pointer',
               transition: 'all 0.15s ease',
+              boxShadow: subTab === 'hero' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
           >
             <Camera size={15} />
@@ -1859,6 +1857,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               fontWeight: 700,
               cursor: 'pointer',
               transition: 'all 0.15s ease',
+              boxShadow: subTab === 'mosaic' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
           >
             <LayoutGrid size={15} />
@@ -1881,6 +1880,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               fontWeight: 700,
               cursor: 'pointer',
               transition: 'all 0.15s ease',
+              boxShadow: subTab === 'zones' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
           >
             <Shield size={15} />
@@ -1894,7 +1894,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
       {/* ==================================================================== */}
       {subTab === 'hero' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* BANDEAU SÉLECTEUR RAPIDE & CONTRÔLEUR DE CAMÉRAS (ADAPTATIF 10+ CAMÉRAS) */}
+          {/* BANDEAU SÉLECTEUR RAPIDE & CONTRÔLEUR DE CAMÉRAS (ADAPTATIF) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{
               display: 'flex',
@@ -1920,92 +1920,94 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                 </span>
               </div>
 
-              {/* CONTRÔLES RAPIDES : ACCÈS DIRECT & PRÉCÉDENTE / SUIVANTE */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: '#ffffff',
-                  border: '1.5px solid #cbd5e1',
-                  borderRadius: '9px',
-                  padding: '4px 10px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-                }}>
-                  <Camera size={13} color="#0284c7" strokeWidth={2.4} />
-                  <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Accès direct :</span>
-                  <select
-                    value={selectedCam}
-                    onChange={(e) => handleSelectCamera(e.target.value)}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      fontSize: '0.80rem',
-                      fontWeight: 700,
-                      color: '#0f172a',
-                      cursor: 'pointer',
-                      outline: 'none',
-                      maxWidth: '220px',
-                    }}
-                  >
-                    {camerasEtat.map((c, i) => (
-                      <option key={c.id} value={c.id}>
-                        #{i + 1} {c.name} — {c.location} ({c.isOffline ? 'OFF' : 'LIVE'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* CONTRÔLES RAPIDES : UNIQUEMENT SI PLUS DE 4 CAMÉRAS POUR NE PAS ENCOMBRER */}
+              {camerasEtat.length > 4 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: '#ffffff',
+                    border: '1.5px solid #cbd5e1',
+                    borderRadius: '9px',
+                    padding: '4px 10px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+                  }}>
+                    <Camera size={13} color="#0284c7" strokeWidth={2.4} />
+                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Accès direct :</span>
+                    <select
+                      value={selectedCam}
+                      onChange={(e) => handleSelectCamera(e.target.value)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        fontSize: '0.80rem',
+                        fontWeight: 700,
+                        color: '#0f172a',
+                        cursor: 'pointer',
+                        outline: 'none',
+                        maxWidth: '220px',
+                      }}
+                    >
+                      {camerasEtat.map((c, i) => (
+                        <option key={c.id} value={c.id}>
+                          #{i + 1} {c.name} — {c.location} ({c.isOffline ? 'OFF' : 'LIVE'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <button
-                    type="button"
-                    onClick={() => camPrecedente && handleSelectCamera(camPrecedente.id)}
-                    disabled={!camPrecedente}
-                    title="Caméra précédente"
-                    style={{
-                      width: '30px',
-                      height: '30px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      background: camPrecedente ? '#ffffff' : '#f8fafc',
-                      color: camPrecedente ? '#0f172a' : '#cbd5e1',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: camPrecedente ? 'pointer' : 'not-allowed',
-                      boxShadow: camPrecedente ? '0 1px 3px rgba(0,0,0,0.04)' : 'none',
-                    }}
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => camSuivante && handleSelectCamera(camSuivante.id)}
-                    disabled={!camSuivante}
-                    title="Caméra suivante"
-                    style={{
-                      width: '30px',
-                      height: '30px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      background: camSuivante ? '#ffffff' : '#f8fafc',
-                      color: camSuivante ? '#0f172a' : '#cbd5e1',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: camSuivante ? 'pointer' : 'not-allowed',
-                      boxShadow: camSuivante ? '0 1px 3px rgba(0,0,0,0.04)' : 'none',
-                    }}
-                  >
-                    <ChevronRight size={16} />
-                  </button>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      type="button"
+                      onClick={() => camPrecedente && handleSelectCamera(camPrecedente.id)}
+                      disabled={!camPrecedente}
+                      title="Caméra précédente"
+                      style={{
+                        width: '30px',
+                        height: '30px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        background: camPrecedente ? '#ffffff' : '#f8fafc',
+                        color: camPrecedente ? '#0f172a' : '#cbd5e1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: camPrecedente ? 'pointer' : 'not-allowed',
+                        boxShadow: camPrecedente ? '0 1px 3px rgba(0,0,0,0.04)' : 'none',
+                      }}
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => camSuivante && handleSelectCamera(camSuivante.id)}
+                      disabled={!camSuivante}
+                      title="Caméra suivante"
+                      style={{
+                        width: '30px',
+                        height: '30px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        background: camSuivante ? '#ffffff' : '#f8fafc',
+                        color: camSuivante ? '#0f172a' : '#cbd5e1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: camSuivante ? 'pointer' : 'not-allowed',
+                        boxShadow: camSuivante ? '0 1px 3px rgba(0,0,0,0.04)' : 'none',
+                      }}
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* CAROUSEL AVEC BOUTONS FLOTTANTS ET DÉFILEMENT FLUIDE */}
             <div style={{ position: 'relative', width: '100%' }}>
-              {camerasEtat.length > 3 && (
+              {camerasEtat.length > 4 && (
                 <button
                   type="button"
                   onClick={defilerGauche}
@@ -2037,7 +2039,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                 ref={ribbonRef}
                 style={{
                   display: 'flex',
-                  gap: '10px',
+                  gap: '12px',
                   overflowX: 'auto',
                   padding: '4px 6px',
                   scrollBehavior: 'smooth',
@@ -2055,25 +2057,26 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '10px',
-                        padding: '8px 14px',
+                        gap: '12px',
+                        padding: '10px 16px',
                         borderRadius: '12px',
                         border: isSelected ? '2px solid #0284c7' : '1px solid var(--border-light)',
                         backgroundColor: isSelected ? '#f0f9ff' : '#ffffff',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
-                        boxShadow: isSelected ? '0 4px 12px rgba(2,132,199,0.15)' : 'none',
+                        boxShadow: isSelected ? '0 4px 14px rgba(2,132,199,0.18)' : '0 1px 3px rgba(0,0,0,0.03)',
                         flexShrink: 0,
                         textAlign: 'left',
-                        maxWidth: '220px',
+                        minWidth: '240px',
+                        maxWidth: '360px',
                       }}
                     >
                       <div style={{ position: 'relative', flexShrink: 0 }}>
                         <div
                           style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
+                            width: '34px',
+                            height: '34px',
+                            borderRadius: '9px',
                             backgroundColor: isSelected ? '#0284c7' : '#f1f5f9',
                             color: isSelected ? '#ffffff' : '#64748b',
                             display: 'flex',
@@ -2081,7 +2084,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                             justifyContent: 'center',
                           }}
                         >
-                          <Cctv size={17} />
+                          <Cctv size={18} />
                         </div>
                         {cam.hasAlert && (
                           <span
@@ -2101,7 +2104,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
 
                       <div style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
                         <div style={{
-                          fontSize: '0.84rem',
+                          fontSize: '0.86rem',
                           fontWeight: 800,
                           color: isSelected ? '#0369a1' : 'var(--ink-primary)',
                           whiteSpace: 'nowrap',
@@ -2111,7 +2114,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                           {cam.name}
                         </div>
                         <div style={{
-                          fontSize: '0.72rem',
+                          fontSize: '0.74rem',
                           color: isSelected ? '#0284c7' : 'var(--ink-muted)',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -2123,16 +2126,32 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
 
                       <span
                         style={{
-                          fontSize: '0.66rem',
+                          fontSize: '0.68rem',
                           fontWeight: 800,
-                          padding: '2px 6px',
-                          borderRadius: '4px',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
                           marginLeft: 'auto',
-                          backgroundColor: cam.isOffline ? '#fee2e2' : '#dcfce7',
-                          color: cam.isOffline ? '#dc2626' : '#16a34a',
+                          backgroundColor: cam.isOffline ? '#fee2e2' : '#ecfdf5',
+                          color: cam.isOffline ? '#dc2626' : '#047857',
+                          border: cam.isOffline ? '1px solid #fecaca' : '1px solid #a7f3d0',
                           flexShrink: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px',
                         }}
                       >
+                        {!cam.isOffline && (
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              backgroundColor: '#16a34a',
+                              boxShadow: '0 0 6px #16a34a',
+                              display: 'inline-block',
+                            }}
+                          />
+                        )}
                         {cam.isOffline ? 'OFF' : 'LIVE'}
                       </span>
                     </button>
@@ -2140,7 +2159,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                 })}
               </div>
 
-              {camerasEtat.length > 3 && (
+              {camerasEtat.length > 4 && (
                 <button
                   type="button"
                   onClick={defilerDroite}
@@ -2187,7 +2206,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                 overflow: 'hidden',
                 backgroundColor: '#05070d',
                 aspectRatio: '16/9',
-                maxHeight: '68vh',
+                maxHeight: '56vh',
                 boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)',
               }}
             >
@@ -2255,12 +2274,14 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   alignItems: 'center',
                   zIndex: 20,
                   pointerEvents: 'none',
+                  gap: '10px',
+                  flexWrap: 'wrap',
                 }}
               >
                 {/* STATUT FLUX GAUCHE */}
                 <div
                   style={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
                     backdropFilter: 'blur(8px)',
                     color: '#ffffff',
                     padding: '6px 14px',
@@ -2271,6 +2292,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                     border: '1px solid rgba(255,255,255,0.12)',
                     fontSize: '0.78rem',
                     fontWeight: 700,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
                   }}
                 >
                   <span
@@ -2288,33 +2310,40 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   <span style={{ opacity: 0.7, fontSize: '0.72rem' }}>({currentCamera.location})</span>
                 </div>
 
-                {/* LÉGENDE & COMPTEUR DROITE */}
+                {/* STATUT IA & DÉTECTION DROITE */}
                 <div
                   style={{
-                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
                     backdropFilter: 'blur(8px)',
                     color: '#ffffff',
-                    padding: '6px 12px',
+                    padding: '6px 14px',
                     borderRadius: '10px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px',
-                    border: '1px solid rgba(255,255,255,0.12)',
+                    gap: '10px',
+                    border: '1px solid rgba(255,255,255,0.15)',
                     fontSize: '0.74rem',
                     fontWeight: 700,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
                   }}
                 >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#4ade80' }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e' }} />
-                    Autorisé
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f87171' }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444' }} />
-                    Suspect {listeSuspects.length > 0 && `(${listeSuspects.length})`}
-                  </span>
-                  <span style={{ opacity: 0.4 }}>|</span>
-                  <span style={{ color: '#bae6fd' }}>
-                    👤 {nbPersonnesVisibles} vue{nbPersonnesVisibles > 1 ? 's' : ''}
+                  {listeSuspects.length > 0 ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fca5a5' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 8px #ef4444' }} />
+                      <strong>{listeSuspects.length} suspect{listeSuspects.length > 1 ? 's' : ''}</strong>
+                    </span>
+                  ) : (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#86efac' }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
+                      Périmètre calme
+                    </span>
+                  )}
+
+                  <span style={{ opacity: 0.35 }}>|</span>
+
+                  <span style={{ color: '#bae6fd', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Users size={13} color="#38bdf8" />
+                    {nbPersonnesVisibles} vue{nbPersonnesVisibles > 1 ? 's' : ''}
                   </span>
                 </div>
               </div>
