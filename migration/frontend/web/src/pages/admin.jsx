@@ -1733,18 +1733,9 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
 
   return (
     <div className="content-body" style={{ maxWidth: '1440px', margin: '0 auto', paddingBottom: '60px' }}>
-      {/* EN-TÊTE ÉPURÉ & SÉLECTEUR DE MODE DE VUE EN UN SEUL BANDEAU FLUIDE */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '16px',
-          marginBottom: '20px',
-        }}
-      >
-        <div>
+      {/* EN-TÊTE ÉPURÉ AVEC DÉGAGEMENT DE LA VAGUE SUPÉRIEURE DROITE */}
+      <div style={{ marginBottom: '18px' }}>
+        <div style={{ maxWidth: 'calc(100% - 320px)' }}>
           <h1 className="welcome-heading" style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>
             Supervision des <span>Caméras</span>
           </h1>
@@ -1753,9 +1744,11 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
           </p>
         </div>
 
-        {/* COMMUTATEUR DE MODE DE VUE (SEGMENTED PILL) */}
+        {/* COMMUTATEUR DE MODE DE VUE (SEGMENTED PILL) 100% VISIBLE & DÉGAGÉ DE LA VAGUE */}
         <div
           style={{
+            position: 'relative',
+            zIndex: 10,
             display: 'inline-flex',
             alignItems: 'center',
             gap: '4px',
@@ -1764,6 +1757,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
             borderRadius: '14px',
             border: '1px solid var(--border-light)',
             boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+            marginTop: '14px',
             maxWidth: '100%',
             overflowX: 'auto',
           }}
@@ -1783,6 +1777,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               fontSize: '0.84rem',
               fontWeight: 700,
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
               transition: 'all 0.15s ease',
               boxShadow: subTab === 'hero' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
@@ -1806,6 +1801,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               fontSize: '0.84rem',
               fontWeight: 700,
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
               transition: 'all 0.15s ease',
               boxShadow: subTab === 'mosaic' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
@@ -1829,6 +1825,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               fontSize: '0.84rem',
               fontWeight: 700,
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
               transition: 'all 0.15s ease',
               boxShadow: subTab === 'zones' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
