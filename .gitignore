@@ -74,3 +74,11 @@ docker/.previa_tar_sha256
 # jamais imbriqué dans CE dépôt. webBackend/ (son backend Firebase,
 # lui, sans dépôt propre) reste suivi normalement ci-dessous.
 /web/
+
+# Binaires mobiles Android
+*.apk
+
+# Bases de données locales
+*.db
+*.sqlite
+

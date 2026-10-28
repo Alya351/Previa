@@ -37,17 +37,24 @@ function detecterAdresseServeur() {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     return window.location.hostname;
   }
+  // CORRECTIF : cette détection ne sert qu'en développement (Expo Go /
+  // Metro). Dans un APK autonome, `linkingUri` vaut un schéma du type
+  // "previa://" : l'ancien code en tirait le faux nom d'hôte "previa" et
+  // l'IP en dur de secours rendait la découverte mDNS inutile (API_BASE
+  // n'était jamais vide). En APK, on renvoie null pour que la découverte
+  // mDNS, puis previa.local, prennent le relais.
+  if (!__DEV__) return null;
+
   const hostUri =
     Constants.expoConfig?.hostUri ||
     Constants.manifest2?.extra?.expoClient?.hostUri ||
     (Constants.linkingUri ? Constants.linkingUri.replace(/^exp:\/\//, '').replace(/^http:\/\//, '') : null) ||
     (Constants.experienceUrl ? Constants.experienceUrl.replace(/^exp:\/\//, '').replace(/^http:\/\//, '') : null);
 
-  if (hostUri) {
-    const hote = hostUri.split(':')[0];
-    if (hote) return hote;
+  if (hostUri && /^[\d.]+(:\d+)?$/.test(hostUri.split('/')[0])) {
+    return hostUri.split(':')[0];
   }
-  return '192.168.1.101';
+  return null;
 }
 
 const ADRESSE_SERVEUR = detecterAdresseServeur();
@@ -116,10 +123,11 @@ async function assurerAdresseServeur() {
     API_BASE = trouve;
     modeSecoursActif = false;
   } else if (!API_BASE) {
-    // Si mDNS et l'IP locale sont injoignables (Agent en 4G/5G à l'extérieur),
-    // bascule automatique transparente vers le tunnel Cloud HTTPS
-    API_BASE = URL_TUNNEL_CLOUD_SECOURS;
-    modeSecoursActif = true;
+    // CORRECTIF : avant de partir sur le tunnel Cloud, on essaie le nom
+    // annoncé par le boîtier sur le réseau local. Le tunnel reste le
+    // dernier recours (voir le bloc catch d'appelApi).
+    API_BASE = 'http://previa.local:8080';
+    modeSecoursActif = false;
   }
   return API_BASE;
 }
@@ -131,6 +139,9 @@ if (!API_BASE && Platform.OS !== 'web') {
 let jetonSession = null;
 export function definirJeton(jeton) {
   jetonSession = jeton || null;
+}
+export function effacerTokenSession() {
+  jetonSession = null;
 }
 
 async function appelApi(chemin, options = {}) {
@@ -160,12 +171,18 @@ async function appelApi(chemin, options = {}) {
         const corps = await reponse.json();
         detail = corps?.detail || detail;
       } catch (e) { /* pas de corps JSON */ }
-      throw new Error(detail);
+      // CORRECTIF : une réponse HTTP (404, 401 "mot de passe incorrect"...)
+      // prouve que le serveur est joignable. On la marque pour ne PAS
+      // basculer sur le tunnel Cloud (et ne pas y renvoyer les identifiants).
+      const erreurHttp = new Error(detail);
+      erreurHttp.http = true;
+      throw erreurHttp;
     }
     return reponse.json();
   } catch (err) {
-    // Si la tentative locale échoue (ex: passage du Wi-Fi à la 4G), bascule transparente
-    if (!modeSecoursActif && URL_TUNNEL_CLOUD_SECOURS) {
+    // Bascule vers le tunnel UNIQUEMENT sur une vraie panne réseau
+    // (serveur injoignable, délai dépassé), jamais sur une réponse HTTP.
+    if (!err.http && !modeSecoursActif && URL_TUNNEL_CLOUD_SECOURS) {
       console.warn("Échec réseau local, bascule transparente vers le Tunnel Cloud 4G/5G...");
       API_BASE = URL_TUNNEL_CLOUD_SECOURS;
       modeSecoursActif = true;
