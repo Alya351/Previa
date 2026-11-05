@@ -36,7 +36,6 @@ DOSSIER_MODELES = Path(__file__).resolve().parent / "models"
 # la liste complète attendue par le backend).
 FICHIERS_REPERES = [
     "yolo11x-pose.pt",
-    "yolo11x-seg.pt",
     "person-seg-yolo12l.pt",
     "clothing-yolov8s-seg.pt",
     "fire-yolo11s.pt",

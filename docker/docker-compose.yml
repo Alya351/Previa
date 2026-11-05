@@ -45,17 +45,6 @@ services:
       - previa_models:/app/models
       - previa_db:/app/db
       - previa_certs:/app/backend/certs
-      # Liste des ESP32 alarme détectés sur le réseau, écrite par
-      # mdns_previa.py (tourne sur l'HÔTE, pas ici — voir ce fichier pour
-      # pourquoi) — lue en lecture seule par
-      # Infrastructure/esp_decouverte.py pour la page admin
-      # "configAlerte". `:ro`, ce conteneur n'a jamais à y écrire.
-      # `../docker/esp_decouverts.json` (pas juste `./esp_decouverts.json`)
-      # : le contexte de ce fichier compose est déjà `docker/`, mais un
-      # bind mount source est relatif au dossier DE CE FICHIER, donc un
-      # chemin direct suffit — précisé en clair ici pour éviter toute
-      # ambiguïté avec le `context: ..` du service au-dessus.
-      - ./esp_decouverts.json:/app/esp_decouverts.json:ro
     restart: unless-stopped
 
   frontend:

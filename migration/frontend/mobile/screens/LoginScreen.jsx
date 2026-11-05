@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import Svg, { Rect, Defs, LinearGradient, Stop, Path } from 'react-native-svg';
 import { PREVIA_COLORS, PREVIA_RADIUS, PREVIA_TOUCH_TARGET } from '../theme';
-import { seConnecter } from '../api';
+import { seConnecter, definirAdresseServeur } from '../api';
 import { IconMail, IconLock, IconEye, IconEyeOff } from '../components/Icons';
 
 export const LoginScreen = ({ onLogin }) => {
@@ -21,6 +21,8 @@ export const LoginScreen = ({ onLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState(null);
+  const [adresse, setAdresse] = useState('');
+  const [afficherAdresse, setAfficherAdresse] = useState(false);
 
   const handleSubmit = async () => {
     if (!email.trim() || !password) {
@@ -30,6 +32,8 @@ export const LoginScreen = ({ onLogin }) => {
     setErreur(null);
     setEnCours(true);
     try {
+      // Adresse du serveur saisie à la main (avancé) : sinon recherche automatique.
+      if (afficherAdresse) definirAdresseServeur(adresse);
       const utilisateur = await seConnecter(email.trim(), password);
       onLogin(utilisateur);
     } catch (e) {
@@ -126,6 +130,31 @@ export const LoginScreen = ({ onLogin }) => {
                 </TouchableOpacity>
               </View>
             </View>
+
+            <TouchableOpacity
+              onPress={() => setAfficherAdresse(!afficherAdresse)}
+              accessibilityRole="button"
+              accessibilityLabel="Adresse du serveur (avancé)"
+              hitSlop={8}
+            >
+              <Text style={styles.loginAdvancedLink}>
+                {afficherAdresse ? '▾ Adresse du serveur (avancé)' : '▸ Adresse du serveur (avancé)'}
+              </Text>
+            </TouchableOpacity>
+            {afficherAdresse && (
+              <View style={styles.loginInputBox}>
+                <TextInput
+                  style={[styles.loginTextInput, { paddingLeft: 18 }]}
+                  value={adresse}
+                  onChangeText={setAdresse}
+                  placeholder="Vide = recherche automatique (ex. 100.101.102.103)"
+                  placeholderTextColor="#94A3B8"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+            )}
 
             {erreur && (
               <View style={styles.errorBox}>
@@ -295,6 +324,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
+  },
+  loginAdvancedLink: {
+    color: '#18528a',
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 10,
   },
   errorBox: {
     backgroundColor: '#fee2e2',

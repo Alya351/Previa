@@ -204,7 +204,7 @@ export function urlDirectRegarder(idCamera) {
   return urlFluxWebSocket(`/cameras/${idCamera}/direct/regarder`);
 }
 
-// État réel de l'alarme physique (lampe + sirène pilotées par l'ESP32)
+// État réel de l'alarme physique (lampe + sirène pilotées par les relais GPIO du Raspberry)
 export function chargerEtatAlarme() {
   return fetchAvecAuth(`${API_BASE}/alarme/etat`).then((r) => r.json());
 }
@@ -252,35 +252,6 @@ export async function telechargerFichierBlob(url, nomFichier) {
       /* ignorer */
     }
   }, 2000);
-}
-
-// Config des ESP32 alarme
-export function listerEsp() {
-  return fetchAvecAuth(`${API_BASE}/systeme/esp`).then(jsonOuErreur);
-}
-export function chargerEtatEsp(idAppareil) {
-  return fetchAvecAuth(`${API_BASE}/systeme/esp/${idAppareil}/etat`).then(jsonOuErreur);
-}
-export function ajouterReseauEsp(idAppareil, ssid, motDePasse) {
-  return fetchAvecAuth(`${API_BASE}/systeme/esp/${idAppareil}/reseaux`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ssid, mot_de_passe: motDePasse }),
-  }).then(jsonOuErreur);
-}
-export function supprimerReseauEsp(idAppareil, ssid) {
-  return fetchAvecAuth(`${API_BASE}/systeme/esp/${idAppareil}/reseaux/supprimer`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ssid }),
-  }).then(jsonOuErreur);
-}
-export function basculerReseauEsp(idAppareil, ssid) {
-  return fetchAvecAuth(`${API_BASE}/systeme/esp/${idAppareil}/basculer`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ssid }),
-  }).then(jsonOuErreur);
 }
 
 // Licence

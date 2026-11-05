@@ -12,3 +12,8 @@ node_modules
 *.pyth
 *.db
 *.sqlite
+# secrets : ne jamais envoyer sur les serveurs EAS
+.env
+.env.*
+*.key
+.previa_tailscale.key

@@ -42,8 +42,8 @@ from fonctionnalites.Infrastructure import derniere_image, alarme_physique, clip
 ALERTES_DIR = Path(__file__).resolve().parent.parent.parent.parent / "db" / "alertes"
 
 # Types d'alerte assez graves pour déclencher la VRAIE alarme physique
-# (lampe + sirène, voir Infrastructure/alarme_physique.py et
-# migration/arduino/esp.ino) — même liste que côté web
+# (lampe + sirène par relais GPIO du Raspberry, voir
+# Infrastructure/alarme_physique.py) — même liste que côté web
 # (frontend/web/src/pages/admin.jsx, couleurNiveau) et mobile
 # (mobile/api.js, TYPES_CRITIQUES) : une seule vérité sur "qu'est-ce qui
 # est critique", pas trois définitions qui pourraient diverger.

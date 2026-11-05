@@ -137,6 +137,22 @@ class PreviaWebHandler(http.server.SimpleHTTPRequestHandler):
 
 def main():
     port = 5173
+    port_mobile = 8080
+
+    # Relais HTTP pour le client mobile (port 8080 sans TLS)
+    import threading
+    def _run_http_mobile():
+        try:
+            http_mobile = http.server.ThreadingHTTPServer(("0.0.0.0", port_mobile), PreviaWebHandler)
+            http_mobile.daemon_threads = True
+            print(f"[main] Relais HTTP mobile actif sur http://0.0.0.0:{port_mobile}", flush=True)
+            http_mobile.serve_forever()
+        except Exception as e:
+            print(f"[main] Note: relais HTTP {port_mobile} non démarré ({e})", flush=True)
+
+    threading.Thread(target=_run_http_mobile, daemon=True).start()
+
+    # Serveur Web Dashboard (port 5173)
     # Utiliser ThreadingHTTPServer pour traiter toutes les requêtes en parallèle (API + streaming vidéo + assets)
     server = http.server.ThreadingHTTPServer(("0.0.0.0", port), PreviaWebHandler)
     server.daemon_threads = True
@@ -148,7 +164,6 @@ def main():
     else:
         print(f"[main] Serveur Web HTTP multithread actif sur http://0.0.0.0:{port}", flush=True)
 
-    
     server.serve_forever()
 
 if __name__ == "__main__":

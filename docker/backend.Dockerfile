@@ -50,5 +50,5 @@ VOLUME ["/app/models", "/app/db", "/app/backend/certs"]
 EXPOSE 8012
 
 COPY docker/entrypoint-backend.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

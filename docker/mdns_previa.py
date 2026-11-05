@@ -23,23 +23,11 @@ sans rien à installer ; sur Windows il faut Bonjour, souvent absent par
 défaut — limite connue, voir README) répond à la même IP que celle
 retournée par _ip_locale() côté backend (même technique de détection).
 """
-import json
 import socket
 import sys
 import time
-from pathlib import Path
 
-from zeroconf import IPVersion, ServiceBrowser, ServiceInfo, ServiceListener, Zeroconf
-
-# Fichier lu par le backend (voir Infrastructure/esp_decouverte.py côté
-# Python et docker-compose.yml pour le montage en lecture seule dans le
-# conteneur) pour la page admin "configAlerte" — liste des ESP32 alarme
-# trouvés sur le réseau. Écrit ICI, dans ce script hôte, pour la même
-# raison que previa.local est annoncé ici plutôt que dans le conteneur
-# backend : le multicast (ce qu'utilise mDNS, annonce ET recherche) ne
-# sort pas de la VM Docker Desktop cachée sur Windows/Mac.
-FICHIER_ESP_DECOUVERTS = Path(__file__).resolve().parent / "esp_decouverts.json"
-
+from zeroconf import IPVersion, ServiceInfo, Zeroconf
 
 def ip_locale() -> str | None:
     """Même technique que _ip_locale() dans
@@ -51,58 +39,6 @@ def ip_locale() -> str | None:
         return s.getsockname()[0]
     finally:
         s.close()
-
-
-class EcouteurEsp(ServiceListener):
-    """Maintient `FICHIER_ESP_DECOUVERTS` à jour avec les ESP32 alarme
-    présents sur le réseau (service `_previaalarme._tcp.local.`, voir
-    demarrerMdnsClient() dans migration/arduino/esp/esp.ino). Ne lit PAS
-    l'état de chaque ESP ici (pas d'appel HTTP bloquant dans les
-    callbacks zeroconf) — juste de quoi les lister ; la page admin
-    interroge ensuite chaque ESP directement pour son état/ses réseaux
-    (CORS déjà ouvert côté firmware, voir ajouterEntetesCors())."""
-
-    def __init__(self):
-        # Clé = nom d'instance mDNS brut donné par zeroconf (ex.
-        # "previa-alarme-A1B2C3._previaalarme._tcp.local.") — le même
-        # identifiant traverse add/update/remove, pas besoin de le
-        # retraduire depuis les propriétés TXT pour savoir quoi retirer.
-        self.appareils = {}
-
-    def _ecrire(self):
-        try:
-            FICHIER_ESP_DECOUVERTS.write_text(json.dumps(list(self.appareils.values())))
-        except OSError as e:
-            print(f"[mdns] impossible d'écrire {FICHIER_ESP_DECOUVERTS} : {e}", flush=True)
-
-    def _maj(self, zc: Zeroconf, type_: str, name: str):
-        info = zc.get_service_info(type_, name)
-        if info is None or not info.parsed_addresses():
-            return
-        proprietes = {
-            (k.decode() if isinstance(k, bytes) else k): (v.decode() if isinstance(v, bytes) else v)
-            for k, v in (info.properties or {}).items()
-        }
-        id_appareil = proprietes.get("id") or name
-        self.appareils[name] = {
-            "id": id_appareil,
-            "ip": info.parsed_addresses()[0],
-            "hote": info.server.rstrip("."),
-            "ssid": proprietes.get("ssid", ""),
-        }
-        self._ecrire()
-        print(f"[mdns] ESP alarme détecté : {id_appareil} -> {self.appareils[name]['ip']}", flush=True)
-
-    def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
-        self._maj(zc, type_, name)
-
-    def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
-        self._maj(zc, type_, name)
-
-    def remove_service(self, zc: Zeroconf, type_: str, name: str) -> None:
-        if self.appareils.pop(name, None) is not None:
-            self._ecrire()
-            print(f"[mdns] ESP alarme disparu : {name}", flush=True)
 
 
 def main() -> None:
@@ -150,14 +86,6 @@ def main() -> None:
     except Exception as exc:
         print(f"[mdns] Avertissement enregistrement service : {exc}", flush=True)
     print(f"[mdns] previa.local -> {ip} annoncé (HTTPS web:{port_https}, HTTP mobile:{port_http_mobile})", flush=True)
-
-    # Recherche active des ESP32 alarme (voir EcouteurEsp ci-dessus) —
-    # tourne en tâche de fond via son propre thread interne à zeroconf,
-    # ré-écrit FICHIER_ESP_DECOUVERTS à chaque appareil vu/perdu.
-    FICHIER_ESP_DECOUVERTS.write_text("[]")  # vide au démarrage, pas de fantômes d'une session précédente
-    ecouteur = EcouteurEsp()
-    ServiceBrowser(zc, "_previaalarme._tcp.local.", ecouteur)
-    print("[mdns] recherche des ESP32 alarme (_previaalarme._tcp.local.) démarrée", flush=True)
 
     # Reboucle toutes les 30s pour détecter un changement de réseau (Wi-Fi
     # différent, IP réattribuée par le DHCP, etc.) — sans ça, `ip_locale()`
@@ -213,7 +141,6 @@ def main() -> None:
                     zc.register_service(info, allow_name_change=True)
                 except Exception as exc:
                     print(f"[mdns] Avertissement enregistrement service : {exc}", flush=True)
-                ServiceBrowser(zc, "_previaalarme._tcp.local.", ecouteur)
                 print(f"[mdns] previa.local -> {ip} annoncé (HTTPS web:{port_https}, HTTP mobile:{port_http_mobile})", flush=True)
     except KeyboardInterrupt:
         pass

@@ -1,0 +1,5 @@
+# Scripts exécutés sous Linux (Raspberry Pi) : toujours des fins de ligne LF,
+# même après un git clone/checkout sous Windows (sinon "\r: command not found").
+*.sh text eol=lf
+raspberry/** text eol=lf
+docker/previastart text eol=lf

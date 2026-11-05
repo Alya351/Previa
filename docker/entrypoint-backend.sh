@@ -6,7 +6,7 @@
 set -e
 
 echo "[entrypoint] vérification des modèles (migration/models/)..."
-python3 telecharger_modeles.py
+python3 telecharger_modeles.py || echo "[entrypoint] ATTENTION : modèles non téléchargés (pas d'internet ?). Le serveur démarre quand même ; copiez les modèles dans le volume previa_models (voir previastart / models.zip)."
 
 echo "[entrypoint] démarrage du backend PREVIA sur le port 8012..."
 cd backend

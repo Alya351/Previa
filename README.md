@@ -43,7 +43,7 @@ graph TD
     D -->|Événements & Alertes| E[Base de Données & State Manager]
     E -->|API REST & WebSockets Port 8080| F[Interface Web React]
     E -->|Mode Hybride Local / Tunnel HTTPS| G[App Mobile React Native]
-    E -->|Signal Relais USB / ESP| H[Sirène Physique Alarme]
+    E -->|Relais GPIO du Raspberry| H[Sirène Physique Alarme]
 ```
 
 ### Stack Technique :

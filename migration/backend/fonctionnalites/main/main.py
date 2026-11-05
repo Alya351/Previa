@@ -43,7 +43,7 @@ from fonctionnalites.cam.batiment import batiment
 from fonctionnalites.cam.camera import camera, rtsp_service
 from fonctionnalites.cam.pieces import piece
 from fonctionnalites.ComportementsSupects import profil_suspect
-from fonctionnalites.Infrastructure import alarme_physique, clips_service, derniere_image, esp_decouverte, gestion_thermique, licence, profil_usage, rapport_cam, reboot, signalisation_webrtc
+from fonctionnalites.Infrastructure import alarme_physique, clips_service, derniere_image, gestion_thermique, licence, profil_usage, rapport_cam, reboot, signalisation_webrtc
 from fonctionnalites.VueEnsemble import vue_ensemble as vue_ensemble_module
 from fonctionnalites.zoneCam import enregitre as zone_module
 from fonctionnalites.Infrastructure.local_store import db
@@ -1545,21 +1545,31 @@ def exporter_alertes_csv():
 
 
 # ========================================================================
-# Alarme physique (lampe + sirène) — voir Infrastructure/alarme_physique.py
-# et migration/arduino/esp.ino (le firmware ESP32 qui pilote réellement
-# les deux broches). Un ESP32 sur le réseau local interroge GET
-# /alarme/etat en boucle (polling, ~3s) — pas de WebSocket ici, un
-# microcontrôleur à bas coût n'a pas besoin de plus, et ça reste plus
-# robuste sur un réseau instable.
+# Alarme physique (lampe + sirène) — voir Infrastructure/alarme_physique.py.
+# Le Raspberry pilote lui-même deux relais par ses broches GPIO (voir
+# raspberry/CABLAGE_RELAIS.md) ; hors Raspberry, le module bascule en
+# simulation (seul l'état change). Plus aucun appareil externe n'est
+# nécessaire.
 # ========================================================================
 @app.get(
     "/alarme/etat",
     tags=["Alarme"],
     summary="État courant de l'alarme physique (lampe + sirène)",
-    description="Interrogé en boucle par le firmware ESP32 (voir migration/arduino/esp.ino) pour savoir s'il doit allumer la lampe et/ou la sirène.",
+    description="État des deux relais (lampe, sirène) pilotés par les broches GPIO du Raspberry ; lu par l'app mobile et le tableau de bord web.",
 )
 def etat_alarme():
     return alarme_physique.etat()
+
+
+@app.get(
+    "/alarme/diagnostic",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Alarme"],
+    summary="Diagnostic du branchement lampe + sirène (mode gpio ou simulation)",
+    description="Indique si les relais sont réellement pilotés (mode `gpio`) ou si le serveur est en `simulation` et pourquoi, avec les broches BCM utilisées (accès admin requis).",
+)
+def diagnostic_alarme():
+    return alarme_physique.diagnostic()
 
 
 @app.post(
@@ -1567,7 +1577,7 @@ def etat_alarme():
     dependencies=[Depends(session.exiger_authentification)],
     tags=["Alarme"],
     summary="Éteint la lampe et la sirène",
-    description="Appelé par \"Arrêter l'alerte\" (app mobile/web) — le prochain polling de l'ESP32 verra l'état éteint et coupera les deux broches.",
+    description="Appelé par \"Arrêter l'alerte\" (app mobile/web) — coupe immédiatement les deux relais GPIO.",
 )
 def arreter_alarme():
     return alarme_physique.arreter()
@@ -1668,79 +1678,6 @@ def activer_licence(demande: DemandeCodeLicence):
         return licence.activer(demande.code)
     except licence.CodeInvalide as exc:
         raise HTTPException(403, str(exc))
-
-
-@app.get(
-    "/systeme/esp",
-    dependencies=[Depends(session.exiger_admin)],
-    tags=["Système"],
-    summary="Liste des ESP32 alarme détectés sur le réseau local",
-    description="Lit ce que docker/mdns_previa.py a trouvé par mDNS (accès admin requis).",
-)
-def lister_esp():
-    return esp_decouverte.lister()
-
-
-class ReseauEsp(BaseModel):
-    ssid: str
-    mot_de_passe: str = ""
-
-
-class SsidEsp(BaseModel):
-    ssid: str
-
-
-def _relais_esp(fn, *args):
-    """Les erreurs réseau vers un ESP (hors service, Wi-Fi capricieux,
-    plus sur le réseau) sont normales et fréquentes ici — 502/404 plutôt
-    que 500, pour que l'admin affiche un message clair au lieu d'une
-    erreur serveur générique."""
-    try:
-        return fn(*args)
-    except LookupError as e:
-        raise HTTPException(404, str(e))
-    except requests.RequestException as e:
-        raise HTTPException(502, f"ESP injoignable : {e}")
-
-
-@app.get(
-    "/systeme/esp/{id_appareil}/etat",
-    dependencies=[Depends(session.exiger_admin)],
-    tags=["Système"],
-    summary="État en direct d'un ESP32 alarme (réseau actuel, réseaux enregistrés, signal)",
-)
-def etat_esp(id_appareil: str):
-    return _relais_esp(esp_decouverte.etat, id_appareil)
-
-
-@app.post(
-    "/systeme/esp/{id_appareil}/reseaux",
-    dependencies=[Depends(session.exiger_admin)],
-    tags=["Système"],
-    summary="Enregistre un nouveau Wi-Fi sur un ESP32 alarme",
-)
-def ajouter_reseau_esp(id_appareil: str, corps: ReseauEsp):
-    return _relais_esp(esp_decouverte.ajouter_reseau, id_appareil, corps.ssid, corps.mot_de_passe)
-
-
-@app.post(
-    "/systeme/esp/{id_appareil}/reseaux/supprimer",
-    dependencies=[Depends(session.exiger_admin)],
-    tags=["Système"],
-    summary="Retire un Wi-Fi enregistré d'un ESP32 alarme",
-)
-def supprimer_reseau_esp(id_appareil: str, corps: SsidEsp):
-    return _relais_esp(esp_decouverte.supprimer_reseau, id_appareil, corps.ssid)
-
-
-@app.post(
-    "/systeme/esp/{id_appareil}/basculer",
-    dependencies=[Depends(session.exiger_admin)],
-    tags=["Système"],
-    summary="Fait basculer un ESP32 alarme vers un Wi-Fi déjà enregistré",
-)
-def basculer_esp(id_appareil: str, corps: SsidEsp):
-    return _relais_esp(esp_decouverte.basculer, id_appareil, corps.ssid)
 
 
 @app.post(

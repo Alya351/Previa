@@ -55,6 +55,11 @@ if [ "$(hostname)" != "previa" ]; then
     fi
 fi
 
+# ------------------------------- 1b. accès Internet par la clé 4G + Tailscale
+# Fait AVANT l'installation des paquets : si la box n'a pas Internet, c'est la clé 4G qui doit servir.
+# Ne bloque jamais l'installation (sur place, PREVIA fonctionne sans Internet).
+bash "$SRC_DIR/acces_distant.sh" || WARN "accès à distance non configuré (voir messages ci-dessus)"
+
 # ----------------------------------------------------- 2. paquets système
 installer_paquet() {
     dpkg -s "$1" >/dev/null 2>&1 && return 0

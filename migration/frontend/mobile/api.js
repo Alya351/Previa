@@ -68,11 +68,14 @@ const ADRESSE_SERVEUR = detecterAdresseServeur();
 // de façon bloquante ici — le tout premier appel échoue simplement le
 // temps que la découverte aboutisse, puis les tentatives suivantes
 // (polling toutes les 1-5s selon l'endroit) passent normalement.
-// URL du tunnel Cloud HTTPS sécurisé de secours (Bascule automatique en 4G/5G)
-const URL_TUNNEL_CLOUD_SECOURS = 'https://api-previa.ngrok-free.app';
+// ANCIEN tunnel ngrok retiré : il n'était pas lancé, répondait « 404 » et masquait la vraie cause.
+// Accès à distance : Tailscale. Renseigner l'adresse du Raspberry dans app.json
+// (expo.extra.adresseServeurDistant : une ou plusieurs adresses séparées par des virgules,
+// ex. "https://previa.xxxx.ts.net,previa.xxxx.ts.net")
+// ou la saisir sur l'écran de connexion (« Adresse du serveur »).
+const ADRESSE_DISTANTE = String(Constants.expoConfig?.extra?.adresseServeurDistant || '').trim();
 
 export let API_BASE = ADRESSE_SERVEUR ? `http://${ADRESSE_SERVEUR}:8080` : null;
-let modeSecoursActif = false;
 
 function decouvrirParMdns(delaiMs = 4000) {
   if (Platform.OS === 'web') return Promise.resolve(null);
@@ -111,24 +114,85 @@ function decouvrirParMdns(delaiMs = 4000) {
 
 let decouverteEnCours = null;
 
+// Adresse saisie à la main sur l'écran de connexion (« Adresse du serveur »).
+// Gardée en mémoire tant que l'application reste ouverte.
+let adresseManuelle = null;
+
+const MESSAGE_INTROUVABLE =
+  "Serveur PREVIA introuvable. Sur place : connectez-vous au Wi-Fi du site. " +
+  "À distance : activez Tailscale puis réessayez.";
+
+// "192.168.1.20" -> "http://192.168.1.20:8080" ; "https://x.ts.net/docs" -> "https://x.ts.net"
+export function normaliserAdresse(saisie) {
+  let a = String(saisie || '').trim();
+  if (!a) return null;
+  if (!/^https?:\/\//i.test(a)) a = `http://${a}`;
+  const m = a.match(/^(https?:\/\/[^/]+)/i);
+  a = m ? m[1] : a;
+  if (/^http:\/\//i.test(a) && !/:\d+$/.test(a)) a += ':8080';
+  return a;
+}
+
+export function definirAdresseServeur(saisie) {
+  adresseManuelle = normaliserAdresse(saisie);
+  if (Platform.OS !== 'web') API_BASE = null; // force une nouvelle recherche
+}
+
+// Un serveur n'est retenu que s'il répond comme PREVIA (GET /alarme/etat
+// renvoie {lampe, sirene}) : une autre page web, ou une page d'erreur de
+// tunnel, ne peut plus être prise pour PREVIA.
+async function sondePrevia(base, delaiMs = 3000) {
+  if (!base) return null;
+  const controller = new AbortController();
+  const minuteur = setTimeout(() => controller.abort(), delaiMs);
+  try {
+    const reponse = await fetch(`${base}/alarme/etat`, { signal: controller.signal });
+    if (!reponse.ok) return null;
+    const corps = await reponse.json();
+    return corps && typeof corps === 'object' && 'lampe' in corps && 'sirene' in corps ? base : null;
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(minuteur);
+  }
+}
+
+function premierServeurJoignable(taches) {
+  return new Promise((resolve) => {
+    let restantes = taches.length;
+    if (!restantes) { resolve(null); return; }
+    taches.forEach((tache) => {
+      Promise.resolve(tache)
+        .then((base) => { if (base) resolve(base); })
+        .catch(() => {})
+        .finally(() => { restantes -= 1; if (restantes === 0) resolve(null); });
+    });
+  });
+}
+
+// Essaie en parallèle : l'adresse saisie (seule, si elle existe), sinon
+// l'adresse distante d'app.json, previa.local, « previa » (nom Tailscale)
+// et la découverte mDNS. Le premier qui répond comme PREVIA gagne.
+async function chercherServeur() {
+  if (adresseManuelle) return sondePrevia(adresseManuelle);
+  // adresseServeurDistant (app.json) peut contenir plusieurs adresses séparées par des virgules
+  // (ex. le lien public https://... et le nom Tailscale).
+  const distantes = ADRESSE_DISTANTE.split(',').map((a) => normaliserAdresse(a));
+  const candidats = [...distantes, 'http://previa.local:8080', 'http://previa:8080'].filter(Boolean);
+  const taches = [...new Set(candidats)].map((base) => sondePrevia(base));
+  taches.push(decouvrirParMdns().then((base) => sondePrevia(base)));
+  return premierServeurJoignable(taches);
+}
+
 async function assurerAdresseServeur() {
   if (API_BASE || Platform.OS === 'web') return API_BASE;
   if (!decouverteEnCours) {
-    decouverteEnCours = decouvrirParMdns().finally(() => {
+    decouverteEnCours = chercherServeur().finally(() => {
       decouverteEnCours = null;
     });
   }
   const trouve = await decouverteEnCours;
-  if (trouve) {
-    API_BASE = trouve;
-    modeSecoursActif = false;
-  } else if (!API_BASE) {
-    // CORRECTIF : avant de partir sur le tunnel Cloud, on essaie le nom
-    // annoncé par le boîtier sur le réseau local. Le tunnel reste le
-    // dernier recours (voir le bloc catch d'appelApi).
-    API_BASE = 'http://previa.local:8080';
-    modeSecoursActif = false;
-  }
+  if (trouve) API_BASE = trouve;
   return API_BASE;
 }
 
@@ -144,12 +208,18 @@ export function effacerTokenSession() {
   jetonSession = null;
 }
 
-async function appelApi(chemin, options = {}) {
+async function appelApi(chemin, options = {}, redecouverte = false) {
+  // Si on rejoint une recherche déjà lancée (ex. au démarrage, avant que le
+  // Wi-Fi soit prêt) et qu'elle échoue, on en refait une avant d'abandonner.
+  const rejoint = Boolean(decouverteEnCours);
   await assurerAdresseServeur();
   if (!API_BASE) {
-    throw new Error("Serveur introuvable. Vérifiez la connexion du site.");
+    if (rejoint && !redecouverte && Platform.OS !== 'web') {
+      return appelApi(chemin, options, true);
+    }
+    throw new Error(MESSAGE_INTROUVABLE);
   }
-  
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -166,29 +236,32 @@ async function appelApi(chemin, options = {}) {
     clearTimeout(timeoutId);
 
     if (!reponse.ok) {
-      let detail = `Erreur ${reponse.status}`;
+      let detail = null;
       try {
         const corps = await reponse.json();
-        detail = corps?.detail || detail;
+        detail = corps?.detail || null;
       } catch (e) { /* pas de corps JSON */ }
-      // CORRECTIF : une réponse HTTP (404, 401 "mot de passe incorrect"...)
-      // prouve que le serveur est joignable. On la marque pour ne PAS
-      // basculer sur le tunnel Cloud (et ne pas y renvoyer les identifiants).
+      if (!detail) {
+        detail = reponse.status === 404
+          ? "Erreur 404 : cette adresse ne répond pas comme un serveur PREVIA. Vérifiez l'adresse du serveur."
+          : `Erreur ${reponse.status}`;
+      }
+      // Une réponse HTTP prouve que le serveur est joignable : pas de nouvelle recherche.
       const erreurHttp = new Error(detail);
       erreurHttp.http = true;
       throw erreurHttp;
     }
     return reponse.json();
   } catch (err) {
-    // Bascule vers le tunnel UNIQUEMENT sur une vraie panne réseau
-    // (serveur injoignable, délai dépassé), jamais sur une réponse HTTP.
-    if (!err.http && !modeSecoursActif && URL_TUNNEL_CLOUD_SECOURS) {
-      console.warn("Échec réseau local, bascule transparente vers le Tunnel Cloud 4G/5G...");
-      API_BASE = URL_TUNNEL_CLOUD_SECOURS;
-      modeSecoursActif = true;
-      return appelApi(chemin, options);
+    if (err.http) throw err;
+    // Vraie panne réseau (injoignable, délai dépassé) : le réseau a peut-être
+    // changé (retour sur place, passage en 4G...). On cherche à nouveau le
+    // serveur une seule fois, puis on réessaie.
+    if (!redecouverte && Platform.OS !== 'web') {
+      API_BASE = null;
+      return appelApi(chemin, options, true);
     }
-    throw err;
+    throw new Error(MESSAGE_INTROUVABLE);
   }
 }
 

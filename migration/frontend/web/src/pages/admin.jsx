@@ -4201,7 +4201,7 @@ function AlertsView({ alertesReelles = [], cameras = [], camerasParId = {}, onRe
   const [alerteInspectee, setAlerteInspectee] = useState(null);
   const dejaVuesRef = useRef(new Set());
 
-  // État RÉEL de la lampe/sirène physiques (ESP32, voir
+  // État RÉEL de la lampe/sirène physiques (relais GPIO du Raspberry, voir
   // Infrastructure/alarme_physique.py côté backend) — un seul appareil
   // pour tout le site, pas un état par alerte. Déclenché automatiquement
   // dès qu'une alerte critique (feu_fumee/intrusion_zone/infiltration)

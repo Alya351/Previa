@@ -345,6 +345,22 @@ def installer_configuration(ssh):
     Sans danger a relancer. Retourne True si tout s'est bien passe."""
     print("\n[*] Configuration du Raspberry Pi (reseau, services, sirene/lampe GPIO)...")
     print("    (la toute premiere fois, l'installation des paquets Python peut prendre 20 a 40 minutes)")
+    # Clé d'authentification Tailscale (PREVIA_TAILSCALE_AUTHKEY dans .env) : déposée sur le Pi avec les droits 600,
+    # lue puis supprimée par raspberry/acces_distant.sh. Jamais affichée.
+    cle_ts = os.environ.get("PREVIA_TAILSCALE_AUTHKEY", "").strip()
+    chemin_cle = f"/home/{USERNAME}/tech-impact/.previa_tailscale.key"
+    if cle_ts:
+        try:
+            sftp = ssh.open_sftp()
+            with sftp.file(chemin_cle, "w") as f:
+                f.write(cle_ts + "\n")
+            sftp.chmod(chemin_cle, 0o600)
+            sftp.close()
+            print("  [i] Cle Tailscale transmise au Raspberry (supprimee apres usage).")
+        except Exception as exc:
+            print(f"  [!] Cle Tailscale non transmise : {exc}")
+    else:
+        print("  [i] Pas de PREVIA_TAILSCALE_AUTHKEY dans .env : acces a distance (Tailscale) non configure.")
     commande = "sudo -S -p '' bash \"$HOME/tech-impact/raspberry/installer_raspberry.sh\" 2>&1"
     stdin, stdout, _ = ssh.exec_command(commande)
     stdin.write(PASSWORD + "\n")
@@ -352,6 +368,10 @@ def installer_configuration(ssh):
     for ligne in iter(stdout.readline, ""):
         print("    " + ligne.rstrip())
     code = stdout.channel.recv_exit_status()
+    try:
+        executer_commande_distante(ssh, "rm -f ~/tech-impact/.previa_tailscale.key")  # la cle ne doit jamais rester
+    except Exception:
+        pass
     if code != 0:
         print(f"  [!] L'installateur s'est termine avec le code {code} (voir les messages ci-dessus).")
         return False

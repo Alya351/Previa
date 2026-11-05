@@ -12,11 +12,7 @@
 - `python-windows/` — Python portable (~25 Mo, avec `zeroconf` déjà dedans)
   utilisé UNIQUEMENT par `previastart.bat` si Windows n'a pas déjà Python
   (voir plus bas) ; ignoré sur Linux/Mac, rien à faire avec
-- `mdns_previa.py` — annonce `previa.local` sur le réseau (voir plus bas),
-  et détecte automatiquement les boîtiers alarme ESP32 du réseau
-- `esp_decouverts.json` — fichier vide, sert au démarrage à afficher les
-  ESP32 alarme détectés dans le panneau admin ; rien à faire avec, laisse-le
-  tel quel
+- `mdns_previa.py` — annonce `previa.local` sur le réseau (voir plus bas)
 
 Mets-les tous dans le même dossier (n'importe lequel, le nom du dossier
 n'a pas d'importance) — `python-windows/` compris, avec sa structure
