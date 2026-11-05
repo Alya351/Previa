@@ -373,7 +373,15 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                     env_map = {"cw": 90, "90": 90, "180": 180, "ccw": 270, "270": 270}
                     rot_deg = env_map.get(rot_env, 0)
 
-                _scale = "scale=1280:720:force_original_aspect_ratio=decrease:flags=fast_bilinear"
+                # Largeur maximale de l'image affichée (PREVIA_VIDEO_LARGEUR, ex. 960 sur Raspberry Pi) :
+                # moins de pixels à encoder en JPEG et à envoyer au navigateur. Défaut : 1280x720.
+                _larg = os.environ.get("PREVIA_VIDEO_LARGEUR", "").strip()
+                if _larg.isdigit() and 320 <= int(_larg) <= 1920:
+                    _lw = int(_larg)
+                    _lh = int(round(_lw * 9 / 16 / 2)) * 2
+                else:
+                    _lw, _lh = 1280, 720
+                _scale = f"scale={_lw}:{_lh}:force_original_aspect_ratio=decrease:flags=fast_bilinear"
                 if rot_deg == 90:
                     vf_filtre = f"transpose=1,{_scale}"
                 elif rot_deg == 180:
@@ -383,8 +391,17 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                 else:
                     vf_filtre = _scale
 
+                # Plafond d'images/s (PREVIA_VIDEO_FPS, ex. 15 sur Raspberry Pi) :
+                # moins de mise à l'échelle + d'encodage JPEG par caméra, donc moins de CPU.
+                _fps_max = os.environ.get("PREVIA_VIDEO_FPS", "").strip()
+                if _fps_max.isdigit() and int(_fps_max) > 0:
+                    vf_filtre = f"fps={int(_fps_max)},{vf_filtre}"
+
                 if ffmpeg:
                     opt_timeout = _option_timeout_rtsp(ffmpeg)
+                    # Qualité JPEG (PREVIA_VIDEO_QUALITE, 2 = max, 31 = min ; ex. 6 sur Raspberry Pi : images ~3x plus légères)
+                    _q = os.environ.get("PREVIA_VIDEO_QUALITE", "").strip()
+                    _qualite_jpeg = _q if _q.isdigit() and 2 <= int(_q) <= 31 else "2"
                     cmd = [
                         ffmpeg,
                         "-hide_banner",
@@ -404,7 +421,7 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         "-vf", vf_filtre,
                         "-f", "image2pipe",
                         "-vcodec", "mjpeg",
-                        "-q:v", "2",
+                        "-q:v", _qualite_jpeg,
                         "-"
                     ])
 
@@ -416,6 +433,21 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                             bufsize=65536
                         )
                         _processus_ffmpeg[id_camera] = proc
+                        # Lire en continu la sortie d'erreur de ffmpeg : si ce tuyau (64 Ko) se remplit sans
+                        # jamais être lu, ffmpeg se bloque et le flux vidéo se fige.
+                        _err_tampon = bytearray()
+
+                        def _vider_stderr(p=proc, tampon_err=_err_tampon):
+                            try:
+                                for ligne_err in iter(p.stderr.readline, b""):
+                                    tampon_err.extend(ligne_err)
+                                    if len(tampon_err) > 4096:
+                                        del tampon_err[:len(tampon_err) - 2048]
+                            except Exception:
+                                pass
+
+                        _th_err = threading.Thread(target=_vider_stderr, daemon=True)
+                        _th_err.start()
                         tampon = b""
                         reussi = False
                         stdout_flux = proc.stdout.raw if hasattr(proc.stdout, "raw") else proc.stdout
@@ -459,7 +491,8 @@ def demarrer_worker_camera(id_camera: str, url_flux: str) -> None:
                         if not reussi:
                             err_msg = ""
                             try:
-                                err_out = proc.stderr.read(2048).decode(errors="ignore") if proc.stderr else ""
+                                _th_err.join(timeout=1.0)
+                                err_out = bytes(_err_tampon[-2048:]).decode(errors="ignore")
                                 err_msg = err_out.strip()
                                 if err_msg:
                                     print(f"[rtsp_service] ⚠️ Erreur FFmpeg pour {id_camera} : {masquer_url_rtsp(err_msg)}", flush=True)

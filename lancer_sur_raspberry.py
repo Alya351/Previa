@@ -220,13 +220,16 @@ def synchroniser_code(ssh):
         ("migration/frontend/web/src", "migration/frontend/web/src"),
         ("migration/frontend/web/serveur_web_https.py", "migration/frontend/web/serveur_web_https.py"),
         ("docker", "docker"),
-        ("lancer_previa.py", "lancer_previa.py"),
+        ("raspberry", "raspberry"),
     ]
 
     def filtrer_tar(membre):
         nom = membre.name.lower()
         # Exclure les dossiers et fichiers temporaires / lourds
         if '__pycache__' in nom or '.git' in nom or 'node_modules' in nom or '.pytest_cache' in nom:
+            return None
+        # Le certificat HTTPS est propre à chaque machine : le Pi génère le sien (preparer_certificat.py)
+        if nom.replace('\\', '/').split('/')[-2:-1] == ['certs']:
             return None
         if nom.endswith('.mp4') or nom.endswith('.avi') or nom.endswith('.tar.gz') or nom.endswith('.onnx') or nom.endswith('.pt'):
             return None
@@ -255,7 +258,7 @@ def synchroniser_code(ssh):
     commande_extraction = (
         "mkdir -p ~/tech-impact/migration/db/cam/cameras && "
         "for path in migration/backend migration/frontend/web/dist "
-        "migration/frontend/web/src docker; do "
+        "migration/frontend/web/src docker raspberry; do "
         "[ ! -e \"$HOME/tech-impact/$path\" ] || chmod -R u+rwX \"$HOME/tech-impact/$path\" || true; "
         "done && "
         "tar -xzf /tmp/previa_sync.tar.gz --overwrite -m -C \"$HOME/tech-impact\"; "
@@ -264,13 +267,28 @@ def synchroniser_code(ssh):
     executer_commande_distante(ssh, commande_extraction)
     print("  [OK] Code synchronise sur le Raspberry Pi !")
 
+# Seuls ces modeles sont charges par le backend (voir DetectionPrincipal/). Le dossier
+# migration/models pese ~5,8 Go (doublon models/models, modeles non branches...) : tout
+# envoyer prendrait des heures et saturerait la carte SD. PREVIA_MODELES_COMPLETS=1 = tout.
+MODELES_DOSSIERS_UTILES = ("segformer-clothes/", "pedestrian-gender/", "osnet-reid/", "insightface/models/buffalo_l/")
+MODELES_TAILLE_MAX_RACINE = 30 * 1024 * 1024  # petits modeles YOLO (nano/small) a la racine
+
+def modele_utile(chemin, models_dir):
+    if os.environ.get("PREVIA_MODELES_COMPLETS") == "1":
+        return True
+    rel = chemin.relative_to(models_dir).as_posix()
+    if "/" not in rel:
+        return rel.lower().endswith((".pt", ".onnx", ".pth")) and chemin.stat().st_size <= MODELES_TAILLE_MAX_RACINE
+    return rel.startswith(MODELES_DOSSIERS_UTILES) and not rel.lower().endswith(".zip")
+
 def synchroniser_modeles(ssh):
     verifier_stockage_pi(ssh)
     models_dir = LOCAL_DIR / "migration" / "models"
     if not models_dir.is_dir():
         raise FileNotFoundError(f"Dossier de modeles absent : {models_dir}")
 
-    fichiers = sorted(path for path in models_dir.rglob("*") if path.is_file())
+    fichiers = sorted(path for path in models_dir.rglob("*") if path.is_file() and modele_utile(path, models_dir))
+    print(f"  [i] Modeles utiles : {len(fichiers)} fichiers, {sum(p.stat().st_size for p in fichiers) / (1024*1024):.0f} Mo (PREVIA_MODELES_COMPLETS=1 pour tout envoyer)")
     if not fichiers:
         raise FileNotFoundError(f"Aucun modele IA trouve dans : {models_dir}")
 
@@ -321,6 +339,39 @@ def synchroniser_modeles(ssh):
 
     print(f"  [OK] {len(a_transferer)} modele(s) synchronise(s) sur {len(fichiers)}.")
 
+def installer_configuration(ssh):
+    """Lance raspberry/installer_raspberry.sh sur le Pi et affiche sa sortie en direct :
+    nom previa.local, droits GPIO (sirene + lampe), services au demarrage.
+    Sans danger a relancer. Retourne True si tout s'est bien passe."""
+    print("\n[*] Configuration du Raspberry Pi (reseau, services, sirene/lampe GPIO)...")
+    print("    (la toute premiere fois, l'installation des paquets Python peut prendre 20 a 40 minutes)")
+    commande = "sudo -S -p '' bash \"$HOME/tech-impact/raspberry/installer_raspberry.sh\" 2>&1"
+    stdin, stdout, _ = ssh.exec_command(commande)
+    stdin.write(PASSWORD + "\n")
+    stdin.flush()
+    for ligne in iter(stdout.readline, ""):
+        print("    " + ligne.rstrip())
+    code = stdout.channel.recv_exit_status()
+    if code != 0:
+        print(f"  [!] L'installateur s'est termine avec le code {code} (voir les messages ci-dessus).")
+        return False
+    print("  [OK] Configuration du Raspberry Pi terminee.")
+    return True
+
+def executer_diagnostic(ssh):
+    """Lance raspberry/diagnostic_pi.py sur le Pi (memoire, temperature, ports, securite, modeles,
+    video...) et affiche le rapport en direct. Desactivable : PREVIA_SANS_DIAGNOSTIC=1."""
+    if os.environ.get("PREVIA_SANS_DIAGNOSTIC") == "1":
+        return
+    print("\n[*] Diagnostic du Raspberry Pi (environ 1 a 5 minutes : attente du chargement des modeles IA)...")
+    commande = "sudo -S -p '' python3 \"$HOME/tech-impact/raspberry/diagnostic_pi.py\" --attendre-modeles 240 2>&1"
+    stdin, stdout, _ = ssh.exec_command(commande)
+    stdin.write(PASSWORD + "\n")
+    stdin.flush()
+    for ligne in iter(stdout.readline, ""):
+        print("    " + ligne.rstrip())
+    stdout.channel.recv_exit_status()
+
 def executer_sur_pi(host):
     print(f"\n[>] [2/3] Connexion SSH a {host}...")
     ssh = paramiko.SSHClient()
@@ -335,6 +386,11 @@ def executer_sur_pi(host):
 
     synchroniser_code(ssh)
     synchroniser_modeles(ssh)
+    try:
+        installateur_ok = installer_configuration(ssh)
+    except Exception as exc:
+        print(f"  [!] Configuration du Raspberry non terminee : {exc}")
+        installateur_ok = False
 
     # Synchro stricte de la date, heure et fuseau horaire vers le Raspberry Pi (anti-décalage horodatage & plages horaires)
     now_epoch = int(time.time())
@@ -368,13 +424,20 @@ def executer_sur_pi(host):
     print(f"======================================================================\n")
 
     # Redémarrage propre du service central sur le Raspberry Pi
-    etat_services = executer_commande_distante(
-        ssh,
-        "systemctl restart previa-api.service previa-web.service && "
-        "systemctl is-active previa-api.service previa-web.service",
-        sudo=True,
-    )
-    print(f"  [OK] Services PREVIA : {etat_services.strip().replace(chr(10), ', ')}")
+    commande_services = "systemctl is-active previa-api.service previa-web.service"
+    if not installateur_ok:
+        commande_services = "systemctl restart previa-api.service previa-web.service && " + commande_services
+    try:
+        etat_services = executer_commande_distante(ssh, commande_services, sudo=True)
+        print(f"  [OK] Services PREVIA : {etat_services.strip().replace(chr(10), ', ')}")
+    except Exception as exc:
+        # Ne pas s'arrêter ici : les journaux affichés ensuite expliquent justement pourquoi un service ne tourne pas
+        print(f"  [!] Un service PREVIA n'est pas actif : {exc}")
+        print("      Les journaux ci-dessous indiquent la cause (api : previa-api, site : previa-web).")
+    try:
+        executer_diagnostic(ssh)
+    except Exception as exc:
+        print(f"  [!] Diagnostic non execute : {exc}")
 
     # Lancement de la surveillance des logs en direct
     cmd = "journalctl -u previa-api.service -u previa-web.service -f -n 25"
