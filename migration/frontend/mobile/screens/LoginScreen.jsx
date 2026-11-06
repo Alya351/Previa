@@ -134,11 +134,11 @@ export const LoginScreen = ({ onLogin }) => {
             <TouchableOpacity
               onPress={() => setAfficherAdresse(!afficherAdresse)}
               accessibilityRole="button"
-              accessibilityLabel="Adresse du serveur (avancé)"
+              accessibilityLabel="Réglage avancé"
               hitSlop={8}
             >
               <Text style={styles.loginAdvancedLink}>
-                {afficherAdresse ? '▾ Adresse du serveur (avancé)' : '▸ Adresse du serveur (avancé)'}
+                {afficherAdresse ? '▾ Réglage avancé (administrateur)' : '▸ Réglage avancé (administrateur)'}
               </Text>
             </TouchableOpacity>
             {afficherAdresse && (
@@ -147,7 +147,7 @@ export const LoginScreen = ({ onLogin }) => {
                   style={[styles.loginTextInput, { paddingLeft: 18 }]}
                   value={adresse}
                   onChangeText={setAdresse}
-                  placeholder="Vide = recherche automatique (ex. 100.101.102.103)"
+                  placeholder="Laisser vide : connexion automatique"
                   placeholderTextColor="#94A3B8"
                   autoCapitalize="none"
                   autoCorrect={false}

@@ -119,8 +119,8 @@ let decouverteEnCours = null;
 let adresseManuelle = null;
 
 const MESSAGE_INTROUVABLE =
-  "Serveur PREVIA introuvable. Sur place : connectez-vous au Wi-Fi du site. " +
-  "À distance : activez Tailscale puis réessayez.";
+  "Impossible de joindre votre système PREVIA pour le moment. Vérifiez que votre téléphone est connecté à Internet " +
+  "(Wi-Fi ou données mobiles), puis réessayez. Si le problème continue, contactez votre administrateur.";
 
 // "192.168.1.20" -> "http://192.168.1.20:8080" ; "https://x.ts.net/docs" -> "https://x.ts.net"
 export function normaliserAdresse(saisie) {
@@ -243,12 +243,13 @@ async function appelApi(chemin, options = {}, redecouverte = false) {
       } catch (e) { /* pas de corps JSON */ }
       if (!detail) {
         detail = reponse.status === 404
-          ? "Erreur 404 : cette adresse ne répond pas comme un serveur PREVIA. Vérifiez l'adresse du serveur."
-          : `Erreur ${reponse.status}`;
+          ? "Ce système ne répond pas comme un système PREVIA. Contactez votre administrateur."
+          : "Une erreur est survenue. Réessayez dans un instant.";
       }
       // Une réponse HTTP prouve que le serveur est joignable : pas de nouvelle recherche.
       const erreurHttp = new Error(detail);
       erreurHttp.http = true;
+      erreurHttp.statut = reponse.status; // gardé pour le diagnostic, jamais affiché
       throw erreurHttp;
     }
     return reponse.json();

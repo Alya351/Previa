@@ -90,7 +90,7 @@ function MainApplication() {
         setCameraChoisie((prev) => prev || camerasPropres[0]?.id_camera || null);
       }
     } catch (err) {
-      setNetworkError(err?.message || "Erreur de connexion au serveur");
+      setNetworkError(err?.message || "Connexion impossible pour le moment. Réessayez dans un instant.");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
