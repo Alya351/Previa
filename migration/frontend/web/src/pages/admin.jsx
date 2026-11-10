@@ -1604,10 +1604,17 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
   const listeSuspects = useMemo(() => {
     return detectionsSurCetteCam.filter((p) => {
       const isEmployee = Boolean(p.nom) || p.statut === 'connu' || p.statut === 'vient_d_etre_confirme';
+      const inZone = Boolean(
+        p.intrusionZoneActive ||
+        p.en_zone_interdite ||
+        (p.intrusionZone && p.intrusionZone !== 'Hors zone') ||
+        (p.motif_suspicion && p.motif_suspicion.toLowerCase().includes('zone'))
+      );
       return (
+        (!isEmployee && inZone) ||
         p.est_suspect === true ||
         (p.riskPct !== undefined && p.riskPct >= 50) ||
-        (!isEmployee && (p.intrusionZoneActive || p.rodageClass === 'danger' || p.infiltrationClass === 'danger' || p.statusClass === 'warn'))
+        (!isEmployee && (p.rodageClass === 'danger' || p.infiltrationClass === 'danger' || p.statusClass === 'warn'))
       );
     });
   }, [detectionsSurCetteCam]);
@@ -5817,6 +5824,10 @@ export default function Admin() {
         // Si l'analyse détaillée est encore en cours mais que YOLO a détecté des personnes en direct :
         const nbDirect = Math.max(c.nombrePersonnes || 0, vueActuelle.nombre_personnes || 0, (vueActuelle.personnes_suivies || []).length);
         if ((!personnesVues.personnes || personnesVues.personnes.length === 0) && nbDirect > 0) {
+          const aUneZoneInterdite = Boolean(
+            c.zone || c.zoneSensible || c.hasZone ||
+            (Array.isArray(alertes) && alertes.some((al) => String(al.id_camera || '') === String(c.id_camera || '') && al.type_evenement === 'intrusion_zone'))
+          );
           for (let i = 0; i < nbDirect; i++) {
             const ps = (vueActuelle.personnes_suivies || [])[i];
             nouvellesPersonnes.push({
@@ -5824,14 +5835,17 @@ export default function Admin() {
               pid: `live_${c.id_camera}_${ps?.track_id || i + 1}`,
               nom: null,
               matricule: null,
-              statut: 'visiteur',
-              est_suspect: false,
-              riskPct: 15,
-              riskLevel: 'low',
+              statut: aUneZoneInterdite ? 'zone_interdite' : 'en_cours_identification',
+              est_suspect: aUneZoneInterdite,
+              intrusionZoneActive: aUneZoneInterdite,
+              en_zone_interdite: aUneZoneInterdite,
+              motif_suspicion: aUneZoneInterdite ? 'Intrusion en zone interdite' : null,
+              riskPct: aUneZoneInterdite ? 96 : 20,
+              riskLevel: aUneZoneInterdite ? 'high' : 'low',
               camCtx,
               genre: null,
               vetements: [],
-              action: { posture: { activite: 'Surveillance' } },
+              action: { posture: { activite: aUneZoneInterdite ? 'Intrusion en zone protégée' : 'Surveillance' } },
             });
           }
         }

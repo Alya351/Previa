@@ -107,16 +107,28 @@ export function mapPersonneApi(p, idx, camCtx) {
   const regard = regardInfo(p.comportement?.regarde_autour);
   const infiltration = infiltrationInfo(p.comportement?.infiltration);
   const intrusionZone = intrusionZoneInfo(p.comportement?.intrusion_zone);
+  const isZoneIntrusion = Boolean(
+    p.intrusion_zone_active ||
+    p.en_zone_interdite ||
+    p.comportement?.intrusion_zone?.intrusion ||
+    (p.motif_suspicion && p.motif_suspicion.toLowerCase().includes('zone')) ||
+    (intrusionZone.texte && intrusionZone.texte !== 'Hors zone')
+  );
   const disparus = p.comportement?.objets_disparus || [];
-  const riskPct = Math.min(100, Math.max(rodeur.risk, regard.risk, infiltration.risk, intrusionZone.risk, disparus.length ? 90 : 0));
+  const rawRisk = Math.max(rodeur.risk, regard.risk, infiltration.risk, intrusionZone.risk, disparus.length ? 90 : 0);
+  const riskPct = Math.min(100, isZoneIntrusion ? Math.max(rawRisk, 96) : rawRisk);
   const avisIA = avisIADe(p);
   const id = p.id || `personne_${camCtx.id_camera}_${idx}`;
+
+  const isEmployee = Boolean(p.nom) || p.statut === 'connu' || p.statut === 'vient_d_etre_confirme';
+  const estSuspect = isZoneIntrusion && !isEmployee ? true : (p.est_suspect !== undefined ? p.est_suspect : (riskPct >= 60 || statut.cls === 'warn'));
 
   return {
     id,
     isObject: false,
     radarPos: stableRadarPos(id),
     camCtx,
+    statut: p.statut || (p.nom ? 'connu' : 'inconnu'),
     statusLabel: statut.label,
     statusClass: statut.cls,
     riskPct,
@@ -128,9 +140,10 @@ export function mapPersonneApi(p, idx, camCtx) {
     regardClass: regard.cls,
     infiltration: infiltration.texte,
     infiltrationClass: infiltration.cls,
-    intrusionZone: intrusionZone.texte,
-    intrusionZoneClass: intrusionZone.cls,
-    intrusionZoneActive: !!p.comportement?.intrusion_zone?.intrusion,
+    intrusionZone: isZoneIntrusion ? 'Intrusion en zone non autorisée' : intrusionZone.texte,
+    intrusionZoneClass: isZoneIntrusion ? 'danger' : intrusionZone.cls,
+    intrusionZoneActive: isZoneIntrusion,
+    en_zone_interdite: isZoneIntrusion,
     dejaSuspectAilleurs: p.comportement?.deja_suspect_ailleurs || null,
     avisIA,
     visage: p.visage_detecte ? 'Oui' : 'Non',
@@ -142,10 +155,10 @@ export function mapPersonneApi(p, idx, camCtx) {
     box_corps: p.box_corps || null,
     box_normalisee: p.box_normalisee || null,
     resolution: p.resolution || null,
-    est_suspect: p.est_suspect !== undefined ? p.est_suspect : (riskPct >= 60 || statut.cls === 'warn'),
+    est_suspect: estSuspect,
     nom: p.nom || null,
     matricule: p.matricule || null,
-    motif_suspicion: p.motif_suspicion || (riskPct >= 60 ? 'Comportement suspect détecté' : null),
+    motif_suspicion: isZoneIntrusion && !isEmployee ? 'Intrusion en zone interdite' : (p.motif_suspicion || (riskPct >= 60 ? 'Comportement suspect détecté' : null)),
     clothes: (p.vetements || []).map((v) => ({
       name: `${v.type}${v.couleur ? ' (' + v.couleur + ')' : ''}`,
       color: couleurVersHex(v.couleur),

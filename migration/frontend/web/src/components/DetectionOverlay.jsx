@@ -45,13 +45,29 @@ export function DetectionOverlay({ detections = [], width = 640, height = 480 })
           hPercent = Math.max(3, Math.min(100 - topPercent, ((y2 - y1) / resH) * 100));
         }
 
-        // RÈGLE DE SÉCURITÉ HUD PREVIA :
-        // 1. ROUGE = Personne suspecte (anomalie comportementale, intrusion zone, rôdage prolongé, visage dissimulé)
-        // 2. VERT  = Collaborateur identifié (reconnu par Face ID, personnel de l'entreprise)
-        // 3. BLEU  = Visiteur normal (personne non enregistrée mais circulant normalement sans anomalie)
+        // RÈGLE DE SÉCURITÉ HUD PREVIA STRICTE :
+        // 1. VERT  = Collaborateur autorisé identifié (Face ID / personnel officiel)
+        // 2. ROUGE = Suspect / Intrusion (Toute personne non autorisée dans une zone délimitée ou comportement anormal)
+        // 3. BLEU  = Visiteur normal (UNIQUEMENT si la personne circule normalement HORS de toute zone sensible)
         const isEmployee = Boolean(det.nom) || det.statut === 'connu' || det.statut === 'vient_d_etre_confirme';
-        const isSuspect = det.est_suspect === true || (det.riskPct !== undefined && det.riskPct >= 60) || (!isEmployee && (det.intrusionZoneActive || det.rodageClass === 'danger' || det.infiltrationClass === 'danger'));
-        const isVisitor = !isSuspect && !isEmployee;
+        
+        // Détection de présence en zone sensible délimitée
+        const inForbiddenZone = Boolean(
+          det.intrusionZoneActive ||
+          det.en_zone_interdite ||
+          (det.motif_suspicion && det.motif_suspicion.toLowerCase().includes('zone')) ||
+          (det.intrusionZone && det.intrusionZone !== 'Hors zone')
+        );
+
+        // RÈGLE ABSOLUE : Dans une zone délimitée, AUCUN visiteur normal n'est toléré !
+        // Quiconque n'est pas un collaborateur autorisé dans une zone délimitée est STRICTEMENT un suspect/intrus.
+        const isSuspect = (!isEmployee && inForbiddenZone) ||
+          det.est_suspect === true ||
+          (det.riskPct !== undefined && det.riskPct >= 60) ||
+          (!isEmployee && (det.rodageClass === 'danger' || det.infiltrationClass === 'danger'));
+
+        // Visiteur = NON employé ET NON suspect ET NON en zone délimitée
+        const isVisitor = !isSuspect && !isEmployee && !inForbiddenZone;
 
         const color = isSuspect ? '#ef4444' : isVisitor ? '#0284c7' : '#10b981';
         const bgColor = isSuspect ? 'rgba(239, 68, 68, 0.20)' : isVisitor ? 'rgba(2, 132, 199, 0.18)' : 'rgba(16, 185, 129, 0.20)';
@@ -62,11 +78,13 @@ export function DetectionOverlay({ detections = [], width = 640, height = 480 })
           ? '0 0 16px rgba(2, 132, 199, 0.7), inset 0 0 8px rgba(2, 132, 199, 0.25)'
           : '0 0 18px rgba(16, 185, 129, 0.8), inset 0 0 10px rgba(16, 185, 129, 0.3)';
 
-        const labelTexte = isSuspect
-          ? (det.motif_suspicion ? `🚨 ${det.motif_suspicion.toUpperCase()}` : '🚨 INDIVIDU SUSPECT')
-          : isVisitor
-          ? '👤 VISITEUR (NORMAL)'
-          : (det.nom ? `✅ ${det.nom} (${det.matricule || 'COLLABORATEUR'})` : '✅ COLLABORATEUR AUTORISÉ');
+        const labelTexte = isEmployee
+          ? (det.nom ? `✅ ${det.nom} (${det.matricule || 'COLLABORATEUR'})` : '✅ COLLABORATEUR AUTORISÉ')
+          : isSuspect
+          ? (inForbiddenZone
+              ? '🚨 INTRUSION EN ZONE INTERDITE'
+              : (det.motif_suspicion ? `🚨 ${det.motif_suspicion.toUpperCase()}` : '🚨 INDIVIDU SUSPECT'))
+          : '👤 VISITEUR (NORMAL)';
 
         return (
           <div

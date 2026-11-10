@@ -69,31 +69,45 @@ except Exception as _exc:
     DEVICE = "cpu"
     print(f"[on_voit_qui] torch non chargé ({_exc})", flush=True)
 
-try:
-    from insightface.app import FaceAnalysis
-except Exception as _exc:
-    print(f"[on_voit_qui] insightface non chargé ({_exc})", flush=True)
-    FaceAnalysis = None
+# Chargement paresseux (Lazy-loading) des bibliothèques d'IA lourdes
+# Permet au serveur FastAPI de démarrer en 3-5 secondes au lieu d'attendre 2 minutes !
+FaceAnalysis = None
+FeatureExtractor = None
+AutoImageProcessor = None
+AutoModelForImageClassification = None
+AutoModelForSemanticSegmentation = None
+SegformerImageProcessor = None
 
-try:
-    from torchreid.reid.utils import FeatureExtractor
-except Exception as _exc:
-    print(f"[on_voit_qui] torchreid non chargé ({_exc})", flush=True)
-    FeatureExtractor = None
+def _importer_libs_ia_lourdes():
+    global FaceAnalysis, FeatureExtractor, AutoImageProcessor, AutoModelForImageClassification, AutoModelForSemanticSegmentation, SegformerImageProcessor
+    if FaceAnalysis is None:
+        try:
+            from insightface.app import FaceAnalysis as _FA
+            FaceAnalysis = _FA
+        except Exception as _exc:
+            print(f"[on_voit_qui] insightface non chargé ({_exc})", flush=True)
 
-try:
-    from transformers import (
-        AutoImageProcessor,
-        AutoModelForImageClassification,
-        AutoModelForSemanticSegmentation,
-        SegformerImageProcessor,
-    )
-except Exception as _exc:
-    print(f"[on_voit_qui] transformers non chargé ({_exc})", flush=True)
-    AutoImageProcessor = None
-    AutoModelForImageClassification = None
-    AutoModelForSemanticSegmentation = None
-    SegformerImageProcessor = None
+    if FeatureExtractor is None:
+        try:
+            from torchreid.reid.utils import FeatureExtractor as _FE
+            FeatureExtractor = _FE
+        except Exception:
+            pass
+
+    if SegformerImageProcessor is None:
+        try:
+            from transformers import (
+                AutoImageProcessor as _AIP,
+                AutoModelForImageClassification as _AMC,
+                AutoModelForSemanticSegmentation as _AMS,
+                SegformerImageProcessor as _SIP,
+            )
+            AutoImageProcessor = _AIP
+            AutoModelForImageClassification = _AMC
+            AutoModelForSemanticSegmentation = _AMS
+            SegformerImageProcessor = _SIP
+        except Exception as _exc:
+            print(f"[on_voit_qui] transformers non chargé ({_exc})", flush=True)
 
 try:
     from ultralytics import YOLO
@@ -316,9 +330,13 @@ COLOR_FR = {
 
 GENDER_FR = {"female": "femme", "male": "homme"}
 
-CONF_PERSONNE = 0.25
+CONF_PERSONNE = 0.30
 CONF_VETEMENT = 0.35
 CONF_POSE = 0.35
+
+# Cache de persistance de tracking d'employés : (id_camera, track_id) -> (employe_dict, timestamp)
+# Empêche le clignotement ou la perte d'identification si la personne tourne temporairement la tête
+_cache_track_employe: dict[tuple[str, int | str], tuple[dict, float]] = {}
 
 # Seuil bas, spécifique au suivi de zone anonyme pour le rôdage (voir
 # on_surveil_quoi/rodeur.py, assigner_zone_anonyme) — une personne trop
@@ -595,6 +613,7 @@ def _get_models_impl():
     global _models, _face_app
     if _models is None:
         print("[on_voit_qui] initialisation des modèles...", flush=True)
+        _importer_libs_ia_lourdes()
         person_seg = None
         clothing = None
         pose = None
@@ -654,7 +673,7 @@ def _get_models_impl():
                     allowed_modules=["detection", "recognition", "genderage", "landmark_3d_68"],
                     root=str(MODELS_DIR / "insightface"),
                 )
-                face_app.prepare(ctx_id=-1, det_size=(320, 320) if DEVICE == "cpu" else (640, 640))
+                face_app.prepare(ctx_id=-1, det_size=(640, 640) if (DEVICE != "cpu" or os.name == "nt") else (320, 320))
             except Exception as e:
                 print(f"[on_voit_qui] face_app ignoré : {e}", flush=True)
 
@@ -858,14 +877,33 @@ def _run_seg(model, frame, conf, utiliser_onnx=True, imgsz=None, id_camera=None,
 
 
 def _is_valid_human_pose(p_pose: dict) -> bool:
-    """Valide qu'une détection squelette possède de vraies articulations humaines."""
+    """Valide qu'une détection squelette possède de vraies articulations humaines
+    et élimine formellement les objets inanimés (tableaux, écrans, fenêtres)."""
     if not p_pose:
         return False
     kpts = p_pose.get("keypoints")
     if kpts is None or len(kpts) < 5:
         return False
-    visibles = [pt for pt in kpts if len(pt) >= 3 and pt[2] > 0.35]
-    return len(visibles) >= 3
+
+    # Filtre de rigueur anatomique : au moins 4 articulations nettes
+    visibles = [pt for pt in kpts if len(pt) >= 3 and pt[2] > 0.40]
+    if len(visibles) < 4:
+        return False
+
+    # Vérification que le squelette contient au moins la tête ou les épaules (kpts 0-6)
+    has_upper = any(len(kpts[idx]) >= 3 and kpts[idx][2] > 0.40 for idx in range(min(7, len(kpts))))
+    if not has_upper:
+        return False
+
+    # Vérification de géométrie corporelle : un tableau/écran est horizontal (W > H), un humain est vertical
+    bx = p_pose.get("box", [0, 0, 0, 0])
+    w = abs(bx[2] - bx[0])
+    h = abs(bx[3] - bx[1])
+    if w > 0 and h > 0 and (w / h) > 1.35:
+        # Objet horizontal (caractéristique d'un tableau mural, écran ou table)
+        return False
+
+    return True
 
 
 def _run_pose(model, frame, conf):
@@ -904,8 +942,20 @@ def detect_faces(face_app, frame_bgr, poses=None):
                 if f.det_score < FACE_MIN_CONF:
                     continue
                 pose = getattr(f, "pose", None)
+                fb = f.bbox.tolist()
+                fw = fb[2] - fb[0]
+                fh = fb[3] - fb[1]
+                # Cadrage harmonieux du visage avec marge naturelle de 8%
+                pad_w = fw * 0.08
+                pad_h = fh * 0.08
+                box_ajustee = [
+                    round(max(0.0, fb[0] - pad_w), 1),
+                    round(max(0.0, fb[1] - pad_h), 1),
+                    round(min(float(frame_bgr.shape[1]), fb[2] + pad_w), 1),
+                    round(min(float(frame_bgr.shape[0]), fb[3] + pad_h), 1),
+                ]
                 faces.append({
-                    "box": [round(float(v), 1) for v in f.bbox.tolist()],
+                    "box": box_ajustee,
                     "confidence": round(float(f.det_score), 3),
                     "embedding": [round(float(x), 6) for x in f.normed_embedding.tolist()],
                     "genre": {0: "female", 1: "male"}.get(int(f.gender)) if f.gender is not None else None,
@@ -930,15 +980,25 @@ def detect_faces(face_app, frame_bgr, poses=None):
                 ys = [pt[1] for pt in visibles]
                 min_x, max_x = min(xs), max(xs)
                 min_y, max_y = min(ys), max(ys)
-                largeur = max(30.0, (max_x - min_x) * 2.0)
-                hauteur = max(35.0, (max_y - min_y) * 2.2)
-                cx = (min_x + max_x) / 2.0
-                cy = (min_y + max_y) / 2.0
+
+                # Si le nez est visible, il est le centre anatomique du visage
+                nose_pt = face_kpts[0]
+                if len(nose_pt) >= 3 and nose_pt[2] > 0.35:
+                    cx = float(nose_pt[0])
+                    cy = float(nose_pt[1])
+                else:
+                    cx = (min_x + max_x) / 2.0
+                    cy = (min_y + max_y) / 2.0
+
+                largeur = max(50.0, (max_x - min_x) * 1.8)
+                hauteur = max(60.0, largeur * 1.25)
+
+                # Cadrage centré sur les yeux, le nez et le menton (pas sur le crâne)
                 x1 = max(0.0, cx - largeur / 2.0)
-                y1 = max(0.0, cy - hauteur * 0.6)
+                y1 = max(0.0, cy - hauteur * 0.45)
                 x2 = min(float(w), cx + largeur / 2.0)
-                y2 = min(float(h), cy + hauteur * 0.6)
-                
+                y2 = min(float(h), cy + hauteur * 0.55)
+
                 faces.append({
                     "box": [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)],
                     "confidence": 0.85,
@@ -1150,7 +1210,7 @@ def identify_face(embedding: list | None, deja_pris: set | None = None) -> dict:
         for e_vec in candidats_emb:
             if len(e_vec) == len(embedding):
                 sim = _cosine_similarity(embedding, e_vec)
-                if sim >= 0.38 and sim > meilleure_sim_emp:
+                if sim >= 0.33 and sim > meilleure_sim_emp:
                     meilleure_sim_emp, meilleur_emp_id = sim, emp_id
 
     if meilleur_emp_id is not None:
@@ -1492,10 +1552,18 @@ def analyser(id_camera: str, frame) -> dict:
 
     _t0 = time.time()
     tous_candidats_personnes = _run_seg(models["person_seg"], frame, CONF_RODEUR_ANONYME, imgsz=IMGSZ_PERSONNES, id_camera=id_camera)
-    personnes = [
-        d for d in tous_candidats_personnes
-        if _est_personne(d) and d.get("score", 0.0) >= 0.05
-    ]
+    # Filtrage strict des personnes réelles pour éliminer les détections fantômes dans le vide :
+    # Un score >= 0.30 et une boîte minimale évitent de prendre les plis de rideaux, sacs ou chaises pour des personnes.
+    personnes = []
+    for d in tous_candidats_personnes:
+        if not _est_personne(d):
+            continue
+        sc = float(d.get("score", 0.0))
+        bx = d.get("box", [0, 0, 0, 0])
+        w_px = abs(bx[2] - bx[0])
+        h_px = abs(bx[3] - bx[1])
+        if sc >= 0.30 and w_px >= 25 and h_px >= 45:
+            personnes.append(d)
 
     # Si aucune personne crédible n'est détectée (score < 0.25) et aucune orientation verrouillée,
     # tester les 3 autres orientations — au plus une fois toutes les
@@ -1680,16 +1748,28 @@ def analyser(id_camera: str, frame) -> dict:
     pose_centroids = [p["centroid"] for p in poses]
     assignation_poses = _assign_faces_to_people(centroides_personnes, pose_centroids)
 
-    # Validation des détections de personnes :
-    # Conservé si un visage est présent, si une pose humaine est validée,
-    # OU si le score YOLO atteint le seuil CONF_PERSONNE (0.20)
+    # Validation rigoureuse des détections de personnes :
+    # Une détection n'est humaine QUE si elle a un vrai visage, une vraie pose humaine anatomique,
+    # ou une boîte strictement verticale à haute confiance (pour exclure formellement les tableaux, écrans et meubles).
     personnes_valides = []
     for i, p in enumerate(personnes):
         has_face = assignation_visages.get(i) is not None
         pose_idx = assignation_poses.get(i)
         has_valid_pose = (pose_idx is not None and _is_valid_human_pose(poses[pose_idx]))
-        high_score = p.get("score", 0.0) >= CONF_PERSONNE
-        if has_face or has_valid_pose or high_score:
+
+        bx = p.get("box", [0, 0, 0, 0])
+        w_box = abs(bx[2] - bx[0])
+        h_box = abs(bx[3] - bx[1])
+        ratio_vertical = (h_box / max(1.0, w_box))
+
+        if has_face:
+            # Présence d'un visage certifié
+            personnes_valides.append(p)
+        elif has_valid_pose:
+            # Présence d'un squelette humain articulé certifié
+            personnes_valides.append(p)
+        elif p.get("score", 0.0) >= 0.45 and ratio_vertical >= 1.25 and h_box >= 60 and w_box >= 30:
+            # Silhouette nettement verticale à confiance élevée (humain debout/assis de dos)
             personnes_valides.append(p)
 
     personnes = personnes_valides
@@ -1871,7 +1951,7 @@ def analyser(id_camera: str, frame) -> dict:
                         e_vec = np.array(e_item, dtype=np.float32)
                         e_norm = float(np.linalg.norm(e_vec)) + 1e-8
                         sim = float(np.dot(f_emb, e_vec) / (f_norm * e_norm))
-                        if sim > meilleure_sim and sim >= FACE_MATCH_THRESHOLD:
+                        if sim > meilleure_sim and sim >= 0.33:
                             meilleure_sim = sim
                             meilleur_emp = emp
             if meilleur_emp:
@@ -1880,6 +1960,33 @@ def analyser(id_camera: str, frame) -> dict:
                 identite["statut"] = "connu"
                 identite["id"] = pid
                 identite["similarite"] = round(meilleure_sim, 3)
+
+                # Auto-enrichissement multi-angles : si bonne reconnaissance (>= 0.48)
+                # et moins de 10 angles stockés, mémoriser ce nouvel angle pour fiabilité maximale
+                try:
+                    current_embs = employe_trouve.get("embeddings") or []
+                    if meilleure_sim >= 0.48 and len(current_embs) < 10:
+                        new_emb_list = [round(float(v), 5) for v in face["embedding"]]
+                        if not any(_cosine_similarity(new_emb_list, ex) > 0.90 for ex in current_embs):
+                            current_embs.append(new_emb_list)
+                            employe_trouve["embeddings"] = current_embs
+                            db.reference(f"personnel/{employe_trouve['id']}").update({"embeddings": current_embs})
+                except Exception:
+                    pass
+
+        # Lissage temporel sur le Track ID pour éviter tout clignotement ou décrochage intempestif
+        track_id = personne.get("track_id")
+        cle_track = (id_camera, track_id) if track_id is not None else None
+        if employe_trouve:
+            if cle_track:
+                _cache_track_employe[cle_track] = (employe_trouve, now)
+        elif cle_track and cle_track in _cache_track_employe:
+            emp_cached, ts_cached = _cache_track_employe[cle_track]
+            if (now - ts_cached) <= 4.0:
+                employe_trouve = emp_cached
+                pid = employe_trouve.get("id")
+                identite["statut"] = "connu"
+                identite["id"] = pid
 
         # Union entre caméras (voir _lier_corps_a_visage) : cette
         # personne vient d'être identifiée PAR SON VISAGE ici — si son
@@ -1984,6 +2091,7 @@ def analyser(id_camera: str, frame) -> dict:
             frame.shape,
             now,
             track_id=personne.get("track_id"),
+            employe=employe_trouve,
         )
 
         # Déterminer si la personne est suspecte ou autorisée (Face ID + Comportement)
@@ -2015,18 +2123,24 @@ def analyser(id_camera: str, frame) -> dict:
 
         # Évaluation des vraies anomalies comportementales et sécuritaires (s'applique à tous)
         if not est_suspect:
-            if face is None and porte_chapeau and porte_noir:
-                est_suspect = True
-                motif_suspicion = "Visage dissimulé / Cagoule"
-            elif comportement.get("intrusion_zone", {}).get("intrusion"):
-                est_suspect = True
-                motif_suspicion = "Intrusion en zone interdite"
+            if comportement.get("intrusion_zone", {}).get("intrusion"):
+                nom_zone = comportement.get("intrusion_zone", {}).get("nom_zone", "")
+                est_autorise = False
+                if employe_trouve and employe_trouve.get("statut") == "actif":
+                    zones_permises = employe_trouve.get("zonesAutorisees") or []
+                    if "Toutes les zones" in zones_permises or any(z.lower() in nom_zone.lower() for z in zones_permises):
+                        est_autorise = True
+                if not est_autorise:
+                    est_suspect = True
+                    motif_suspicion = "Intrusion en zone interdite"
             elif comportement.get("rodeur", {}).get("rodeur"):
-                est_suspect = True
-                motif_suspicion = "Comportement rôdeur détecté"
+                if not (employe_trouve and employe_trouve.get("statut") == "actif"):
+                    est_suspect = True
+                    motif_suspicion = "Comportement rôdeur détecté"
             elif comportement.get("infiltration", {}).get("infiltre"):
-                est_suspect = True
-                motif_suspicion = "Infiltration sans passage entrée"
+                if not (employe_trouve and employe_trouve.get("statut") == "actif"):
+                    est_suspect = True
+                    motif_suspicion = "Infiltration sans passage entrée"
 
         frame_h, frame_w = frame.shape[:2]
         bx_corps = personne["box"]
@@ -2039,6 +2153,11 @@ def analyser(id_camera: str, frame) -> dict:
             round(float(bx_actif[3]) / max(1, frame_h), 4),
         ] if bx_actif and len(bx_actif) == 4 and frame_w > 0 and frame_h > 0 else None
 
+        is_intrusion_active = bool(comportement.get("intrusion_zone", {}).get("intrusion"))
+        if is_intrusion_active and not (employe_trouve and employe_trouve.get("statut") == "actif"):
+            est_suspect = True
+            motif_suspicion = "Intrusion en zone interdite"
+
         profils.append({
             "id": pid,
             "statut": identite["statut"],
@@ -2048,6 +2167,8 @@ def analyser(id_camera: str, frame) -> dict:
             "box_normalisee": box_norm,
             "resolution": [frame_w, frame_h],
             "est_suspect": est_suspect,
+            "intrusion_zone_active": is_intrusion_active,
+            "en_zone_interdite": is_intrusion_active,
             "nom": nom_collaborateur,
             "matricule": matricule_collaborateur,
             "motif_suspicion": motif_suspicion,

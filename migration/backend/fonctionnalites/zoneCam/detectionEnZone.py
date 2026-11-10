@@ -6,6 +6,7 @@ import cv2
 from fonctionnalites.Alertes import alertes, comparaison_ia
 from fonctionnalites.ComportementsSupects import profil_suspect, rodeur
 from fonctionnalites.Infrastructure import rapport_cam
+from fonctionnalites.Infrastructure.local_store import db
 from fonctionnalites.zoneCam import enregitre as zone_registre
 
 # Délai minimum hors-zone (en secondes) avant de réarmer une nouvelle alerte
@@ -194,6 +195,7 @@ def evaluer(
     frame_shape: tuple,
     now: float,
     track_id: int | str | None = None,
+    employe: dict | None = None,
 ) -> dict:
     """Cœur du module d'intrusion par zone.
     Garantit UNE SEULE alerte par intrusion (identifiée par Track ID / PID).
@@ -237,17 +239,60 @@ def evaluer(
         or _point_dans_zone(polygone, point_bas_tiers)
     )
 
+    # Vérification des autorisations d'accès à la zone (REQ-CAM-05)
+    emp_cible = employe
+    if not emp_cible and pid:
+        try:
+            personnel_db = db.reference("personnel").get() or {}
+            if isinstance(personnel_db, dict):
+                emp_cible = personnel_db.get(pid)
+                if not emp_cible:
+                    for e in personnel_db.values():
+                        if e and (e.get("id") == pid or e.get("face_id") == pid or str(e.get("id")) in str(pid)):
+                            emp_cible = e
+                            break
+        except Exception:
+            pass
+
+    est_autorise = False
+    if emp_cible and emp_cible.get("statut") == "actif":
+        zones_permises = emp_cible.get("zonesAutorisees") or []
+        if "Toutes les zones" in zones_permises or any(z.lower() in nom_zone.lower() for z in zones_permises):
+            est_autorise = True
+
+    if intrusion and est_autorise:
+        # Collaborateur officiel présent dans une zone autorisée : pas d'alerte intrusion
+        session["en_zone"] = True
+        return {
+            "intrusion": False,
+            "autorise": True,
+            "statut": "collaborateur_autorise_en_zone",
+            "alerte_declenchee": False,
+            "info_plage": desc_statut,
+            "nom_zone": nom_zone,
+            "session_id": session_id,
+            "active": True,
+            "avis_ia": None,
+        }
+
     avis_ia = None
     alerte_declenchee = False
 
     if intrusion:
         # La personne est actuellement physiquement dans le polygone
-        if not session["alerte_envoyee"]:
-            # NOUVELLE INTRUSION CONFIRMÉE : on déclenche la 1ère et UNIQUE alerte
-            session["en_zone"] = True
-            session["alerte_envoyee"] = True
+        session["en_zone"] = True
+        if not session.get("premiere_intrusion_ts"):
             session["premiere_intrusion_ts"] = now
-            session["derniere_sortie_ts"] = None
+        session["derniere_sortie_ts"] = None
+        session["nb_vues_en_zone"] = session.get("nb_vues_en_zone", 0) + 1
+
+        duree_en_zone = now - session["premiere_intrusion_ts"]
+
+        # Filtre anti-faux-positifs (Dwell Time / Persistance) :
+        # L'alerte n'est confirmée que si l'individu persiste dans la zone au moins 0.8s ou 3 détections consécutives
+        if not session["alerte_envoyee"] and (duree_en_zone >= 0.8 or session["nb_vues_en_zone"] >= 3):
+            # NOUVELLE INTRUSION CONFIRMÉE : on déclenche la 1ère et UNIQUE alerte
+            session["alerte_envoyee"] = True
             alerte_declenchee = True
 
             rapport_cam.ajouter_historique(id_camera, {
@@ -271,13 +316,16 @@ def evaluer(
             # Enregistrement d'UNE SEULE alerte isolée dans le journal
             alertes.enregistrer_alerte("intrusion_zone", id_camera, pid, phrase, avis_ia, now)
             statut = "intrusion_detectee"
-        else:
+        elif session["alerte_envoyee"]:
             # L'intrusion est DÉJÀ EN COURS : la personne reste dans la zone.
             # AUCUNE NOUVELLE ALERTE N'EST CRÉÉE.
-            session["en_zone"] = True
             statut = "intrusion_en_cours"
+        else:
+            statut = "en_cours_de_confirmation"
     else:
         # La personne est hors de la zone
+        session["nb_vues_en_zone"] = 0
+        session["premiere_intrusion_ts"] = None
         if session["en_zone"]:
             session["en_zone"] = False
             session["derniere_sortie_ts"] = now
@@ -289,8 +337,12 @@ def evaluer(
 
         statut = "hors_zone"
 
+    # Règle stricte de zone sécurisée : quiconque n'est pas un collaborateur autorisé
+    # et se trouve physiquement dans la zone délimitée est IMMÉDIATEMENT qualifié d'intrus (jamais visiteur normal)
+    est_en_intrusion = bool(intrusion and not est_autorise)
+
     return {
-        "intrusion": intrusion,
+        "intrusion": est_en_intrusion,
         "statut": statut,
         "alerte_declenchee": alerte_declenchee,
         "info_plage": desc_statut,
