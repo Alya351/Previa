@@ -3348,7 +3348,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
         </div>
 
         {events.length > 0 && (
-          <button
+          <button className="ev-purge"
             type="button"
             onClick={handleClearAll}
             disabled={enSuppression}
@@ -3652,7 +3652,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
               )}
             </div>
 
-            <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <div className="ev-mode" style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
               <button
                 type="button"
                 onClick={() => setModeAffichage('timeline')}
@@ -3710,7 +3710,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
           borderTop: '1px solid #f1f5f9',
           fontSize: '0.80rem'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', width: '100%' }}>
+          <div className="ev-filtres" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', width: '100%' }}>
             {/* CAMERA FILTER */}
             <div className="events-camera-select-wrapper" style={{
               display: 'flex',
@@ -3744,7 +3744,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
             </div>
 
             {/* SORTING */}
-            <div style={{
+            <div className="ev-f-sort" style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -3776,7 +3776,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
             </div>
 
             {/* PAGE SIZE */}
-            <div style={{
+            <div className="ev-f-page" style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -3838,7 +3838,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
           </div>
 
           {/* ACTIVE RECORD COUNT */}
-          <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>
+          <div className="ev-f-count" style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>
             {filteredAndSorted.length > 0 ? (
               <span>
                 Affichage <strong>{(safeCurrentPage - 1) * itemsPerPage + 1}</strong>–<strong>{Math.min(safeCurrentPage * itemsPerPage, filteredAndSorted.length)}</strong> sur <strong>{filteredAndSorted.length}</strong>
@@ -3864,9 +3864,10 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
               }}
             />
           ) : (
-            <div style={{ position: 'relative', paddingLeft: '28px' }}>
+            <div className="ev-timeline" style={{ position: 'relative', paddingLeft: '28px' }}>
               {/* LIGNE VERTICALE DE LA TIMELINE */}
               <div
+                className="ev-timeline-line"
                 style={{
                   position: 'absolute',
                   left: '10px',
@@ -3903,6 +3904,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
                     >
                       {/* POINT SUR LA LIGNE TIMELINE */}
                       <div
+                        className="ev-dot"
                         style={{
                           position: 'absolute',
                           left: '-23px',
@@ -3918,6 +3920,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
 
                       {/* MINIATURE SNAPSHOT PHOTO */}
                       <div
+                        className="ev-thumb"
                         style={{
                           width: '130px',
                           height: '84px',
@@ -3972,7 +3975,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
                       </div>
 
                       {/* CONTENU DE L'ÉVÉNEMENT */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div className="ev-body" style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <span
                             style={{
@@ -4007,7 +4010,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
                       </div>
 
                       {/* ACTIONS & DÉTAILS */}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                      <div className="ev-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                           <button
                             type="button"

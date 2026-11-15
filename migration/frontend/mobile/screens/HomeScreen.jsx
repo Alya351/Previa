@@ -88,27 +88,25 @@ export const HomeScreen = ({
           </View>
         )}
 
-        {/* CARTE HERO STATUS (Current Balance equivalent) */}
+        {/* CARTE HERO STATUS (Current Balance equivalent : Épuré, aéré, sans mélange de textes) */}
         <View style={styles.heroStatusCard}>
           <View style={styles.heroStatusLeft}>
-            <View style={styles.heroStatusPill}>
-              <View style={styles.heroStatusDot} />
-              <Text style={styles.heroStatusLabel}>Statut du Système · Actif</Text>
-            </View>
-            <Text style={styles.heroStatusVal}>
-              132 <Text style={styles.heroStatusValSub}>Détections</Text>
-            </Text>
+            <Text style={styles.heroStatusCategory}>SURVEILLANCE DU SITE</Text>
+            <Text style={styles.heroStatusVal}>Protection Active</Text>
             <View style={styles.heroStatusMeta}>
-              <Text style={styles.heroStatusMetaGreen}>● 2 Caméras en ligne</Text>
+              <View style={styles.heroStatusPill}>
+                <View style={styles.heroStatusDot} />
+                <Text style={styles.heroStatusPillText}>24h/24 en ligne</Text>
+              </View>
               <Text style={styles.heroStatusMetaDot}>·</Text>
-              <Text style={styles.heroStatusMetaGray}>99.8% Disponibilité</Text>
+              <Text style={styles.heroStatusMetaGray}>2 caméras actives</Text>
             </View>
           </View>
           <TouchableOpacity
             style={styles.heroStatusPlusBtn}
             onPress={() => onNavigate('direct')}
             activeOpacity={0.8}
-            accessibilityLabel="Ajouter caméra ou scanner"
+            accessibilityLabel="Contrôle ou direct caméras"
           >
             <IconPlus size={20} color={PREVIA_COLORS.bluePrimary} />
           </TouchableOpacity>
@@ -1319,11 +1317,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // HERO STATUS CARD
+  // HERO STATUS CARD (Inspiré de l'élégance du modèle iOS)
   heroStatusCard: {
     backgroundColor: '#F0F9FF',
     borderRadius: 26,
-    padding: 18,
+    padding: 20,
     borderWidth: 1,
     borderColor: 'rgba(2, 132, 199, 0.16)',
     marginBottom: 20,
@@ -1339,51 +1337,54 @@ const styles = StyleSheet.create({
   heroStatusLeft: {
     flex: 1,
   },
-  heroStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  heroStatusCategory: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
     marginBottom: 4,
   },
-  heroStatusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#10B981',
-  },
-  heroStatusLabel: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0369A1',
-  },
   heroStatusVal: {
-    fontSize: 26,
-    fontWeight: '900',
+    fontSize: 24,
+    fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.5,
-  },
-  heroStatusValSub: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748B',
+    marginBottom: 8,
   },
   heroStatusMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 4,
   },
-  heroStatusMetaGreen: {
+  heroStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#ECFDF5',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  heroStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  heroStatusPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#059669',
+    color: '#047857',
   },
   heroStatusMetaDot: {
     color: '#94A3B8',
     fontSize: 11,
   },
   heroStatusMetaGray: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#64748B',
   },
