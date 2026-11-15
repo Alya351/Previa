@@ -1382,6 +1382,7 @@ function TuileCameraMosaic({ cam, personnes = [], onFocus, onFullscreen, onEtatF
 
   return (
     <div
+      className="mosaic-tile"
       style={{
         backgroundColor: '#ffffff',
         borderRadius: '18px',
@@ -1464,8 +1465,8 @@ function TuileCameraMosaic({ cam, personnes = [], onFocus, onFullscreen, onEtatF
       </div>
 
       {/* PIED DE CARTE */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
+      <div className="mosaic-tile-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--ink-primary)' }}>
             {cam.name}
           </div>
@@ -1474,7 +1475,7 @@ function TuileCameraMosaic({ cam, personnes = [], onFocus, onFullscreen, onEtatF
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '6px' }}>
+        <div className="mosaic-tile-actions" style={{ display: 'flex', gap: '6px' }}>
           <button
             type="button"
             onClick={onFocus}
@@ -1813,7 +1814,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
 
         {/* COMMUTATEUR DE MODE DE VUE (SEGMENTED PILL ÉPURÉ SANS ICÔNES SUPERFLUES) */}
         <div
-          className="no-scrollbar"
+          className="cam-subtabs no-scrollbar"
           style={{
             position: 'relative',
             zIndex: 10,
@@ -1847,7 +1848,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               boxShadow: subTab === 'hero' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
           >
-            Focus Caméra
+            Focus<span className="tab-long"> Caméra</span>
           </button>
 
           <button
@@ -1867,7 +1868,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               boxShadow: subTab === 'mosaic' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
           >
-            Mosaïque Multi-Vues ({camerasEtat.length})
+            Mosaïque<span className="tab-long"> Multi-Vues</span> ({camerasEtat.length})
           </button>
 
           <button
@@ -1887,7 +1888,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
               boxShadow: subTab === 'zones' ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
             }}
           >
-            Zones Sensibles
+            Zones<span className="tab-long"> Sensibles</span>
           </button>
         </div>
       </div>
@@ -1899,7 +1900,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* BANDEAU SÉLECTEUR RAPIDE & CONTRÔLEUR DE CAMÉRAS (ADAPTATIF) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{
+            <div className="cam-ribbon-head" style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -2489,7 +2490,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                 padding: '4px 6px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.84rem', color: 'var(--ink-secondary)' }}>
+              <div className="cam-focus-info" style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.84rem', color: 'var(--ink-secondary)' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
                   <Clock size={15} color="#0284c7" />
                   Flux : <strong>{currentCamera.frameAge}</strong>
@@ -2528,7 +2529,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   ) : (
                     <Camera size={14} color="#0284c7" strokeWidth={2.4} />
                   )}
-                  <span>{isDownloadingSnapshot ? 'Enregistrement...' : "Capture d'écran"}</span>
+                  <span>{isDownloadingSnapshot ? 'Enregistrement...' : <>Capture<span className="tab-long"> d'écran</span></>}</span>
                 </button>
 
                 <button
@@ -2550,7 +2551,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   }}
                   title="Délimiter une zone non autorisée sur cette caméra"
                 >
-                  <span>Zones Sensibles</span>
+                  <span>Zones<span className="tab-long"> Sensibles</span></span>
                 </button>
 
                 <button

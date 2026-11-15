@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PREVIA_COLORS, PREVIA_RADIUS, PREVIA_TOUCH_TARGET } from '../theme';
-import { IconHome, IconCamera, IconAlertTriangle, IconBarChart, IconUser } from './Icons';
+import { IconHome, IconCamera, IconAlertTriangle, IconActivity, IconUser } from './Icons';
 
 export const BottomTabBar = ({ activeTab, onTabPress, onAlarmPress, unreadCount = 0 }) => {
   const insets = useSafeAreaInsets();
@@ -14,7 +14,7 @@ export const BottomTabBar = ({ activeTab, onTabPress, onAlarmPress, unreadCount 
   ];
 
   const rightTabs = [
-    { key: 'activity', label: 'Activité', icon: IconBarChart, badge: unreadCount },
+    { key: 'activity', label: 'Activité', icon: IconActivity, badge: unreadCount },
     { key: 'profile', label: 'Profil', icon: IconUser },
   ];
 

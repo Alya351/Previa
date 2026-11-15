@@ -23,6 +23,7 @@ const LABEL_PAR_NIVEAU = { high: 'Danger Immédiat', med: 'À surveiller', low: 
 export function AiAnalysisCard({ situations = [], alerteEnCours, onSelectModule }) {
   return (
     <div 
+      className="ai-analysis-card"
       style={{
         background: '#ffffff',
         borderRadius: '16px',
@@ -35,7 +36,7 @@ export function AiAnalysisCard({ situations = [], alerteEnCours, onSelectModule 
       }}
     >
       {/* HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="ai-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--ink-primary)', margin: 0 }}>
             Surveillance Comportementale
