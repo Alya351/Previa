@@ -3617,7 +3617,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
           </div>
 
           {/* SEARCH & VIEW SWITCHER */}
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="events-search-container" style={{ position: 'relative', width: '250px', maxWidth: '100%' }}>
               <Search size={15} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
               <input
@@ -3710,7 +3710,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
           borderTop: '1px solid #f1f5f9',
           fontSize: '0.80rem'
         }}>
-          <div className="ev-filtres" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', width: '100%' }}>
+          <div className="ev-filtres" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {/* CAMERA FILTER */}
             <div className="events-camera-select-wrapper" style={{
               display: 'flex',
@@ -4782,6 +4782,47 @@ function AlertsView({ alertesReelles = [], cameras = [], camerasParId = {}, onRe
                   <p style={{ fontSize: '0.86rem', color: '#334155', margin: '0 0 10px 0', lineHeight: 1.45, fontWeight: 500 }}>
                     {item.description}
                   </p>
+
+                  {/* CE QUE LE SYSTÈME A FAIT AUTOMATIQUEMENT */}
+                  {item.critique && (
+                    <div className="alert-auto-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <div
+                        style={{
+                          background: etatAlarme.lampe ? '#fef3c7' : '#f8fafc',
+                          color: etatAlarme.lampe ? '#92400e' : '#64748b',
+                          border: `1px solid ${etatAlarme.lampe ? '#fde68a' : '#e2e8f0'}`,
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          fontSize: '0.76rem',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <Lightbulb size={14} />
+                        <span>{etatAlarme.lampe ? '💡 Projecteur allumé' : '💡 Éclairage en veille'}</span>
+                      </div>
+
+                      <div
+                        style={{
+                          background: etatAlarme.sirene ? '#fee2e2' : '#ecfdf5',
+                          color: etatAlarme.sirene ? '#dc2626' : '#059669',
+                          border: `1px solid ${etatAlarme.sirene ? '#fca5a5' : '#bbf7d0'}`,
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          fontSize: '0.76rem',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <Volume2 size={14} />
+                        <span>{etatAlarme.sirene ? '🚨 Sirène active' : '🔊 Sirène prête'}</span>
+                      </div>
+                    </div>
+                  )}
 
 
                 </div>
