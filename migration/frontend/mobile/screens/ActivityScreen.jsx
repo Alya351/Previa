@@ -67,7 +67,7 @@ export const ActivityScreen = ({ onNavigate, isDark = false, totalEvents = 132 }
             <Svg width={180} height={180} viewBox="0 0 100 100">
               {/* Background Track */}
               <Circle cx="50" cy="50" r="38" stroke="#E2E8F0" strokeWidth="12" fill="none" />
-              {/* Segment 1: Navy (#014791 - 55% Face ID) */}
+              {/* Segment 1: Navy (#014791 - 55% Détections conformes) */}
               <Circle
                 cx="50" cy="50" r="38"
                 stroke="#014791" strokeWidth="12"
