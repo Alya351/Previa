@@ -88,19 +88,11 @@ export const HomeScreen = ({
           </View>
         )}
 
-        {/* CARTE HERO STATUS (Current Balance equivalent : Épuré, aéré, sans mélange de textes) */}
+        {/* CARTE HERO STATUS (Fidèle à 100% à la carte supérieure de la référence) */}
         <View style={styles.heroStatusCard}>
           <View style={styles.heroStatusLeft}>
             <Text style={styles.heroStatusCategory}>SURVEILLANCE DU SITE</Text>
             <Text style={styles.heroStatusVal}>Protection Active</Text>
-            <View style={styles.heroStatusMeta}>
-              <View style={styles.heroStatusPill}>
-                <View style={styles.heroStatusDot} />
-                <Text style={styles.heroStatusPillText}>24h/24 en ligne</Text>
-              </View>
-              <Text style={styles.heroStatusMetaDot}>·</Text>
-              <Text style={styles.heroStatusMetaGray}>2 caméras actives</Text>
-            </View>
           </View>
           <TouchableOpacity
             style={styles.heroStatusPlusBtn}
@@ -1346,11 +1338,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   heroStatusVal: {
-    fontSize: 24,
+    fontSize: 25,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.5,
-    marginBottom: 8,
   },
   heroStatusMeta: {
     flexDirection: 'row',
