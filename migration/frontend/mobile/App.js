@@ -19,6 +19,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { LiveScreen } from './screens/LiveScreen';
 import { AlertsScreen } from './screens/AlertsScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { ActivityScreen } from './screens/ActivityScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { ModalNumeroGardiennerie } from './components/ModalNumeroGardiennerie';
 
@@ -209,7 +210,16 @@ function MainApplication() {
           />
         )}
 
-        {/* ÉCRAN 4 : PROFIL */}
+        {/* ÉCRAN 4 : ACTIVITÉ & ANALYTIQUE (Design Référence) */}
+        {activeTab === 'activity' && (
+          <ActivityScreen
+            onNavigate={(targetTab) => setActiveTab(targetTab)}
+            isDark={isDark}
+            totalEvents={132}
+          />
+        )}
+
+        {/* ÉCRAN 5 : PROFIL */}
         {activeTab === 'profile' && (
           <ProfileScreen
             currentUser={currentUser}

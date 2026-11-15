@@ -169,5 +169,45 @@ export const IconFlame = ({ size = 20, color = '#EF4444' }) => (
   </Svg>
 );
 
+export const IconScan = ({ size = 24, color = '#FFFFFF' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M3 7V5a2 2 0 0 1 2-2h2" />
+    <Path d="M17 3h2a2 2 0 0 1 2 2v2" />
+    <Path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+    <Path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+    <Circle cx="12" cy="12" r="3" />
+  </Svg>
+);
+
+export const IconSearch = ({ size = 20, color = '#152E4C' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <Circle cx="11" cy="11" r="8" />
+    <Line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </Svg>
+);
+
+export const IconPlus = ({ size = 20, color = '#FFFFFF' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <Line x1="12" y1="5" x2="12" y2="19" />
+    <Line x1="5" y1="12" x2="19" y2="12" />
+  </Svg>
+);
+
+export const IconMoreVertical = ({ size = 18, color = '#6B7280' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <Circle cx="12" cy="5" r="2" />
+    <Circle cx="12" cy="12" r="2" />
+    <Circle cx="12" cy="19" r="2" />
+  </Svg>
+);
+
+export const IconPieChart = ({ size = 22, color = '#0284c7' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+    <Path d="M22 12A10 10 0 0 0 12 2v10z" />
+  </Svg>
+);
+
+
 
 

@@ -21,11 +21,15 @@ import {
   IconChevronRight,
   IconAlertTriangle,
   IconShieldCheck,
+  IconShieldAlert,
   IconPlay,
   IconActivity,
   IconCheck,
   IconX,
   IconPhone,
+  IconPlus,
+  IconMoreVertical,
+  IconUser,
 } from '../components/Icons';
 
 export const HomeScreen = ({
@@ -83,6 +87,170 @@ export const HomeScreen = ({
             </Text>
           </View>
         )}
+
+        {/* CARTE HERO STATUS (Current Balance equivalent) */}
+        <View style={styles.heroStatusCard}>
+          <View style={styles.heroStatusLeft}>
+            <View style={styles.heroStatusPill}>
+              <View style={styles.heroStatusDot} />
+              <Text style={styles.heroStatusLabel}>Statut du Système · Actif</Text>
+            </View>
+            <Text style={styles.heroStatusVal}>
+              132 <Text style={styles.heroStatusValSub}>Détections</Text>
+            </Text>
+            <View style={styles.heroStatusMeta}>
+              <Text style={styles.heroStatusMetaGreen}>● 2 Caméras en ligne</Text>
+              <Text style={styles.heroStatusMetaDot}>·</Text>
+              <Text style={styles.heroStatusMetaGray}>99.8% Disponibilité</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.heroStatusPlusBtn}
+            onPress={() => onNavigate('direct')}
+            activeOpacity={0.8}
+            accessibilityLabel="Ajouter caméra ou scanner"
+          >
+            <IconPlus size={20} color={PREVIA_COLORS.bluePrimary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* SECTION : CAMÉRAS EN DIRECT (Upcoming payment equivalent) */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            Caméras en direct
+          </Text>
+          <TouchableOpacity
+            onPress={() => onNavigate('direct')}
+            activeOpacity={0.7}
+            style={styles.sectionLinkBtn}
+          >
+            <Text style={styles.sectionLinkText}>Voir tout</Text>
+            <IconChevronRight size={14} color={PREVIA_COLORS.bluePrimary} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.cameraGridRow}>
+          {/* CARTE 1 : PRIMAIRE SAPPHIRE */}
+          <TouchableOpacity
+            style={styles.cameraCardPrimary}
+            onPress={() => onNavigate('direct')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.cameraCardTop}>
+              <View style={styles.cameraIconCirclePrimary}>
+                <IconCamera size={18} color="#FFFFFF" />
+              </View>
+              <IconMoreVertical size={16} color="rgba(255,255,255,0.7)" />
+            </View>
+            <View>
+              <Text style={styles.cameraCardTitlePrimary}>ODC · FabLab</Text>
+              <Text style={styles.cameraCardSubPrimary}>1080p · 25 FPS</Text>
+              <View style={styles.cameraLivePillPrimary}>
+                <View style={styles.cameraLiveDot} />
+                <Text style={styles.cameraLiveTextPrimary}>FLUX LIVE</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* CARTE 2 : SECONDAIRE BLANCHE */}
+          <TouchableOpacity
+            style={styles.cameraCardSecondary}
+            onPress={() => onNavigate('direct')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.cameraCardTop}>
+              <View style={styles.cameraIconCircleSecondary}>
+                <IconCamera size={18} color={PREVIA_COLORS.bluePrimary} />
+              </View>
+              <IconMoreVertical size={16} color="#94A3B8" />
+            </View>
+            <View>
+              <Text style={styles.cameraCardTitleSecondary}>École Du Code</Text>
+              <Text style={styles.cameraCardSubSecondary}>Cour Extérieure</Text>
+              <View style={styles.cameraLivePillSecondary}>
+                <View style={[styles.cameraLiveDot, { backgroundColor: '#10B981' }]} />
+                <Text style={styles.cameraLiveTextSecondary}>ACTIF</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* SECTION : DERNIÈRES ALERTES (Recent transactions equivalent) */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            Dernières Alertes
+          </Text>
+          <TouchableOpacity
+            onPress={() => onNavigate('alerts')}
+            activeOpacity={0.7}
+            style={styles.sectionLinkBtn}
+          >
+            <Text style={styles.sectionLinkText}>Voir tout</Text>
+            <IconChevronRight size={14} color={PREVIA_COLORS.bluePrimary} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.recentAlertsList}>
+          {/* ITEM 1 : INTRUSION */}
+          <TouchableOpacity
+            style={styles.recentAlertCard}
+            onPress={() => onNavigate('alerts')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.recentAlertLeft}>
+              <View style={[styles.recentAlertIconWrap, { backgroundColor: '#FEE2E2' }]}>
+                <IconShieldAlert size={20} color="#DC2626" />
+              </View>
+              <View>
+                <Text style={styles.recentAlertTitle}>Intrusion Zone Sensible</Text>
+                <Text style={styles.recentAlertSub}>FabLab ODC · 14:32</Text>
+              </View>
+            </View>
+            <View style={[styles.recentAlertBadge, { backgroundColor: '#FEE2E2' }]}>
+              <Text style={[styles.recentAlertBadgeText, { color: '#DC2626' }]}>Critique</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* ITEM 2 : FACE ID */}
+          <TouchableOpacity
+            style={styles.recentAlertCard}
+            onPress={() => onNavigate('alerts')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.recentAlertLeft}>
+              <View style={[styles.recentAlertIconWrap, { backgroundColor: '#ECFDF5' }]}>
+                <IconUser size={20} color="#059669" />
+              </View>
+              <View>
+                <Text style={styles.recentAlertTitle}>Face ID : Alya KIEMDE</Text>
+                <Text style={styles.recentAlertSub}>Entrée Principale · 14:15</Text>
+              </View>
+            </View>
+            <View style={[styles.recentAlertBadge, { backgroundColor: '#ECFDF5' }]}>
+              <Text style={[styles.recentAlertBadgeText, { color: '#059669' }]}>Autorisé</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* ITEM 3 : SUSPECT */}
+          <TouchableOpacity
+            style={styles.recentAlertCard}
+            onPress={() => onNavigate('alerts')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.recentAlertLeft}>
+              <View style={[styles.recentAlertIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                <IconAlertTriangle size={20} color="#D97706" />
+              </View>
+              <View>
+                <Text style={styles.recentAlertTitle}>Comportement : Rôdeur</Text>
+                <Text style={styles.recentAlertSub}>Cour École · 13:58</Text>
+              </View>
+            </View>
+            <View style={[styles.recentAlertBadge, { backgroundColor: '#FEF3C7' }]}>
+              <Text style={[styles.recentAlertBadgeText, { color: '#D97706' }]}>Alerte</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
 
         {/* APERÇU VIDÉO DIRECT RAPIDE */}
         <View style={styles.sectionHeaderRow}>
@@ -1149,5 +1317,262 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14.5,
     fontWeight: '700',
+  },
+
+  // HERO STATUS CARD
+  heroStatusCard: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: 26,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(2, 132, 199, 0.16)',
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  heroStatusLeft: {
+    flex: 1,
+  },
+  heroStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  heroStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#10B981',
+  },
+  heroStatusLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  heroStatusVal: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.5,
+  },
+  heroStatusValSub: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  heroStatusMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  heroStatusMetaGreen: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  heroStatusMetaDot: {
+    color: '#94A3B8',
+    fontSize: 11,
+  },
+  heroStatusMetaGray: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  heroStatusPlusBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(2, 132, 199, 0.1)',
+  },
+
+  // CAMERA GRID
+  cameraGridRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 22,
+  },
+  cameraCardPrimary: {
+    flex: 1,
+    height: 136,
+    borderRadius: 22,
+    backgroundColor: PREVIA_COLORS.bluePrimary,
+    padding: 14,
+    justifyContent: 'space-between',
+    shadowColor: PREVIA_COLORS.bluePrimary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  cameraCardSecondary: {
+    flex: 1,
+    height: 136,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.9)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cameraCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cameraIconCirclePrimary: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraIconCircleSecondary: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraCardTitlePrimary: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 16,
+  },
+  cameraCardSubPrimary: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 10.5,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  cameraLivePillPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  cameraLiveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#34D399',
+  },
+  cameraLiveTextPrimary: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  cameraCardTitleSecondary: {
+    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 16,
+  },
+  cameraCardSubSecondary: {
+    color: '#64748B',
+    fontSize: 10.5,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  cameraLivePillSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  cameraLiveTextSecondary: {
+    color: '#475569',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+
+  // RECENT ALERTS LIST
+  recentAlertsList: {
+    gap: 10,
+    marginBottom: 24,
+  },
+  recentAlertCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.8)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+  },
+  recentAlertLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    flex: 1,
+  },
+  recentAlertIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recentAlertTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  recentAlertSub: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 1,
+  },
+  recentAlertBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  recentAlertBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
   },
 });
