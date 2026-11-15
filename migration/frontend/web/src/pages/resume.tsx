@@ -43,7 +43,7 @@ const LIENS: Lien[] = [
   {
     groupe: 'Terrain',
     titre: 'Flux Caméra & Surveillance',
-    description: "Capture vidéo en direct depuis l'appareil (téléphone, poste fixe).",
+    description: "Inspection et visualisation des flux caméras IP en direct.",
     href: '/camera',
   },
   {

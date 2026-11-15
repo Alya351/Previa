@@ -91,7 +91,7 @@ export function Sidebar({
                   aria-label={item.label}
                   aria-current={isActive ? 'page' : undefined}
                 >
-                  <Icon className="nav-icon" size={19} strokeWidth={isActive ? 2.4 : 1.8} aria-hidden="true" />
+                  <Icon className="nav-icon" size={isCollapsed ? 26 : 22} strokeWidth={isActive ? 2.6 : 2.2} aria-hidden="true" />
                   {!isCollapsed && (
                     <>
                       <span className="nav-label">{item.label}</span>

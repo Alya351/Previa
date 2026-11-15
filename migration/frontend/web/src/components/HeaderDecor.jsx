@@ -6,7 +6,15 @@ import { supprimerAlerte, supprimerToutesAlertes } from '../api.js';
 // (GET /alertes et le compte connecté, voir sessionStorage dans
 // pages/admin.jsx) — remplace les 3 notifications et le profil "OP"
 // fictifs d'origine.
-export function HeaderDecor({ onNavigate, onLogout, onRefresh, unreadCount = 3, notifications = [], utilisateur }) {
+export function HeaderDecor({
+  onNavigate,
+  onLogout,
+  onRefresh,
+  unreadCount = 3,
+  notifications = [],
+  utilisateur,
+  isMobileMode = false
+}) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [hasUnread, setHasUnread] = useState(true);
   const [showProfile, setShowProfile] = useState(false);
@@ -61,6 +69,171 @@ export function HeaderDecor({ onNavigate, onLogout, onRefresh, unreadCount = 3, 
     }
   };
 
+  // =========================================================================
+  // RENDU MOBILE DÉDIÉ (intégré proprement dans la sticky navbar du haut)
+  // =========================================================================
+  if (isMobileMode) {
+    return (
+      <div className="mobile-header-actions">
+        {/* NOTIFICATIONS DROPDOWN */}
+        <div ref={notifRef} style={{ position: 'relative' }}>
+          <button 
+            className="mobile-action-icon-btn" 
+            onClick={() => {
+              const next = !showNotifications;
+              setShowNotifications(next);
+              if (next) {
+                setHasUnread(false);
+              }
+              setShowProfile(false);
+            }} 
+            title="Notifications et Alertes en direct"
+            aria-label="Notifications"
+          >
+            <Bell size={19} strokeWidth={2.4} color="#0284c7" />
+            {hasUnread && notifications.length > 0 && (
+              <span className="mobile-badge-dot">
+                {notifications.length > 9 ? '9+' : notifications.length}
+              </span>
+            )}
+          </button>
+
+          {showNotifications && (
+            <div className="wave-dropdown-panel mobile-dropdown-panel mobile-dropdown-notifications">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--ink-primary)' }}>
+                  Notifications ({notifications.length})
+                </span>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  {notifications.length > 0 && (
+                    <button 
+                      onClick={handleClearAllNotifications}
+                      style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
+                      title="Effacer toutes les notifications"
+                    >
+                      <Trash2 size={12} />
+                      Effacer
+                    </button>
+                  )}
+                  <button 
+                    onClick={handleGoToAlerts}
+                    style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Voir tout
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '340px', overflowY: 'auto' }}>
+                {notifications.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--ink-muted)', fontSize: '0.85rem' }}>
+                    Aucune notification active
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <div 
+                      key={n.id}
+                      onClick={handleGoToAlerts}
+                      style={{
+                        background: '#f8fafc',
+                        padding: '10px 12px',
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        borderLeft: `4px solid ${n.type === 'critical' ? '#ef4444' : (n.type === 'warning' ? '#f59e0b' : '#0284c7')}`,
+                        transition: 'background 0.15s ease',
+                        position: 'relative'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--ink-primary)', flex: 1 }}>{n.title}</div>
+                        <button
+                          onClick={(e) => handleDeleteNotification(e, n.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#94a3b8',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            borderRadius: '4px'
+                          }}
+                          title="Supprimer cette notification"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--ink-muted)', marginTop: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{n.cam}</span>
+                        <span>{n.time}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* USER PROFILE DROPDOWN */}
+        <div ref={profileRef} style={{ position: 'relative' }}>
+          <button 
+            className="mobile-profile-btn" 
+            onClick={() => {
+              setShowProfile(!showProfile);
+              setShowNotifications(false);
+            }} 
+            title="Profil Opérateur"
+            aria-label="Profil"
+          >
+            <span>{(utilisateur?.nom || 'OP').slice(0, 2).toUpperCase()}</span>
+          </button>
+
+          {showProfile && (
+            <div className="wave-dropdown-panel mobile-dropdown-panel mobile-dropdown-profile">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid var(--border-light)' }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, #0284c7, #0369a1)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.9rem' }}>
+                  {(utilisateur?.nom || 'OP').slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--ink-primary)' }}>{utilisateur?.nom || 'Opérateur Sécurité'}</div>
+                  <div style={{ fontSize: '0.74rem', color: '#16a34a', fontWeight: 700 }}>{utilisateur?.role === 'admin' ? 'Admin' : 'Utilisateur'} · Poste Actif</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                  onClick={handleUserLogout}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: '#fee2e2',
+                    color: '#ef4444',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    width: '100%',
+                    textAlign: 'left'
+                  }}
+                >
+                  <LogOut size={16} />
+                  Se déconnecter
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // RENDU DESKTOP OFFICIEL (Vague bleue organique en coin supérieur droit)
+  // =========================================================================
   return (
     <div className="top-wave-header-container">
       {/* EXACT DUAL-LAYER ORGANIC WAVE MATCHING THE REFERENCE IMAGE */}
@@ -198,7 +371,6 @@ export function HeaderDecor({ onNavigate, onLogout, onRefresh, unreadCount = 3, 
             </div>
           )}
         </div>
-
 
         {/* USER PROFILE DROPDOWN */}
         <div ref={profileRef} style={{ position: 'relative' }}>

@@ -17,7 +17,7 @@ import './camera.css';
 //
 // Pas de connexion requise ici, comme dans l'ancien système — cette page
 // est pensée pour tourner sur l'appareil physique pointé sur la scène
-// (un téléphone à l'entrée, par exemple), pas forcément un poste admin.
+// (une caméra ou terminal dédié, par exemple), pas forcément un poste admin.
 
 const ANALYSE_INTERVAL_MS = 2000;
 const LARGEUR_MAX_ENVOI = 960;

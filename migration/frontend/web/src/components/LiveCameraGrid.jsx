@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { VideoOff, Cctv } from 'lucide-react';
 import { useFluxDirect } from '../lib/useFluxDirect.js';
 import { FluxCamera } from './FluxCamera.jsx';
@@ -8,6 +8,8 @@ import { FluxCamera } from './FluxCamera.jsx';
 // fictives d'origine.
 function CartePreviewCamera({ cam, onSelectCamera }) {
   const streamDirect = useFluxDirect(cam.urlFlux ? null : cam.id);
+  // État réel du flux, remonté par FluxCamera : 'connexion' | 'direct' | 'hors_ligne'
+  const [etatFlux, setEtatFlux] = useState('connexion');
 
   const handleClick = () => {
     if (onSelectCamera) onSelectCamera(cam);
@@ -30,21 +32,37 @@ function CartePreviewCamera({ cam, onSelectCamera }) {
       title={`Cliquer pour inspecter ${cam.name} (${cam.location || 'Zone'})`}
       aria-label={`Inspecter le flux de la caméra ${cam.name}`}
     >
-      {/* LIVE BLUE PILL BADGE */}
-      <div className="camera-live-badge" aria-label="Statut en direct">
-        <span className="live-indicator-dot" aria-hidden="true" />
-        <span>LIVE</span>
-      </div>
+      {/* BADGE D'ÉTAT : « LIVE » seulement si une image arrive réellement */}
+      {etatFlux === 'direct' && (
+        <div className="camera-live-badge" aria-label="Statut en direct">
+          <span className="live-indicator-dot" aria-hidden="true" />
+          <span>LIVE</span>
+        </div>
+      )}
+      {etatFlux === 'connexion' && (
+        <div className="camera-live-badge" aria-label="Connexion en cours" style={{ background: 'rgba(100, 116, 139, 0.95)' }}>
+          <span className="live-indicator-dot" aria-hidden="true" />
+          <span>CONNEXION…</span>
+        </div>
+      )}
+      {etatFlux === 'hors_ligne' && (
+        <div className="camera-live-badge" aria-label="Caméra hors ligne" style={{ background: 'rgba(220, 38, 38, 0.95)' }}>
+          <span className="live-indicator-dot" aria-hidden="true" style={{ animation: 'none' }} />
+          <span>HORS LIGNE</span>
+        </div>
+      )}
 
       <FluxCamera
         stream={streamDirect}
         imageRepli={cam.urlFlux ? `/cameras/${cam.id}/flux` : cam.image}
         alt={cam.name}
         className="camera-feed-img"
+        afficherEtat
+        onStatusChange={setEtatFlux}
       />
 
       {/* BOTTOM NAME OVERLAY BAR */}
-      <div className="camera-name-overlay">
+      <div className="camera-name-overlay" style={{ zIndex: 2 }}>
         <span>{cam.name}</span>
       </div>
     </div>

@@ -16,7 +16,7 @@ const httpsConfig = certsPrets
 // Proxy vers le backend (port 8012)
 const routesBackend = [
   'alarme', 'alertes', 'batiments', 'cameras', 'docs', 'openapi.json', 'personnel', 'pieces',
-  'profils', 'redoc', 'static-docs', 'systeme', 'utilisateurs', 'vue-ensemble',
+  'profils', 'redoc', 'static-docs', 'systeme', 'utilisateurs', 'vue-ensemble', 'export', 'journal-actions',
 ]
 const proxy = Object.fromEntries(
   routesBackend.map((r) => [`/${r}`, { target: 'https://localhost:8012', changeOrigin: true, secure: false, ws: true }]),

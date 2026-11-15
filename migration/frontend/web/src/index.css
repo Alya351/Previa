@@ -61,3 +61,24 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* Anti-débordement — mobile et tablette uniquement (15/11/2026) */
+@media (max-width: 768px) {
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+img, video, canvas, svg, iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+}

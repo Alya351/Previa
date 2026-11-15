@@ -1,5 +1,46 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+function useResponsive() {
+  const getSnapshot = () => {
+    if (typeof window === 'undefined') {
+      return { width: 1200, height: 800, isSmallMobile: false, isMobile: false, isTablet: false, isDesktop: true, kpiColumns: 4 };
+    }
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const isTouch = 'ontouchstart' in window || (navigator.maxTouchPoints > 0);
+    return {
+      width: w,
+      height: h,
+      isSmallMobile: w < 480,
+      isMobile: w < 768,
+      isTablet: w >= 768 && w < 1180,
+      isDesktop: w >= 1180,
+      isTouch,
+      kpiColumns: w < 340 ? 1 : (w < 1180 ? 2 : 4),
+      orientation: w > h ? 'landscape' : 'portrait',
+    };
+  };
+
+  const [state, setState] = useState(getSnapshot);
+
+  useEffect(() => {
+    let timeoutId = null;
+    const handleResize = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => setState(getSnapshot()), 50);
+    };
+    window.addEventListener('resize', handleResize, { passive: true });
+    window.addEventListener('orientationchange', handleResize, { passive: true });
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
+  return state;
+}
 import {
   Activity, AlertTriangle, ArrowRight, ArrowUpDown, BarChart3, Building2, Camera, Cctv, Check, CheckCircle, CheckCircle2,
   ChevronLeft, ChevronRight, Clock, DoorOpen, Download, Eye, FileSpreadsheet, FileText, Filter, Info, KeyRound, LayoutGrid,
@@ -103,16 +144,30 @@ function LicenceDisabledScreen({ statut, onActivee }) {
           Système désactivé
         </h2>
         <p style={{ fontSize: '0.92rem', color: 'var(--ink-muted)', marginTop: 10, lineHeight: 1.55 }}>
-          {MESSAGES_LICENCE[statut] || "La licence de cette installation n'est plus active."}
-          {' '}Payez un nouveau code ou contactez Previa sur le site officiel.
+          {MESSAGES_LICENCE[statut] || "La licence de cette installation n'est pas encore activée."}
+          {' '}Obtenez votre code d'amorçage officiel ci-dessous :
         </p>
 
-        <form onSubmit={activer} style={{ width: '100%', marginTop: 26, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <a
+          href="https://previa-sv.vercel.app/code-amorcage"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            marginTop: 14, marginBottom: 6, padding: '11px 18px', borderRadius: '12px',
+            background: 'rgba(2, 132, 199, 0.08)', color: '#0284c7', border: '1px solid rgba(2, 132, 199, 0.25)',
+            fontSize: '0.88rem', fontWeight: 700, textDecoration: 'none', transition: 'all 0.2s', width: '100%',
+          }}
+        >
+          <KeyRound size={16} /> Obtenir un code d'amorçage
+        </a>
+
+        <form onSubmit={activer} style={{ width: '100%', marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ position: 'relative' }}>
             <KeyRound size={18} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-muted)' }} />
             <input
               type="text"
-              placeholder="Nouveau code d'amorçage"
+              placeholder="Collez votre code d'amorçage ici..."
               value={code}
               onChange={(e) => setCode(e.target.value)}
               style={{ width: '100%', padding: '12px 14px 12px 42px', borderRadius: '10px', border: '1px solid var(--border-light)', background: '#f8fafc', color: 'var(--ink-primary)', colorScheme: 'light', fontSize: '0.9rem', outline: 'none' }}
@@ -134,15 +189,17 @@ function LicenceDisabledScreen({ statut, onActivee }) {
               opacity: enCours || !code.trim() ? 0.7 : 1, boxShadow: '0 8px 20px rgba(2, 132, 199, 0.3)',
             }}
           >
-            {enCours ? 'Vérification...' : 'Activer ce code'}
+            {enCours ? 'Vérification...' : 'Activer la plateforme'}
           </button>
         </form>
 
         <a
-          href="mailto:contact@previa.app"
-          style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 22, fontSize: '0.86rem', color: '#0284c7', fontWeight: 700, textDecoration: 'none' }}
+          href="https://previa-sv.vercel.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 18, fontSize: '0.84rem', color: '#64748b', textDecoration: 'none' }}
         >
-          <Mail size={15} /> Contacter Previa
+          Visiter le site officiel PREVIA ↗
         </a>
       </div>
     </div>
@@ -157,6 +214,7 @@ function DashboardView({
   onToggleSidebar, onSelectTab,
   kpis = {}, cameras = [], situations = [], alerteEnCours = null,
 }) {
+  const { width, isMobile } = useResponsive();
   const [selectedCamera, setSelectedCamera] = useState(null);
   const [selectedSituation, setSelectedSituation] = useState(null);
 
@@ -168,7 +226,7 @@ function DashboardView({
   return (
     <div className="content-body">
       {/* WELCOME BANNER HEADER */}
-      <div className="welcome-header" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+      <div className="welcome-header" style={{ marginBottom: isMobile ? '14px' : '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div className="welcome-title-group" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <button
             className="hamburger-btn"
@@ -287,8 +345,11 @@ function DashboardView({
         onNavigate={(tab) => onSelectTab(tab)}
       />
 
-      {/* TWO COLUMN GRID: FLUX EN DIRECT + ANALYSES IA */}
-      <div className="main-two-column-grid">
+      {/* TWO COLUMN GRID: FLUX EN DIRECT + ANALYSES IA (ADAPTATIF DYNAMIQUE) */}
+      <div
+        className="main-two-column-grid"
+        style={isMobile ? { gridTemplateColumns: '1fr', gap: '16px' } : undefined}
+      >
         {/* LEFT COLUMN: 3X2 LIVE CAMERAS GRID */}
         <LiveCameraGrid cameras={cameras} onSelectCamera={(cam) => setSelectedCamera(cam)} />
 
@@ -658,7 +719,7 @@ function SectionZones({ cameras, initialCameraId }) {
       )}
 
       {/* 2-COLUMN STUDIO LAYOUT */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '20px', alignItems: 'start' }}>
+      <div className="zones-studio-grid" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '20px', alignItems: 'start' }}>
         {/* Visual Drawing Viewport */}
         <div>
           <div
@@ -1314,7 +1375,7 @@ function heureLocale(horodatage) {
 // ============================================================================
 // SECTION : CAMÉRAS (SUPERVISION ÉPURÉE, MULTI-VUES ET ZONES DE SÉCURITÉ)
 // ============================================================================
-function TuileCameraMosaic({ cam, personnes = [], onFocus, onFullscreen }) {
+function TuileCameraMosaic({ cam, personnes = [], onFocus, onFullscreen, onEtatFlux }) {
   const streamDirectTuile = useFluxDirect(cam.urlFlux ? null : cam.id);
   const detectionsTuile = personnes.filter((p) => String(p.camCtx?.id_camera || '') === String(cam.id));
 
@@ -1349,6 +1410,7 @@ function TuileCameraMosaic({ cam, personnes = [], onFocus, onFullscreen }) {
           imageRepli={cam.image}
           alt={cam.name}
           detections={detectionsTuile}
+          onStatusChange={onEtatFlux ? (etat) => onEtatFlux(cam.id, etat) : undefined}
           style={{
             width: '100%',
             height: '100%',
@@ -1488,6 +1550,11 @@ function determinerMotifSuspicion(p) {
 }
 
 function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, onSelectTab }) {
+  // État RÉEL du flux de chaque caméra RTSP, remonté par FluxCamera
+  // ('connexion' | 'direct' | 'hors_ligne'). Sans lui, une caméra RTSP était toujours
+  // affichée « LIVE », même quand aucune image n'arrivait.
+  const [etatsFlux, setEtatsFlux] = useState({});
+  const majEtatFlux = (idCam, etat) => setEtatsFlux((prev) => (prev[idCam] === etat ? prev : { ...prev, [idCam]: etat }));
   const [selectedCam, setSelectedCam] = useState(() => {
     return localStorage.getItem('previa_selected_camera') || null;
   });
@@ -1556,7 +1623,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
 
   const camerasEtat = cameras.map((c) => {
     const age = c.misAJourLe ? (Date.now() / 1000 - g_decalageServeurSec - c.misAJourLe) : null;
-    const isOff = c.urlFlux ? false : (age == null || age > 15);
+    const isOff = c.urlFlux ? etatsFlux[c.id] === 'hors_ligne' : (age == null || age > 15);
     const persSurCam = personnes.filter((p) => String(p.camCtx?.id_camera || '') === String(c.id));
     const persCount = persSurCam.length > 0 ? persSurCam.length : (c.nombrePersonnes ?? 0);
     const alertesDeCetteCam = alertes.filter((a) => String(a.id_camera || '') === String(c.id));
@@ -1570,7 +1637,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
       urlFlux: c.urlFlux,
       status: isOff ? 'Hors-ligne' : 'En ligne',
       isOffline: isOff,
-      frameAge: c.urlFlux ? 'En direct' : (age == null ? 'Aucune image' : `${ilYA(c.misAJourLe)}`),
+      frameAge: c.urlFlux ? (isOff ? 'Aucune image' : 'En direct') : (age == null ? 'Aucune image' : `${ilYA(c.misAJourLe)}`),
       persons: persCount,
       behavior: persCount > 0 ? `${persCount} personne(s) visible(s)` : 'Surveillance normale',
       alertes: alertesDeCetteCam,
@@ -1734,7 +1801,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
     <div className="content-body" style={{ maxWidth: '1440px', margin: '0 auto', paddingBottom: '60px' }}>
       {/* EN-TÊTE ÉPURÉ AVEC DÉGAGEMENT DE LA VAGUE SUPÉRIEURE DROITE */}
       <div style={{ marginBottom: '18px' }}>
-        <div style={{ maxWidth: 'calc(100% - 320px)' }}>
+        <div className="cameras-header-title">
           <h1 className="welcome-heading" style={{ fontSize: '1.75rem', fontWeight: 800, margin: 0 }}>
             Supervision des <span>Caméras</span>
           </h1>
@@ -1745,6 +1812,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
 
         {/* COMMUTATEUR DE MODE DE VUE (SEGMENTED PILL ÉPURÉ SANS ICÔNES SUPERFLUES) */}
         <div
+          className="no-scrollbar"
           style={{
             position: 'relative',
             zIndex: 10,
@@ -2150,6 +2218,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                 imageRepli={currentCamera.image}
                 alt={currentCamera.name}
                 detections={detectionsSurCetteCam}
+                onStatusChange={(etat) => majEtatFlux(currentCamera.id, etat)}
                 style={{
                   width: '100%',
                   height: '100%',
@@ -2197,8 +2266,9 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                 </div>
               )}
 
-              {/* HUD FLOTTANT SUPÉRIEUR */}
+              {/* HUD FLOTTANT SUPÉRIEUR (C2: Adaptatif mobile, pas de collision) */}
               <div
+                className="camera-video-hud"
                 style={{
                   position: 'absolute',
                   top: 14,
@@ -2213,8 +2283,9 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   flexWrap: 'wrap',
                 }}
               >
-                {/* STATUT FLUX GAUCHE */}
+                {/* STATUT FLUX GAUCHE (Compact avec ellipsis) */}
                 <div
+                  className="camera-hud-badge-primary"
                   style={{
                     backgroundColor: 'rgba(15, 23, 42, 0.85)',
                     backdropFilter: 'blur(8px)',
@@ -2228,6 +2299,8 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                     fontSize: '0.78rem',
                     fontWeight: 700,
                     boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+                    maxWidth: '100%',
+                    overflow: 'hidden',
                   }}
                 >
                   <span
@@ -2237,16 +2310,18 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                       borderRadius: '50%',
                       backgroundColor: isOffline ? '#ef4444' : '#22c55e',
                       boxShadow: isOffline ? '0 0 8px #ef4444' : '0 0 8px #22c55e',
+                      flexShrink: 0,
                     }}
                   />
-                  <span>{isOffline ? 'HORS-LIGNE' : 'EN DIRECT'}</span>
+                  <span style={{ flexShrink: 0 }}>{isOffline ? 'HORS-LIGNE' : 'EN DIRECT'}</span>
                   <span style={{ opacity: 0.4 }}>|</span>
-                  <span style={{ color: '#38bdf8' }}>{currentCamera.name}</span>
-                  <span style={{ opacity: 0.7, fontSize: '0.72rem' }}>({currentCamera.location})</span>
+                  <span style={{ color: '#38bdf8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentCamera.name}</span>
+                  <span className="camera-hud-location-text" style={{ opacity: 0.7, fontSize: '0.72rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>({currentCamera.location})</span>
                 </div>
 
-                {/* STATUT IA & DÉTECTION DROITE */}
+                {/* STATUT IA & DÉTECTION DROITE (Masqué sur mobile < 640px) */}
                 <div
+                  className="camera-hud-badge-secondary"
                   style={{
                     backgroundColor: 'rgba(15, 23, 42, 0.85)',
                     backdropFilter: 'blur(8px)',
@@ -2424,7 +2499,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                 </span>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div className="camera-actions-toolbar">
                 <button
                   type="button"
                   onClick={handleDownloadSnapshot}
@@ -2528,9 +2603,10 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
       {subTab === 'mosaic' && (
         <div>
           <div
+            className="cameras-mosaic-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
               gap: '18px',
             }}
           >
@@ -2539,6 +2615,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                 key={cam.id}
                 cam={cam}
                 personnes={personnes}
+                onEtatFlux={majEtatFlux}
                 onFocus={() => {
                   setSelectedCam(cam.id);
                   setSubTab('hero');
@@ -2735,7 +2812,7 @@ function CiblesView({ titre, sousTitre, items = [], type }) {
           </p>
         </div>
       ) : vue === 'cartes' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+        <div className="cibles-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '16px' }}>
           {tries.map((item) => {
             const rs = RISK_STYLE[item.riskLevel] || RISK_STYLE.low;
             const estSuivi = suivi === item.id;
@@ -3294,7 +3371,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
       </div>
 
       {/* KPI STATS SUMMARY */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+      <div className="events-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '20px' }}>
         {/* TOTAL INCIDENTS */}
         <div style={{
           background: '#ffffff',
@@ -3425,9 +3502,9 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
         }}
       >
         {/* ROW 1 : SEVERITY TABS + SEARCH + VIEW SWITCHER */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="events-filter-row-1" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           {/* SEVERITY TABS */}
-          <div style={{
+          <div className="events-severity-tabs no-scrollbar" style={{
             display: 'flex',
             background: '#f1f5f9',
             padding: '4px',
@@ -3534,8 +3611,8 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
           </div>
 
           {/* SEARCH & VIEW SWITCHER */}
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', width: '250px', maxWidth: '100%' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', width: '100%' }}>
+            <div className="events-search-container" style={{ position: 'relative', width: '250px', maxWidth: '100%' }}>
               <Search size={15} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
               <input
                 type="text"
@@ -3617,7 +3694,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
         </div>
 
         {/* ROW 2 : INLINE CONTROLS (CAMERA, SORT, PAGE SIZE) */}
-        <div style={{
+        <div className="events-filter-row-2" style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -3627,9 +3704,9 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
           borderTop: '1px solid #f1f5f9',
           fontSize: '0.80rem'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', width: '100%' }}>
             {/* CAMERA FILTER */}
-            <div style={{
+            <div className="events-camera-select-wrapper" style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -3801,6 +3878,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
                   return (
                     <div
                       key={ev.id}
+                      className="event-history-card"
                       style={{
                         position: 'relative',
                         background: '#ffffff',
@@ -3991,7 +4069,8 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
               }}
             />
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+            <div className="table-responsive">
+              <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid var(--border-light)', color: 'var(--ink-muted)', fontSize: '0.78rem', textTransform: 'uppercase' }}>
                   <th style={{ padding: '12px 16px' }}>Horodatage</th>
@@ -4045,7 +4124,8 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -4552,7 +4632,7 @@ function AlertsView({ alertesReelles = [], cameras = [], camerasParId = {}, onRe
       )}
 
       {/* 2 CARTES DE STATUT ESSENTIELLES (ÉPURÉES & SANS CONFUSION) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+      <div className="alerts-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '24px' }}>
         {/* DANGER IMMÉDIAT */}
         <div style={{ background: '#ffffff', borderRadius: '14px', padding: '18px 20px', border: criticalCount > 0 ? '1px solid #fecaca' : '1px solid var(--border-light)', boxShadow: 'var(--shadow-card)', display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: criticalCount > 0 ? '#fee2e2' : '#f1f5f9', color: criticalCount > 0 ? '#dc2626' : '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -5086,7 +5166,7 @@ function ReportsView({ alertesReelles = [], kpis = {} }) {
       </div>
 
       {/* REPORTS CARDS GRID */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+      <div className="reports-cards-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: '20px' }}>
         {reports.map((rep) => (
           <div
             key={rep.id}
@@ -5233,17 +5313,23 @@ function OrganisationView() {
 
   async function charger() {
     try {
+      // Chaque échec est noté au lieu d'être transformé en liste vide silencieuse :
+      // une liste vide doit vouloir dire « aucun élément », jamais « le serveur n'a pas répondu ».
+      const echecs = [];
+      const charge = (chemin, libelle) => appelApiOrg(chemin).catch(() => { echecs.push(libelle); return []; });
       const [c, b, p, cam] = await Promise.all([
-        appelApiOrg('/utilisateurs').catch(() => []),
-        appelApiOrg('/batiments').catch(() => []),
-        appelApiOrg('/pieces').catch(() => []),
-        appelApiOrg('/cameras').catch(() => []),
+        charge('/utilisateurs', 'comptes'),
+        charge('/batiments', 'bâtiments'),
+        charge('/pieces', 'pièces'),
+        charge('/cameras', 'caméras'),
       ]);
       setComptes(Array.isArray(c) ? c : (Array.isArray(c?.utilisateurs) ? c.utilisateurs : []));
       setBatiments(Array.isArray(b) ? b : (Array.isArray(b?.batiments) ? b.batiments : []));
       setPieces(Array.isArray(p) ? p : (Array.isArray(p?.pieces) ? p.pieces : []));
       setCameras(Array.isArray(cam) ? cam : (Array.isArray(cam?.cameras) ? cam.cameras : []));
-      setErreur('');
+      setErreur(echecs.length
+        ? `Impossible de charger : ${echecs.join(', ')}. Le serveur ne répond pas ou l'accès est refusé.`
+        : '');
     } catch (e) {
       setErreur(e.message);
     }
@@ -5260,7 +5346,7 @@ function OrganisationView() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+      <div className="subtab-pills-bar no-scrollbar" style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'nowrap' }}>
         {onglets.map((o) => {
           const Icon = o.icon;
           return (
@@ -5282,7 +5368,25 @@ function OrganisationView() {
         })}
       </div>
 
-      {erreur && <p style={{ color: '#dc2626', fontSize: '0.85rem', marginBottom: '14px' }}>{erreur}</p>}
+      {erreur && (
+        <div
+          role="alert"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap',
+            background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c',
+            borderRadius: '10px', padding: '10px 14px', fontSize: '0.85rem', fontWeight: 600, marginBottom: '14px',
+          }}
+        >
+          <span>{erreur}</span>
+          <button
+            type="button"
+            onClick={charger}
+            style={{ background: '#ffffff', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: '8px', padding: '6px 12px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
+          >
+            Réessayer
+          </button>
+        </div>
+      )}
 
       {onglet === 'comptes' && <SectionComptes comptes={comptes} onChange={charger} />}
       {onglet === 'batiments' && <SectionBatiments batiments={batiments} comptes={comptes} onChange={charger} />}
@@ -5321,7 +5425,7 @@ function SectionComptes({ comptes = [], onChange }) {
   return (
     <div style={carte}>
       <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '14px' }}>Tous les comptes ({(comptes || []).length})</h3>
-      <form onSubmit={creer} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
+      <form className="org-form" onSubmit={creer} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
         <input style={champ} placeholder="Prénom" value={prenom} onChange={(e) => setPrenom(e.target.value)} required />
         <input style={champ} placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} required />
         <input style={champ} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -5333,48 +5437,94 @@ function SectionComptes({ comptes = [], onChange }) {
         <button style={btn} disabled={envoi} type="submit"><Plus size={15} /> Créer le compte</button>
       </form>
       {err && <p style={{ color: '#dc2626', fontSize: '0.8rem' }}>{err}</p>}
-      <div className="table-responsive" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <table style={{ width: '100%', minWidth: '550px', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-          <thead><tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--ink-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-            <th style={{ padding: '8px', textAlign: 'left' }}>Nom & Prénom</th><th style={{ padding: '8px', textAlign: 'left' }}>Email</th><th style={{ padding: '8px', textAlign: 'left' }}>Rôle</th><th />
-          </tr></thead>
-          <tbody>
-            {(comptes || []).map((c) => (
-              <tr key={c.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                <td style={{ padding: '8px', fontWeight: 700 }}>{c.prenom} {c.nom}</td>
-                <td style={{ padding: '8px', color: 'var(--ink-muted)' }}>{c.email}</td>
-                <td style={{ padding: '8px' }}>
-                  <span style={{ background: c.role === 'admin' ? '#e0f2fe' : '#f1f5f9', color: c.role === 'admin' ? '#0284c7' : '#475569', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '0.75rem' }}>
-                    {c.role === 'admin' ? 'Administrateur' : 'Opérateur'}
-                    {c.est_par_defaut ? ' (Principal)' : ''}
-                  </span>
-                </td>
-                <td style={{ padding: '8px', textAlign: 'right', display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                  <button
-                    style={{ ...btnSuppr, background: '#f0f9ff', color: '#0284c7', borderColor: '#bae6fd' }}
-                    onClick={async () => {
-                      const nmp = prompt(`Nouveau mot de passe pour ${c.prenom} ${c.nom} :`);
-                      if (nmp && nmp.trim()) {
-                        try {
-                          const chemin = c.role === 'admin' ? `/utilisateurs/admins/${c.id}` : `/utilisateurs/users/${c.id}`;
-                          await appelApiOrg(chemin, { method: 'PUT', body: JSON.stringify({ mot_de_passe: nmp.trim() }) });
-                          alert(`Le mot de passe de ${c.prenom} a bien été réinitialisé !`);
-                          onChange();
-                        } catch (errM) {
-                          alert(`Erreur : ${errM.message}`);
+
+      {/* DESKTOP TABLE */}
+      <div className="org-table-desktop">
+        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', minWidth: '550px', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <thead><tr style={{ borderBottom: '1px solid var(--border-light)', color: 'var(--ink-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+              <th style={{ padding: '8px', textAlign: 'left' }}>Nom & Prénom</th><th style={{ padding: '8px', textAlign: 'left' }}>Email</th><th style={{ padding: '8px', textAlign: 'left' }}>Rôle</th><th />
+            </tr></thead>
+            <tbody>
+              {(comptes || []).map((c) => (
+                <tr key={c.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                  <td style={{ padding: '8px', fontWeight: 700 }}>{c.prenom} {c.nom}</td>
+                  <td style={{ padding: '8px', color: 'var(--ink-muted)' }}>{c.email}</td>
+                  <td style={{ padding: '8px' }}>
+                    <span style={{ background: c.role === 'admin' ? '#e0f2fe' : '#f1f5f9', color: c.role === 'admin' ? '#0284c7' : '#475569', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '0.75rem' }}>
+                      {c.role === 'admin' ? 'Administrateur' : 'Opérateur'}
+                      {c.est_par_defaut ? ' (Principal)' : ''}
+                    </span>
+                  </td>
+                  <td style={{ padding: '8px', textAlign: 'right', display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                    <button
+                      style={{ ...btnSuppr, width: 'auto', padding: '4px 8px', background: '#f0f9ff', color: '#0284c7', borderColor: '#bae6fd', fontSize: '0.75rem' }}
+                      onClick={async () => {
+                        const nmp = prompt(`Nouveau mot de passe pour ${c.prenom} ${c.nom} :`);
+                        if (nmp && nmp.trim()) {
+                          try {
+                            const chemin = c.role === 'admin' ? `/utilisateurs/admins/${c.id}` : `/utilisateurs/users/${c.id}`;
+                            await appelApiOrg(chemin, { method: 'PUT', body: JSON.stringify({ mot_de_passe: nmp.trim() }) });
+                            alert(`Le mot de passe de ${c.prenom} a bien été réinitialisé !`);
+                            onChange();
+                          } catch (errM) {
+                            alert(`Erreur : ${errM.message}`);
+                          }
                         }
-                      }
-                    }}
-                    title="Réinitialiser le mot de passe"
-                  >
-                    Réinitialiser Pass
-                  </button>
-                  {!c.est_par_defaut && <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer ce compte"><Trash2 size={14} /></button>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      }}
+                      title="Réinitialiser le mot de passe"
+                    >
+                      Réinitialiser Pass
+                    </button>
+                    {!c.est_par_defaut && <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer ce compte"><Trash2 size={14} /></button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* MOBILE CARDS VIEW (O2: Ergonomique & tactile sur petit écran) */}
+      <div className="org-cards-mobile">
+        {(comptes || []).map((c) => (
+          <div key={c.id} className="org-account-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--ink-primary)' }}>{c.prenom} {c.nom}</span>
+              <span style={{ background: c.role === 'admin' ? '#e0f2fe' : '#f1f5f9', color: c.role === 'admin' ? '#0284c7' : '#475569', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, fontSize: '0.72rem' }}>
+                {c.role === 'admin' ? 'Administrateur' : 'Opérateur'}{c.est_par_defaut ? ' (Principal)' : ''}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--ink-muted)', overflowWrap: 'anywhere' }}>
+              {c.email}
+            </div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid var(--border-light)', paddingTop: '10px', marginTop: '4px' }}>
+              <button
+                style={{ ...btnSuppr, width: 'auto', padding: '6px 14px', background: '#f0f9ff', color: '#0284c7', borderColor: '#bae6fd', fontSize: '0.78rem', fontWeight: 700 }}
+                onClick={async () => {
+                  const nmp = prompt(`Nouveau mot de passe pour ${c.prenom} ${c.nom} :`);
+                  if (nmp && nmp.trim()) {
+                    try {
+                      const chemin = c.role === 'admin' ? `/utilisateurs/admins/${c.id}` : `/utilisateurs/users/${c.id}`;
+                      await appelApiOrg(chemin, { method: 'PUT', body: JSON.stringify({ mot_de_passe: nmp.trim() }) });
+                      alert(`Le mot de passe de ${c.prenom} a bien été réinitialisé !`);
+                      onChange();
+                    } catch (errM) {
+                      alert(`Erreur : ${errM.message}`);
+                    }
+                  }
+                }}
+              >
+                Réinitialiser Pass
+              </button>
+              {!c.est_par_defaut && (
+                <button style={{ ...btnSuppr, width: '36px', height: '36px' }} onClick={() => supprimer(c)} title="Supprimer ce compte">
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -5758,6 +5908,7 @@ export default function Admin() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
 
   const nom = sessionStorage.getItem('previa_utilisateur_nom') || 'Utilisateur';
   const role = sessionStorage.getItem('previa_utilisateur_role') || 'user';
@@ -6075,37 +6226,197 @@ export default function Admin() {
       />
 
       {/* MAIN OPERATIONS WORKSPACE */}
-      <main className="main-layout">
-        {/* MOBILE TOP BAR (visible on screens <= 768px) */}
-        <div className="mobile-top-bar">
-          <button
-            className="mobile-menu-btn"
-            onClick={() => setIsMobileMenuOpen(true)}
-            aria-label="Ouvrir le menu"
-          >
-            <Menu size={22} />
-          </button>
-          <div className="mobile-app-title">
-            <strong>Previa</strong> · <span>{titresOnglets[currentTab] || 'Tableau de bord'}</span>
+      <div className="main-wrapper">
+        {/* MOBILE TOP BAR (visible on screens <= 768px, no burger menu, compact native bar) */}
+        <header className="mobile-top-bar">
+          <div className="mobile-top-bar-left">
+            <div className="mobile-brand-group">
+              <span className="mobile-brand-pill">PREVIA</span>
+              <span className="mobile-view-title">{titresOnglets[currentTab] || 'Tableau de bord'}</span>
+            </div>
           </div>
-        </div>
 
-        {/* TOP RIGHT ORGANIC BLUE WAVE BANNER WITH ACTION BUTTONS */}
-        <HeaderDecor
-          onNavigate={(tab) => {
-            setCurrentTab(tab);
-            setIsMobileMenuOpen(false);
-          }}
-          onLogout={seDeconnecter}
-          onRefresh={rafraichir}
-          unreadCount={alertes.length}
-          notifications={notifications}
-          utilisateur={{ nom, role }}
-        />
+          <div className="mobile-top-bar-right">
+            <HeaderDecor
+              onNavigate={(tab) => {
+                setCurrentTab(tab);
+                setIsMoreSheetOpen(false);
+              }}
+              onLogout={seDeconnecter}
+              onRefresh={rafraichir}
+              unreadCount={alertes.length}
+              notifications={notifications}
+              utilisateur={{ nom, role }}
+              isMobileMode={true}
+            />
+          </div>
+        </header>
 
-        {/* CURRENT TAB VIEW */}
-        {renderActiveView()}
-      </main>
+        <main className="main-layout">
+          {/* TOP RIGHT ORGANIC BLUE WAVE BANNER (DESKTOP ONLY) */}
+          <div className="desktop-header-decor-wrapper">
+            <HeaderDecor
+              onNavigate={(tab) => {
+                setCurrentTab(tab);
+                setIsMoreSheetOpen(false);
+              }}
+              onLogout={seDeconnecter}
+              onRefresh={rafraichir}
+              unreadCount={alertes.length}
+              notifications={notifications}
+              utilisateur={{ nom, role }}
+              isMobileMode={false}
+            />
+          </div>
+
+          {/* CURRENT TAB VIEW */}
+          {renderActiveView()}
+        </main>
+
+        {/* MOBILE NATIVE BOTTOM NAVIGATION BAR (FIXED <= 767px) */}
+        <nav className="mobile-bottom-nav" aria-label="Navigation principale mobile">
+          <button
+            type="button"
+            className={`mobile-tab-btn ${currentTab === 'dashboard' && !isMoreSheetOpen ? 'active' : ''}`}
+            onClick={() => { setCurrentTab('dashboard'); setIsMoreSheetOpen(false); }}
+          >
+            <div className="mobile-tab-icon-wrap">
+              <LayoutGrid size={20} />
+            </div>
+            <span className="mobile-tab-label">Accueil</span>
+          </button>
+
+          <button
+            type="button"
+            className={`mobile-tab-btn ${currentTab === 'cameras' && !isMoreSheetOpen ? 'active' : ''}`}
+            onClick={() => { setCurrentTab('cameras'); setIsMoreSheetOpen(false); }}
+          >
+            <div className="mobile-tab-icon-wrap">
+              <Cctv size={20} />
+            </div>
+            <span className="mobile-tab-label">Caméras</span>
+          </button>
+
+          <button
+            type="button"
+            className={`mobile-tab-btn ${currentTab === 'events' && !isMoreSheetOpen ? 'active' : ''}`}
+            onClick={() => { setCurrentTab('events'); setIsMoreSheetOpen(false); }}
+          >
+            <div className="mobile-tab-icon-wrap">
+              <Clock size={20} />
+            </div>
+            <span className="mobile-tab-label">Historique</span>
+          </button>
+
+          <button
+            type="button"
+            className={`mobile-tab-btn ${currentTab === 'personnes' && !isMoreSheetOpen ? 'active' : ''}`}
+            onClick={() => { setCurrentTab('personnes'); setIsMoreSheetOpen(false); }}
+          >
+            <div className="mobile-tab-icon-wrap">
+              <Users size={20} />
+            </div>
+            <span className="mobile-tab-label">Personnel</span>
+          </button>
+
+          <button
+            type="button"
+            className={`mobile-tab-btn ${['organisation', 'alerts', 'reports'].includes(currentTab) || isMoreSheetOpen ? 'active' : ''}`}
+            onClick={() => setIsMoreSheetOpen((prev) => !prev)}
+          >
+            <div className="mobile-tab-icon-wrap">
+              <SlidersHorizontal size={20} />
+              {alertes.length > 0 && <span className="mobile-tab-badge-dot" />}
+            </div>
+            <span className="mobile-tab-label">Plus</span>
+          </button>
+        </nav>
+
+        {/* MOBILE "PLUS" BOTTOM SHEET DRAWER */}
+        {isMoreSheetOpen && (
+          <div className="mobile-sheet-backdrop" onClick={() => setIsMoreSheetOpen(false)}>
+            <div className="mobile-sheet-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="mobile-sheet-handle" />
+              <div className="mobile-sheet-header">
+                <h3 className="mobile-sheet-title">Menu & Paramètres</h3>
+                <button
+                  type="button"
+                  className="mobile-sheet-close-btn"
+                  onClick={() => setIsMoreSheetOpen(false)}
+                  aria-label="Fermer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="mobile-sheet-items">
+                {estParDefaut && (
+                  <button
+                    type="button"
+                    className={`mobile-sheet-item ${currentTab === 'organisation' ? 'active' : ''}`}
+                    onClick={() => { setCurrentTab('organisation'); setIsMoreSheetOpen(false); }}
+                  >
+                    <div className="mobile-sheet-item-icon">
+                      <Building2 size={20} />
+                    </div>
+                    <div className="mobile-sheet-item-text">
+                      <span className="mobile-sheet-item-title">Organisation</span>
+                      <span className="mobile-sheet-item-sub">Bâtiments, pièces, comptes & caméras</span>
+                    </div>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className={`mobile-sheet-item ${currentTab === 'alerts' ? 'active' : ''}`}
+                  onClick={() => { setCurrentTab('alerts'); setIsMoreSheetOpen(false); }}
+                >
+                  <div className="mobile-sheet-item-icon">
+                    <ShieldAlert size={20} />
+                  </div>
+                  <div className="mobile-sheet-item-text">
+                    <span className="mobile-sheet-item-title">Alertes & Sécurité</span>
+                    <span className="mobile-sheet-item-sub">Événements en direct & anomalies</span>
+                  </div>
+                  {alertes.length > 0 && (
+                    <span className="mobile-sheet-badge">{alertes.length}</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className={`mobile-sheet-item ${currentTab === 'reports' ? 'active' : ''}`}
+                  onClick={() => { setCurrentTab('reports'); setIsMoreSheetOpen(false); }}
+                >
+                  <div className="mobile-sheet-item-icon">
+                    <FileText size={20} />
+                  </div>
+                  <div className="mobile-sheet-item-text">
+                    <span className="mobile-sheet-item-title">Rapports & Audit</span>
+                    <span className="mobile-sheet-item-sub">Synthèses et exports de sécurité</span>
+                  </div>
+                </button>
+
+                <div className="mobile-sheet-divider" />
+
+                <button
+                  type="button"
+                  className="mobile-sheet-item mobile-sheet-logout"
+                  onClick={() => { setIsMoreSheetOpen(false); seDeconnecter(); }}
+                >
+                  <div className="mobile-sheet-item-icon logout">
+                    <DoorOpen size={20} />
+                  </div>
+                  <div className="mobile-sheet-item-text">
+                    <span className="mobile-sheet-item-title logout-text">Déconnexion</span>
+                    <span className="mobile-sheet-item-sub">Quitter la session en cours</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
