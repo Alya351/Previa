@@ -49,6 +49,12 @@ function MainApplication() {
   };
 
   const [modalNumeroOuvert, setModalNumeroOuvert] = useState(false);
+  const [sireneActive, setSireneActive] = useState(false);
+
+  const handleToggleSirene = () => {
+    setSireneActive((prev) => !prev);
+    // Couper ou déclencher l'alarme immédiatement (Spécification mobile : Couper ou déclencher l'alarme)
+  };
 
   // Authentification et session opérateur
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -252,6 +258,7 @@ function MainApplication() {
       <BottomTabBar
         activeTab={activeTab}
         onTabPress={setActiveTab}
+        onAlarmPress={handleToggleSirene}
         unreadCount={unreadCount}
       />
     </SafeAreaView>

@@ -17,6 +17,8 @@ import {
   IconAlertTriangle,
   IconChevronRight,
   IconChevronDown,
+  IconPhone,
+  IconCamera,
 } from '../components/Icons';
 
 export const ActivityScreen = ({ onNavigate, isDark = false, totalEvents = 132 }) => {
@@ -109,51 +111,47 @@ export const ActivityScreen = ({ onNavigate, isDark = false, totalEvents = 132 }
           {/* LEGEND PILLS */}
           <View style={styles.legendGrid}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#014791' }]} />
-              <Text style={styles.legendText}>Face ID (55%)</Text>
-            </View>
-            <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: '#0284C7' }]} />
-              <Text style={styles.legendText}>Mouvements (25%)</Text>
+              <Text style={styles.legendText}>Vérifiées (75%)</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: '#00B4D8' }]} />
-              <Text style={styles.legendText}>Véhicules (12%)</Text>
+              <Text style={styles.legendText}>Résolues (18%)</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
-              <Text style={styles.legendText}>Alertes (8%)</Text>
+              <Text style={styles.legendText}>En cours (7%)</Text>
             </View>
           </View>
         </View>
 
-        {/* SECTION : ACTIONS RAPIDES */}
+        {/* SECTION : ACTIONS DE RÉACTION RAPIDE (Tableau Mobile : Réagir, Couper alarme, Appeler) */}
         <View style={styles.sectionWrap}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Actions Rapides</Text>
-            <TouchableOpacity><Text style={styles.linkText}>Voir tout</Text></TouchableOpacity>
+            <Text style={styles.sectionTitle}>Commandes Immédiates</Text>
+            <TouchableOpacity><Text style={styles.linkText}>1 tap</Text></TouchableOpacity>
           </View>
 
           <View style={styles.quickGrid}>
             <TouchableOpacity style={styles.quickCard} activeOpacity={0.8}>
+              <View style={[styles.quickIconWrap, { backgroundColor: '#FEE2E2' }]}>
+                <IconAlertTriangle size={20} color="#DC2626" />
+              </View>
+              <Text style={styles.quickTitle}>Couper / Sirène</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.quickCard} activeOpacity={0.8}>
+              <View style={[styles.quickIconWrap, { backgroundColor: '#ECFDF5' }]}>
+                <IconPhone size={20} color="#059669" />
+              </View>
+              <Text style={styles.quickTitle}>Appeler Gardien</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.quickCard} activeOpacity={0.8} onPress={() => onNavigate('direct')}>
               <View style={[styles.quickIconWrap, { backgroundColor: '#E0F2FE' }]}>
-                <IconUser size={20} color="#0284C7" />
+                <IconCamera size={20} color="#0284C7" />
               </View>
-              <Text style={styles.quickTitle}>Ajouter Face ID</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.quickCard} activeOpacity={0.8}>
-              <View style={[styles.quickIconWrap, { backgroundColor: '#ECFEFF' }]}>
-                <IconFileText size={20} color="#00B4D8" />
-              </View>
-              <Text style={styles.quickTitle}>Rapport PDF</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.quickCard} activeOpacity={0.8}>
-              <View style={[styles.quickIconWrap, { backgroundColor: '#EEF2FF' }]}>
-                <IconLock size={20} color="#6366F1" />
-              </View>
-              <Text style={styles.quickTitle}>Verrouiller</Text>
+              <Text style={styles.quickTitle}>Direct Caméra</Text>
             </TouchableOpacity>
           </View>
         </View>

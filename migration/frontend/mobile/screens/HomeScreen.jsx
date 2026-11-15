@@ -211,23 +211,23 @@ export const HomeScreen = ({
             </View>
           </TouchableOpacity>
 
-          {/* ITEM 2 : FACE ID */}
+          {/* ITEM 2 : MOUVEMENT SUSPECT DE NUIT (Pas de Face ID sur mobile, réservé au Web) */}
           <TouchableOpacity
             style={styles.recentAlertCard}
             onPress={() => onNavigate('alerts')}
             activeOpacity={0.8}
           >
             <View style={styles.recentAlertLeft}>
-              <View style={[styles.recentAlertIconWrap, { backgroundColor: '#ECFDF5' }]}>
-                <IconUser size={20} color="#059669" />
+              <View style={[styles.recentAlertIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                <IconAlertTriangle size={20} color="#D97706" />
               </View>
               <View>
-                <Text style={styles.recentAlertTitle}>Face ID : Alya KIEMDE</Text>
-                <Text style={styles.recentAlertSub}>Entrée Principale · 14:15</Text>
+                <Text style={styles.recentAlertTitle}>Mouvement Nocturne Suspect</Text>
+                <Text style={styles.recentAlertSub}>École Du Code · 14:15</Text>
               </View>
             </View>
-            <View style={[styles.recentAlertBadge, { backgroundColor: '#ECFDF5' }]}>
-              <Text style={[styles.recentAlertBadgeText, { color: '#059669' }]}>Autorisé</Text>
+            <View style={[styles.recentAlertBadge, { backgroundColor: '#FEF3C7' }]}>
+              <Text style={[styles.recentAlertBadgeText, { color: '#D97706' }]}>Anomalie</Text>
             </View>
           </TouchableOpacity>
 

@@ -2,9 +2,9 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PREVIA_COLORS, PREVIA_RADIUS, PREVIA_TOUCH_TARGET } from '../theme';
-import { IconHome, IconCamera, IconScan, IconBarChart, IconUser } from './Icons';
+import { IconHome, IconCamera, IconAlertTriangle, IconBarChart, IconUser } from './Icons';
 
-export const BottomTabBar = ({ activeTab, onTabPress, onScanPress, unreadCount = 0 }) => {
+export const BottomTabBar = ({ activeTab, onTabPress, onAlarmPress, unreadCount = 0 }) => {
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 10);
 
@@ -59,16 +59,16 @@ export const BottomTabBar = ({ activeTab, onTabPress, onScanPress, unreadCount =
           {leftTabs.map(renderTab)}
         </View>
 
-        {/* BOUTON CENTRAL SURÉLEVÉ (SCANNER FACE ID / IA) */}
+        {/* BOUTON CENTRAL SURÉLEVÉ : ACTION D'URGENCE / SIRÈNE (Tableau Mobile : Couper/Déclencher l'alarme) */}
         <View style={styles.centerFabContainer}>
           <TouchableOpacity
             style={styles.centerFab}
-            onPress={onScanPress || (() => onTabPress('direct'))}
+            onPress={onAlarmPress || (() => onTabPress('direct'))}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Scanner Face ID et Détection IA"
+            accessibilityLabel="Couper ou déclencher l'alarme d'urgence"
           >
-            <IconScan size={26} color="#FFFFFF" />
+            <IconAlertTriangle size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
@@ -142,12 +142,12 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: PREVIA_COLORS.bluePrimary,
+    backgroundColor: '#DC2626', // Rouge action d'urgence alarme / sirène
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
     borderColor: '#FFFFFF',
-    shadowColor: PREVIA_COLORS.bluePrimary,
+    shadowColor: '#DC2626',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.45,
     shadowRadius: 16,
@@ -173,4 +173,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
+
 
