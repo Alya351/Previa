@@ -33,7 +33,7 @@ import requests
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -1016,6 +1016,15 @@ def voir_vue_ensemble():
 # FastAPI exécute automatiquement les endpoints synchrones dans un thread
 # séparé — en `async def`, ce calcul bloquerait la boucle d'événements
 # entière.
+@app.get(
+    "/cameras/{id_camera}/voir",
+    include_in_schema=False,
+)
+def voir_navigateur_get(id_camera: str):
+    """Redirige les requêtes GET (ex: navigateur web) vers l'aperçu image."""
+    return RedirectResponse(url=f"/cameras/{id_camera}/image", status_code=307)
+
+
 @app.post(
     "/cameras/{id_camera}/voir",
     tags=["Analyse"],
@@ -2108,3 +2117,14 @@ def _sauvegarder_a_larret():
     évènement force une dernière écriture avant que le process ne
     termine. N'aide pas contre un `kill -9`/crash brutal."""
     etat_persistant.sauvegarder_maintenant()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    _racine = Path(__file__).resolve().parent.parent.parent
+    _cert = _racine / "certs" / "cert.pem"
+    _key = _racine / "certs" / "key.pem"
+    _ssl = {}
+    if _cert.exists() and _key.exists():
+        _ssl = {"ssl_certfile": str(_cert), "ssl_keyfile": str(_key)}
+    uvicorn.run("fonctionnalites.main.main:app", host="0.0.0.0", port=8012, **_ssl)

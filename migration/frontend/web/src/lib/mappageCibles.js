@@ -32,11 +32,29 @@ export function stableRadarPos(id) {
   return { top: `${top}%`, left: `${left}%` };
 }
 
+// Durée lisible : on change d'unité dès qu'on dépasse la suivante
+// (60 s -> min, 60 min -> h, 24 h -> j, 7 j -> sem, ~30 j -> mois, 365 j -> an).
+// Ex. 45 -> "45s" ; 175 -> "2 min 55s" ; 7500 -> "2 h 05 min" ; 200000 -> "2 j 7 h".
 export function formatDuree(sec) {
   sec = Math.max(0, Math.round(sec || 0));
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return m > 0 ? `${m} min ${String(s).padStart(2, '0')}s` : `${s}s`;
+  const MIN = 60, H = 3600, J = 86400, SEM = 7 * J, MOIS = 30.44 * J, AN = 365 * J;
+  if (sec < MIN) return `${sec}s`;
+  if (sec < H) { const m = Math.floor(sec / MIN), s = sec % MIN; return s ? `${m} min ${String(s).padStart(2, '0')}s` : `${m} min`; }
+  if (sec < J) { const h = Math.floor(sec / H), m = Math.floor((sec % H) / MIN); return m ? `${h} h ${String(m).padStart(2, '0')} min` : `${h} h`; }
+  if (sec < SEM) { const j = Math.floor(sec / J), h = Math.floor((sec % J) / H); return h ? `${j} j ${h} h` : `${j} j`; }
+  if (sec < MOIS) { const w = Math.floor(sec / SEM), j = Math.floor((sec % SEM) / J); return j ? `${w} sem ${j} j` : `${w} sem`; }
+  if (sec < AN) { const mo = Math.floor(sec / MOIS); return `${mo} mois`; }
+  const a = Math.floor(sec / AN); return `${a} an${a > 1 ? 's' : ''}`;
+}
+
+// Réécrit les durées brutes d'un texte venu du backend
+// ("depuis 175 secondes" -> "depuis 2 min 55s", "depuis 130 minutes" -> "depuis 2 h 10 min").
+// Sert aussi aux anciennes alertes déjà enregistrées avec des secondes.
+export function humaniserDurees(texte) {
+  if (!texte) return texte || '';
+  return String(texte)
+    .replace(/(\d+)\s*secondes?/gi, (tout, n) => (Number(n) >= 60 ? formatDuree(Number(n)) : tout))
+    .replace(/(\d+)\s*minutes?/gi, (tout, n) => (Number(n) >= 60 ? formatDuree(Number(n) * 60) : tout));
 }
 
 export function statutIdentite(statut) {

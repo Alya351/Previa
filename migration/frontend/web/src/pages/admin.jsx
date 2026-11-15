@@ -69,6 +69,7 @@ import { FluxCamera } from '../components/FluxCamera.jsx';
 import {
   mapPersonneApi, mapObjetInstanceApi, mapFeuFumeeAlerte, mapZoneSuspecte,
   avisIALibelle, construireFicheDetail,
+  humaniserDurees,
 } from '../lib/mappageCibles.js';
 import './admin.css';
 
@@ -3172,7 +3173,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
           rawType: a.type_evenement,
           cam: `${(a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra 1'} · ${[a.batiment, a.piece].filter(Boolean).join(' / ') || 'Zone Principale'}`,
           camId: String(a.id_camera || ''),
-          desc: a.description || '',
+          desc: humaniserDurees(a.description || ''),
           level: critique ? 'Critique' : 'Suspect',
           critique,
           validated: true,
@@ -4279,7 +4280,7 @@ function AlertsView({ alertesReelles = [], cameras = [], camerasParId = {}, onRe
       imageUrl: urlImageAlerte(a.id),
       timeAgo: formaterTempsRelatif(a.horodatage),
       horodatage: a.horodatage,
-      description: a.description,
+      description: humaniserDurees(a.description),
       critique,
     };
   });
@@ -4774,46 +4775,7 @@ function AlertsView({ alertesReelles = [], cameras = [], camerasParId = {}, onRe
                     {item.description}
                   </p>
 
-                  {/* CE QUE LE SYSTÈME A FAIT AUTOMATIQUEMENT */}
-                  {item.critique && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <div
-                        style={{
-                          background: etatAlarme.lampe ? '#fef3c7' : '#f8fafc',
-                          color: etatAlarme.lampe ? '#92400e' : '#64748b',
-                          border: `1px solid ${etatAlarme.lampe ? '#fde68a' : '#e2e8f0'}`,
-                          padding: '4px 10px',
-                          borderRadius: '8px',
-                          fontSize: '0.76rem',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        <Lightbulb size={14} />
-                        <span>{etatAlarme.lampe ? '💡 Projecteur allumé' : '💡 Éclairage en veille'}</span>
-                      </div>
 
-                      <div
-                        style={{
-                          background: etatAlarme.sirene ? '#fee2e2' : '#ecfdf5',
-                          color: etatAlarme.sirene ? '#dc2626' : '#059669',
-                          border: `1px solid ${etatAlarme.sirene ? '#fca5a5' : '#bbf7d0'}`,
-                          padding: '4px 10px',
-                          borderRadius: '8px',
-                          fontSize: '0.76rem',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        <Volume2 size={14} />
-                        <span>{etatAlarme.sirene ? '🚨 Sirène active' : '🔊 Sirène prête'}</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* 3. BOUTONS D'ACTION ÉPURÉS POUR L'OPÉRATEUR */}
@@ -5920,6 +5882,35 @@ export default function Admin() {
   const [alertes, setAlertes] = useState([]);
   const [audioActif, setAudioActif] = useState(true);
 
+  // Suivi de consultation des alertes : une fois l'onglet Alertes ouvert,
+  // les alertes déjà présentes sont considérées comme lues et le badge repasse à 0.
+  // Seules les NOUVELLES alertes survenues ultérieurement incrémenteront à nouveau le compteur.
+  const [derniereConsultationAlertes, setDerniereConsultationAlertes] = useState(() => {
+    try {
+      return Number(localStorage.getItem('previa_derniere_consultation_alertes') || 0);
+    } catch {
+      return 0;
+    }
+  });
+
+  // Marque toutes les alertes actuelles comme lues. On retient l'horodatage de la plus
+  // récente alerte (heure du SERVEUR), pas seulement l'heure du navigateur : sinon un
+  // décalage d'horloge PC/serveur laissait des alertes déjà vues compter comme « nouvelles ».
+  const marquerAlertesLues = () => {
+    const plusRecente = alertes.reduce((m, a) => Math.max(m, Number(a.horodatage || a.timestamp || 0)), 0);
+    const vu = Math.max(plusRecente, Math.floor(Date.now() / 1000) - g_decalageServeurSec);
+    setDerniereConsultationAlertes(vu);
+    try {
+      localStorage.setItem('previa_derniere_consultation_alertes', String(vu));
+    } catch {}
+  };
+
+  // Onglet Alertes ouvert : tout est lu, y compris les alertes qui arrivent pendant qu'on le regarde.
+  useEffect(() => {
+    if (currentTab === 'alerts') marquerAlertesLues();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTab, alertes]);
+
   // Licence de cette installation (voir LicenceDisabledScreen plus haut
   // et Infrastructure/licence.py côté backend) — `null` tant que le
   // premier chargement n'a pas répondu, pour ne jamais flasher l'app
@@ -6135,13 +6126,31 @@ export default function Admin() {
     uptimeRate,
   };
 
-  const notifications = alertes.slice(0, 3).map((a) => ({
-    id: a.id,
-    title: a.description,
-    time: a.horodatage ? new Date(a.horodatage * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '',
-    cam: (a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra 1',
-    type: ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(a.type_evenement) ? 'critical' : 'warning',
-  }));
+  const alertesNonLues = currentTab === 'alerts'
+    ? 0
+    : alertes.filter((a) => {
+        const ts = Number(a.horodatage || a.timestamp || 0);
+        if (!ts) return false;
+        if (derniereConsultationAlertes === 0) {
+          const ageSec = (Date.now() / 1000 - g_decalageServeurSec) - ts;
+          return ageSec <= 86400;
+        }
+        return ts > derniereConsultationAlertes;
+      }).length;
+
+  const notifications = alertes
+    .filter((a) => {
+      if (derniereConsultationAlertes === 0) return true;
+      return Number(a.horodatage || a.timestamp || 0) > derniereConsultationAlertes;
+    })
+    .slice(0, 5)
+    .map((a) => ({
+      id: a.id,
+      title: a.description,
+      time: a.horodatage ? new Date(a.horodatage * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '',
+      cam: (a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra 1',
+      type: ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(a.type_evenement) ? 'critical' : 'warning',
+    }));
 
   const renderActiveView = () => {
     const toggleSidebar = () => setIsSidebarCollapsed(!isSidebarCollapsed);
@@ -6220,7 +6229,7 @@ export default function Admin() {
         isCollapsed={isSidebarCollapsed}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
-        unreadAlerts={alertes.length}
+        unreadAlerts={alertesNonLues}
         showOrganisation={estParDefaut}
         joursRestantsLicence={licence.jours_restants}
       />
@@ -6244,7 +6253,8 @@ export default function Admin() {
               }}
               onLogout={seDeconnecter}
               onRefresh={rafraichir}
-              unreadCount={alertes.length}
+              unreadCount={alertesNonLues}
+              onMarquerLu={marquerAlertesLues}
               notifications={notifications}
               utilisateur={{ nom, role }}
               isMobileMode={true}
@@ -6262,7 +6272,8 @@ export default function Admin() {
               }}
               onLogout={seDeconnecter}
               onRefresh={rafraichir}
-              unreadCount={alertes.length}
+              unreadCount={alertesNonLues}
+              onMarquerLu={marquerAlertesLues}
               notifications={notifications}
               utilisateur={{ nom, role }}
               isMobileMode={false}
@@ -6326,7 +6337,7 @@ export default function Admin() {
           >
             <div className="mobile-tab-icon-wrap">
               <SlidersHorizontal size={20} />
-              {alertes.length > 0 && <span className="mobile-tab-badge-dot" />}
+              {alertesNonLues > 0 && <span className="mobile-tab-badge-dot" />}
             </div>
             <span className="mobile-tab-label">Plus</span>
           </button>
@@ -6378,8 +6389,8 @@ export default function Admin() {
                     <span className="mobile-sheet-item-title">Alertes & Sécurité</span>
                     <span className="mobile-sheet-item-sub">Événements en direct & anomalies</span>
                   </div>
-                  {alertes.length > 0 && (
-                    <span className="mobile-sheet-badge">{alertes.length}</span>
+                  {alertesNonLues > 0 && (
+                    <span className="mobile-sheet-badge">{alertesNonLues}</span>
                   )}
                 </button>
 

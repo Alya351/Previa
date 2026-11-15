@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Camera, Film, Download, Trash2, ShieldAlert, AlertTriangle, Check, ExternalLink } from 'lucide-react';
 import { urlImageAlerte, urlClipAlerte, telechargerFichierBlob } from '../api.js';
+import { humaniserDurees } from '../lib/mappageCibles.js';
 
 export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
   const [activeTab, setActiveTab] = useState('photo'); // 'photo' | 'video'
@@ -45,7 +46,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
   const typeLabel = alerte.type || alerte.title || 'Incident de sécurité';
   const rawCam = alerte.cam || alerte.cameraName || alerte.num || '';
   const cameraLabel = (rawCam && !/^[a-f0-9]{8,36}$/i.test(String(rawCam).trim())) ? rawCam : 'Caméra 1';
-  const desc = alerte.desc || alerte.description || '';
+  const desc = humaniserDurees(alerte.desc || alerte.description || '');
   const dateStr = alerte.date ? `${alerte.date} à ${alerte.time}` : (alerte.timeAgo || (alerte.horodatage ? new Date(alerte.horodatage * 1000).toLocaleString('fr-FR') : 'à l\'instant'));
 
   return (

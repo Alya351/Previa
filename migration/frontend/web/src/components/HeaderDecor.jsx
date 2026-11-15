@@ -11,6 +11,7 @@ export function HeaderDecor({
   onLogout,
   onRefresh,
   unreadCount = 3,
+  onMarquerLu,
   notifications = [],
   utilisateur,
   isMobileMode = false
@@ -36,6 +37,7 @@ export function HeaderDecor({
 
   const handleGoToAlerts = () => {
     setHasUnread(false);
+    if (onMarquerLu) onMarquerLu();
     setShowNotifications(false);
     if (onNavigate) {
       onNavigate('alerts');
@@ -84,6 +86,8 @@ export function HeaderDecor({
               setShowNotifications(next);
               if (next) {
                 setHasUnread(false);
+                // Ouvrir la cloche = notifications vues : le compteur repasse à 0 durablement
+                if (onMarquerLu) onMarquerLu();
               }
               setShowProfile(false);
             }} 
@@ -91,9 +95,9 @@ export function HeaderDecor({
             aria-label="Notifications"
           >
             <Bell size={19} strokeWidth={2.4} color="#0284c7" />
-            {hasUnread && notifications.length > 0 && (
+            {unreadCount > 0 && (
               <span className="mobile-badge-dot">
-                {notifications.length > 9 ? '9+' : notifications.length}
+                {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </button>
@@ -281,6 +285,8 @@ export function HeaderDecor({
               setShowNotifications(next);
               if (next) {
                 setHasUnread(false);
+                // Ouvrir la cloche = notifications vues : le compteur repasse à 0 durablement
+                if (onMarquerLu) onMarquerLu();
               }
               setShowProfile(false);
             }} 
@@ -288,7 +294,7 @@ export function HeaderDecor({
             aria-label="Notifications"
           >
             <Bell size={21} strokeWidth={2.4} fill="#ffffff" />
-            {hasUnread && notifications.length > 0 && (
+            {unreadCount > 0 && (
               <span className="wave-badge-dot" />
             )}
           </button>

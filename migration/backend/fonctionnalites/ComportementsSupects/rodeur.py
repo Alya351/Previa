@@ -102,6 +102,24 @@ _dernier_statut_rodeur: dict[str, dict] = {}   # id_camera -> {pid -> str}
 _dernier_avis_ia_rodeur: dict[str, dict] = {}  # id_camera -> {pid -> dict|None}
 
 
+
+def _duree_lisible(secondes: float) -> str:
+    """Durée en unités lisibles : 45 s, 2 min 55 s, 2 h 05 min, 2 j 7 h, 1 sem 2 j..."""
+    s = max(0, int(round(secondes)))
+    if s < 60:
+        return f"{s} secondes"
+    if s < 3600:
+        m, r = divmod(s, 60)
+        return f"{m} min {r:02d} s" if r else f"{m} min"
+    if s < 86400:
+        h, r = divmod(s, 3600)
+        return f"{h} h {r // 60:02d} min" if r // 60 else f"{h} h"
+    if s < 7 * 86400:
+        j, r = divmod(s, 86400)
+        return f"{j} j {r // 3600} h" if r // 3600 else f"{j} j"
+    w, r = divmod(s, 7 * 86400)
+    return f"{w} sem {r // 86400} j" if r // 86400 else f"{w} sem"
+
 def observer_position(id_camera: str, pid: str, centroid: tuple, now: float) -> None:
     """Ajoute cette position à l'historique de suivi de `pid` SUR CETTE
     CAMÉRA, purge les positions trop anciennes (hors fenêtre) et les
@@ -202,7 +220,7 @@ def evalue_rodeur(id_camera: str, pid: str, now: float, diagonale_frame: float, 
         # pour cette migration — voir fonctionnalites/Alertes, qui ne
         # contient que comparaison_ia.py.
         if rode and statut in RODEUR_PHRASE_FR:
-            phrase = f"Une personne {RODEUR_PHRASE_FR[statut]} depuis {round(duree)} secondes dans la même zone restreinte."
+            phrase = f"Une personne {RODEUR_PHRASE_FR[statut]} depuis {_duree_lisible(duree)} dans la même zone restreinte."
             avis_camera[pid] = comparaison_ia.comparer(phrase)
 
             # Profil global (voir profil_suspect.py) : sans effet sur une

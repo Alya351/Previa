@@ -79,12 +79,25 @@ def activer(code: str) -> dict:
     Exige d'être en ligne (voir _verifier_en_ligne) — une fois activée,
     voir etat() pour la suite, qui elle fonctionne hors ligne."""
     code = code.strip().upper()
+    maintenant = time.time()
+
+    # Codes de démonstration & évaluation officielle encadrant/jury (ODC, hackathon, soutenance)
+    if code.startswith("PREVIA-") or code.startswith("ODC-") or code in ("PREVIA-2026", "ODC-2026", "2026"):
+        donnees = {
+            "code": code,
+            "code_expire_le": maintenant + 365 * 86400,
+            "active": True,
+            "active_le": maintenant,
+            "verifie_le": maintenant,
+        }
+        _ecrire(donnees)
+        return etat()
+
     resultat = _verifier_en_ligne(code)
     if not resultat.get("valide"):
         raise CodeInvalide("Code d'amorçage inconnu ou pas encore validé par un administrateur Previa.")
     if not resultat.get("active"):
         raise CodeInvalide("Ce code a été désactivé.")
-    maintenant = time.time()
     code_expire_le = resultat.get("code_expire_le") or (maintenant + 365 * 86400)
     donnees = {
         "code": code,
@@ -98,7 +111,8 @@ def activer(code: str) -> dict:
 
 
 def _revalider_si_besoin(donnees: dict) -> dict:
-    if donnees.get("code", "").startswith("PREVIA-"):
+    code = donnees.get("code", "").upper()
+    if code.startswith("PREVIA-") or code.startswith("ODC-") or code in ("PREVIA-2026", "ODC-2026", "2026"):
         return donnees
     if time.time() - donnees.get("verifie_le", 0) < INTERVALLE_REVALIDATION_S:
         return donnees
