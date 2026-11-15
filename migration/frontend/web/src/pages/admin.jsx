@@ -2395,6 +2395,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
             {/* BANDEAU D'ALERTE EN DIRECT (UNIQUEMENT SI INCIDENT PRÉSENT SUR CETTE CAMÉRA) */}
             {derniereAlerteCetteCam && (
               <div
+                className="cam-incident"
                 style={{
                   marginTop: '12px',
                   backgroundColor: '#fef2f2',
@@ -2413,6 +2414,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   onClick={() => setAlerteInspectee(derniereAlerteCetteCam)}
                 >
                   <div
+                    className="cam-incident-icon"
                     style={{
                       width: '32px',
                       height: '32px',
@@ -2428,15 +2430,17 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
                   </div>
                   <div>
                     <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#991b1b' }}>
-                      Incident détecté : {derniereAlerteCetteCam.type_evenement || 'Alerte sécurité'}
+                      Incident détecté : {LABEL_TYPE_ALERTES[derniereAlerteCetteCam.type_evenement]
+                        || LABEL_TYPE_ALERTES[String(derniereAlerteCetteCam.type_evenement || '').split('_')[0]]
+                        || derniereAlerteCetteCam.type_evenement || 'Alerte sécurité'}
                     </div>
-                    <div style={{ fontSize: '0.78rem', color: '#b91c1c' }}>
-                      {derniereAlerteCetteCam.description} · {derniereAlerteCetteCam.horodatage ? heureLocale(derniereAlerteCetteCam.horodatage) : "à l'instant"}
+                    <div className="cam-incident-desc" style={{ fontSize: '0.78rem', color: '#b91c1c' }}>
+                      {humaniserDurees(derniereAlerteCetteCam.description)} · {derniereAlerteCetteCam.horodatage ? heureLocale(derniereAlerteCetteCam.horodatage) : "à l'instant"}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div className="cam-incident-actions" style={{ display: 'flex', gap: '8px' }}>
                   <button
                     type="button"
                     onClick={() => setAlerteInspectee(derniereAlerteCetteCam)}

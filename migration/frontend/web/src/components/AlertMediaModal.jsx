@@ -65,6 +65,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
       onClick={onClose}
     >
       <div
+        className="amm-card"
         style={{
           background: '#ffffff',
           borderRadius: '20px',
@@ -81,7 +82,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* EN-TÊTE */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+        <div className="amm-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
               <span
@@ -100,7 +101,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
                 {isCrit ? <ShieldAlert size={12} /> : <AlertTriangle size={12} />}
                 {isCrit ? 'URGENCE CRITIQUE' : 'COMPORTEMENT SUSPECT'}
               </span>
-              <span style={{ fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
+              <span className="amm-date" style={{ fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
                 {dateStr}
               </span>
             </div>
@@ -134,7 +135,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
 
         {/* ONGLETS MÉDIA : PHOTO OU VIDÉO */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-          <div style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '12px', gap: '4px' }}>
+          <div className="amm-tabs" style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '12px', gap: '4px' }}>
             <button
               onClick={() => setActiveTab('photo')}
               style={{
@@ -153,7 +154,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
               }}
             >
               <Camera size={15} />
-              <span>Photo de l'incident</span>
+              <span>Photo<span className="tab-long"> de l'incident</span></span>
             </button>
             <button
               onClick={() => setActiveTab('video')}
@@ -173,12 +174,12 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
               }}
             >
               <Film size={15} />
-              <span>Extrait Vidéo (10s)</span>
+              <span><span className="tab-long">Extrait </span>Vidéo<span className="tab-long"> (10s)</span></span>
             </button>
           </div>
 
           {/* BOUTON DE TÉLÉCHARGEMENT DIRECT & FIABLE (BLOB) */}
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="amm-dl" style={{ display: 'flex', gap: '8px' }}>
             {activeTab === 'photo' ? (
               <button
                 type="button"
@@ -237,6 +238,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
 
         {/* LECTEUR MÉDIA PRINCIPAL */}
         <div
+          className="amm-media"
           style={{
             position: 'relative',
             width: '100%',
@@ -286,7 +288,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
         </div>
 
         {/* DÉTAILS CONTEXTUELS */}
-        <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '14px 18px', border: '1px solid var(--border-light)' }}>
+        <div className="amm-desc" style={{ background: '#f8fafc', borderRadius: '12px', padding: '14px 18px', border: '1px solid var(--border-light)' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--ink-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>
             Description de l'incident
           </div>
@@ -296,7 +298,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
         </div>
 
         {/* ACTIONS INFÉRIEURES */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginTop: '4px' }}>
+        <div className="amm-foot" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginTop: '4px' }}>
           <div>
             {onDelete && (
               <button
@@ -320,7 +322,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
                 }}
               >
                 <Trash2 size={15} />
-                <span>Supprimer cet incident</span>
+                <span>Supprimer<span className="tab-long"> cet incident</span></span>
               </button>
             )}
           </div>
@@ -348,7 +350,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
                 }}
               >
                 <ExternalLink size={15} />
-                <span>Voir la Caméra en Direct</span>
+                <span><span className="tab-long">Voir la Caméra en Direct</span><span className="tab-short">En direct</span></span>
               </button>
             )}
 

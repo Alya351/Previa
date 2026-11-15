@@ -182,6 +182,9 @@ export default function Login({ onLoginSuccess }) {
                 {[['particulier', 'Mon domicile / mon commerce'], ['entreprise', 'Une entreprise']].map(([valeur, texte]) => (
                   <button key={valeur} type="button" onClick={() => setProfil(valeur)}
                     style={{ flex: 1, padding: '10px 12px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700,
+                      fontSize: '0.84rem', lineHeight: 1.25,
+                      // Couleur du texte explicite : sinon il héritait du blanc de la page (illisible)
+                      color: profil === valeur ? '#0369a1' : '#334155',
                       border: profil === valeur ? '2px solid #0284c7' : '1px solid #cbd5e1',
                       background: profil === valeur ? '#e0f2fe' : '#f8fafc' }}>
                     {texte}

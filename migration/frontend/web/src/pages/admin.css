@@ -3167,3 +3167,44 @@ input:-webkit-autofill:active {
   body .mosaic-tile-footer > div > div:first-child { font-size: 0.76rem !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   body .mosaic-tile-footer > div > div:last-child { font-size: 0.64rem !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* Libellés courts (affichés uniquement sur téléphone) */
+.tab-short { display: none; }
+
+/* ==========================================================================
+   TÉLÉPHONE v3 (15/11/2026) — incident caméra et fenêtre d'incident épurés
+   ========================================================================== */
+@media (max-width: 768px) {
+  .tab-short { display: inline !important; }
+
+  /* ---- Bandeau « Incident détecté » sous la vidéo ---- */
+  body .cam-incident { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; padding: 12px !important; }
+  body .cam-incident-icon { display: none !important; }
+  body .cam-incident-desc {
+    display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    margin-top: 2px; line-height: 1.35 !important;
+  }
+  body .cam-incident-actions { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  body .cam-incident-actions > button { justify-content: center !important; min-height: 40px !important; }
+
+  /* ---- Fenêtre d'incident : feuille compacte en bas d'écran ---- */
+  body .amm-card { padding: 16px !important; gap: 12px !important; border-radius: 18px !important; max-height: 88vh !important; }
+  body .amm-head h2 { font-size: 1.05rem !important; }
+  body .amm-head p { font-size: 0.78rem !important; margin-top: 2px !important; }
+  body .amm-head span { white-space: nowrap !important; }
+  body .amm-head span:first-child { font-size: 0.62rem !important; padding: 3px 7px !important; }
+  body .amm-date { font-size: 0.7rem !important; }
+  body .amm-tabs { flex: 1 1 auto !important; }
+  body .amm-tabs > button { flex: 1 1 0 !important; justify-content: center !important; padding: 7px 8px !important; font-size: 0.8rem !important; white-space: nowrap !important; }
+  body .amm-dl > button { padding: 7px 10px !important; }
+  body .amm-dl > button > span { display: none !important; }
+  body .amm-media { height: auto !important; aspect-ratio: 16 / 9 !important; border-radius: 12px !important; }
+  body .amm-media p { font-size: 0.78rem !important; }
+  body .amm-media p + p { display: none !important; }
+  body .amm-media svg { width: 28px !important; height: 28px !important; }
+  body .amm-desc { padding: 10px 12px !important; }
+  body .amm-desc > div:first-child { display: none !important; }
+  body .amm-desc > div:last-child { font-size: 0.82rem !important; line-height: 1.4 !important; }
+  body .amm-foot { flex-wrap: nowrap !important; gap: 8px !important; }
+  body .amm-foot button { padding: 9px 12px !important; font-size: 0.8rem !important; white-space: nowrap !important; }
+}
