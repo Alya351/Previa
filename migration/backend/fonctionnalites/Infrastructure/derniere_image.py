@@ -10,14 +10,28 @@ ce module ne fait pas exception, il garde juste LE DERNIER instantané
 camera.jsx), jamais plus.
 """
 
+import time
+
 from fonctionnalites.Infrastructure import clips_service
 
 _DERNIERES_IMAGES: dict[str, bytes] = {}
+# Heure de réception de la dernière image par caméra — sert à savoir si
+# une caméra est connectée (voir GET /cameras-statuts dans main.py). En
+# mémoire seulement, comme les images : vide après un redémarrage.
+_HORODATAGES: dict[str, float] = {}
 
 
 def enregistrer(id_camera: str, contenu_jpeg: bytes) -> None:
     _DERNIERES_IMAGES[id_camera] = contenu_jpeg
+    _HORODATAGES[id_camera] = time.time()
     clips_service.ajouter_trame(id_camera, contenu_jpeg)
+
+
+def age_secondes(id_camera: str) -> float | None:
+    """Secondes écoulées depuis la dernière image reçue, ou None si aucune
+    image n'a été reçue depuis le démarrage du serveur."""
+    t = _HORODATAGES.get(id_camera)
+    return None if t is None else max(0.0, time.time() - t)
 
 
 def lire(id_camera: str) -> bytes | None:
@@ -29,3 +43,4 @@ def oublier(id_camera: str) -> None:
     dans main.py) — évite de continuer à servir la dernière image d'une
     caméra qui n'existe plus."""
     _DERNIERES_IMAGES.pop(id_camera, None)
+    _HORODATAGES.pop(id_camera, None)

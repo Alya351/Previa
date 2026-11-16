@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Trash2, AlertTriangle, ShieldAlert, X } from 'lucide-react';
 
 export default function ConfirmModal({
@@ -11,8 +12,15 @@ export default function ConfirmModal({
   cancelText = "Annuler",
   dangerLevel = "danger", // 'danger' | 'warning'
   itemDetails = null, // { type, time, cam, desc }
+  lignes = null, // [[libellé, valeur], ...] : détail libre de ce qui sera touché
+  requireText = null, // si fourni : l'utilisateur doit taper ce texte pour confirmer
+  loadingText = "Suppression en cours...",
   loading = false,
 }) {
+  const [saisie, setSaisie] = useState('');
+  useEffect(() => { if (!isOpen) setSaisie(''); }, [isOpen]);
+  const saisieOk = !requireText || saisie.trim().toLowerCase() === String(requireText).trim().toLowerCase();
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e) => {
@@ -26,7 +34,9 @@ export default function ConfirmModal({
 
   const isCritical = dangerLevel === 'danger';
 
-  return (
+  // Rendue dans <body> (portail) : sinon la fenêtre reste prisonnière du contexte
+  // d'empilement de la page et passe sous la barre latérale.
+  return createPortal(
     <div
       style={{
         position: 'fixed',
@@ -194,6 +204,31 @@ export default function ConfirmModal({
             </div>
           )}
 
+          {lignes && lignes.length > 0 && (
+            <div style={{ marginTop: '16px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {lignes.map(([libelle, valeur]) => (
+                <div key={libelle} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>{libelle}</span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', textAlign: 'right' }}>{valeur}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {requireText && (
+            <div style={{ marginTop: '16px' }}>
+              <label style={{ fontSize: '0.82rem', color: '#475569', display: 'block', marginBottom: '6px' }}>
+                Pour confirmer, tapez <strong>{requireText}</strong> :
+              </label>
+              <input
+                value={saisie}
+                onChange={(e) => setSaisie(e.target.value)}
+                autoFocus
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.9rem', boxSizing: 'border-box' }}
+              />
+            </div>
+          )}
+
           {/* Actions */}
           <div
             style={{
@@ -233,7 +268,7 @@ export default function ConfirmModal({
             <button
               type="button"
               onClick={onConfirm}
-              disabled={loading}
+              disabled={loading || !saisieOk}
               style={{
                 flex: 1.3,
                 padding: '12px 18px',
@@ -264,12 +299,13 @@ export default function ConfirmModal({
                 if (!loading) e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
-              <Trash2 size={16} />
-              {loading ? "Suppression en cours..." : confirmText}
+              {isCritical && <Trash2 size={16} />}
+              {loading ? loadingText : confirmText}
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Lock, Mail, User, KeyRound, ArrowRight } from 'lucide-react';
 import PreviaLogo from '../components/PreviaLogo';
+import ConfirmModal from '../components/ConfirmModal';
 import { API_BASE } from '../api.js';
 import './admin.css';
 
@@ -20,13 +21,20 @@ export default function Login({ onLoginSuccess }) {
   const [fullName, setFullName] = useState('');
   const [codeSecret, setCodeSecret] = useState('');
   const [profil, setProfil] = useState('entreprise');
+  const [demandeProfil, setDemandeProfil] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [erreur, setErreur] = useState('');
   const [succes, setSucces] = useState('');
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
+    // Le choix du profil est définitif : confirmation explicite avant la création.
+    if (isSignUp) { setDemandeProfil(true); return; }
+    envoyer();
+  };
+
+  const envoyer = async () => {
     setErreur('');
     setSucces('');
     setIsLoading(true);
@@ -211,6 +219,17 @@ export default function Login({ onLoginSuccess }) {
                 </div>
               </div>
             )}
+
+            <ConfirmModal
+              isOpen={demandeProfil}
+              onClose={() => setDemandeProfil(false)}
+              onConfirm={() => { setDemandeProfil(false); envoyer(); }}
+              dangerLevel="warning"
+              title="Confirmer le type d'installation ?"
+              message="Ce choix détermine les pages et le vocabulaire de l'application. Il ne pourra pas être modifié ensuite sans réinitialiser tout le système, ce qui efface toutes les données."
+              lignes={[['Profil choisi', profil === 'particulier' ? 'Mon domicile / mon commerce' : 'Une entreprise']]}
+              confirmText="Confirmer et créer le compte"
+            />
 
             {erreur && (
               <div style={{ background: '#fee2e2', color: '#dc2626', padding: '10px 14px', borderRadius: '10px', fontSize: '0.84rem', fontWeight: 600 }}>

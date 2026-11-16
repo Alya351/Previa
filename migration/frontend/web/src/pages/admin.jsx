@@ -46,7 +46,7 @@ import {
   ChevronLeft, ChevronRight, Clock, DoorOpen, Download, Eye, FileSpreadsheet, FileText, Filter, Info, KeyRound, LayoutGrid,
   Lightbulb, List, Loader2, Mail, MapPin, Maximize2, Menu, Moon, MousePointerClick, Package, Play, Plus, RefreshCw, Save, Search,
   Shield, ShieldAlert, ShieldCheck, SlidersHorizontal, Sun, Target, Trash2, TrendingUp, Undo2, Users, Volume2,
-  VolumeX, Wifi, WifiOff, X, Zap, ZoomIn,
+  VolumeX, Wifi, WifiOff, X, Zap, ZoomIn, Heart, Pencil,
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import HeaderDecor from '../components/HeaderDecor';
@@ -62,9 +62,10 @@ import {
   API_BASE, entetesAuth, chargerEtatAlarme, arreterAlarme, chargerEtatLicence, activerLicence,
   chargerZoneCamera, enregistrerZoneCamera, supprimerZoneCamera, listerCameras,
   creerCamera, supprimerCamera, testerFluxRtsp, urlFluxCamera, urlSnapshotCamera, urlImageAlerte, urlClipAlerte,
-  supprimerAlerte, supprimerToutesAlertes,
+  supprimerAlerte, supprimerToutesAlertes, mettreAJourCamera, obtenirProfil, chargerStatutsCameras,
 } from '../api.js';
 import { useFluxDirect } from '../lib/useFluxDirect.js';
+import { ProfilContext, useProfil, nomOngletConfiguration } from '../lib/profilContext.js';
 import { FluxCamera } from '../components/FluxCamera.jsx';
 import {
   mapPersonneApi, mapObjetInstanceApi, mapFeuFumeeAlerte, mapZoneSuspecte,
@@ -1557,6 +1558,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
   // affichée « LIVE », même quand aucune image n'arrivait.
   const [etatsFlux, setEtatsFlux] = useState({});
   const majEtatFlux = (idCam, etat) => setEtatsFlux((prev) => (prev[idCam] === etat ? prev : { ...prev, [idCam]: etat }));
+  const { profil } = useProfil();
   const [selectedCam, setSelectedCam] = useState(() => {
     return localStorage.getItem('previa_selected_camera') || null;
   });
@@ -1616,7 +1618,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
             Aucune caméra enregistrée
           </h3>
           <p style={{ fontSize: '0.88rem', color: 'var(--ink-muted)', marginTop: '6px' }}>
-            Configurez une caméra dans l'onglet <strong>Organisation</strong> pour commencer la surveillance.
+            Configurez une caméra dans l'onglet <strong>{nomOngletConfiguration(profil)}</strong> pour commencer la surveillance.
           </p>
         </div>
       </div>
@@ -2844,7 +2846,7 @@ function CiblesView({ titre, sousTitre, items = [], type }) {
                 </div>
 
                 <div style={{ fontSize: '0.76rem', color: 'var(--ink-muted)' }}>
-                  📍 {[item.camCtx?.batiment, item.camCtx?.piece, (item.camCtx?.num && !/^[a-f0-9]{8,36}$/i.test(item.camCtx.num)) ? item.camCtx.num : 'Caméra 1'].filter(Boolean).join(' / ')}
+                  📍 {[item.camCtx?.batiment, item.camCtx?.piece, (item.camCtx?.num && !/^[a-f0-9]{8,36}$/i.test(item.camCtx.num)) ? item.camCtx.num : 'Caméra supprimée'].filter(Boolean).join(' / ')}
                 </div>
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -2912,7 +2914,7 @@ function CiblesView({ titre, sousTitre, items = [], type }) {
                     <td style={{ padding: '10px 14px' }}><span style={{ fontWeight: 800, color: rs.couleur }}>{item.riskPct}%</span></td>
                     <td style={{ padding: '10px 14px', color: 'var(--ink-secondary)' }}>{item.isObject ? `${item.zone} · ${item.immobileDuree}` : `${item.rodage} · ${item.regard}`}</td>
                     <td style={{ padding: '10px 14px', color: 'var(--ink-secondary)' }}>{avis ? `${avis.label} (${Math.round((item.avisIA.confiance || 0) * 100)}%)` : '—'}</td>
-                    <td style={{ padding: '10px 14px', color: 'var(--ink-secondary)' }}>{(item.camCtx?.num && !/^[a-f0-9]{8,36}$/i.test(item.camCtx.num)) ? item.camCtx.num : 'Caméra 1'}</td>
+                    <td style={{ padding: '10px 14px', color: 'var(--ink-secondary)' }}>{(item.camCtx?.num && !/^[a-f0-9]{8,36}$/i.test(item.camCtx.num)) ? item.camCtx.num : 'Caméra supprimée'}</td>
                     <td style={{ padding: '10px 14px' }}>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button onClick={() => setSuivi(estSuivi ? null : item.id)} title="Suivre" style={iconBtn(estSuivi)}><Target size={14} /></button>
@@ -3003,7 +3005,7 @@ function AnalyticsView({ alertesReelles = [], nombreCameras = 0 }) {
                 <div key={a.id} style={{ padding: '12px 14px', background: '#f8fafc', borderRadius: '10px', borderLeft: `4px solid ${couleurNiveau(a.type_evenement)}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--ink-primary)' }}>{a.description}</div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>{(a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra 1'} : {a.piece || 'Zone'}</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>{(a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra supprimée'} : {a.piece || 'Zone'}</div>
                   </div>
                   <span style={{ fontSize: '0.75rem', color: couleurNiveau(a.type_evenement), fontWeight: 700 }}>
                     {a.horodatage ? new Date(a.horodatage * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
@@ -3176,7 +3178,7 @@ function EventsView({ alertesReelles = [], cameras = [], onRefresh, onSelectTab 
           date: new Date(a.horodatage ? a.horodatage * 1000 : Date.now()).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }),
           type: LABEL_TYPE_EVENEMENTS[a.type_evenement] || a.type_evenement,
           rawType: a.type_evenement,
-          cam: `${(a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra 1'} · ${[a.batiment, a.piece].filter(Boolean).join(' / ') || 'Zone Principale'}`,
+          cam: `${(a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra supprimée'} · ${[a.batiment, a.piece].filter(Boolean).join(' / ') || 'Zone Principale'}`,
           camId: String(a.id_camera || ''),
           desc: humaniserDurees(a.description || ''),
           level: critique ? 'Critique' : 'Suspect',
@@ -4266,14 +4268,14 @@ function AlertsView({ alertesReelles = [], cameras = [], camerasParId = {}, onRe
     const critique = ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(a.type_evenement);
     const idCam = String(a.id_camera || a.camId || a.id || '').trim();
     const camTrouvee = (cameras || []).find((c) => String(c.id || c.id_camera || '').trim() === idCam);
-    let camNom = 'Caméra 1';
+    let camNom = 'Caméra supprimée';
     let loc = 'Zone de Surveillance';
     if (camTrouvee) {
-      camNom = (camTrouvee.num && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.num)) ? camTrouvee.num : (camTrouvee.name && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.name)) ? camTrouvee.name : 'Caméra 1';
+      camNom = (camTrouvee.num && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.num)) ? camTrouvee.num : (camTrouvee.name && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.name)) ? camTrouvee.name : 'Caméra supprimée';
       loc = [camTrouvee.batiment || camTrouvee.location, camTrouvee.piece].filter(Boolean).join(' · ') || 'Zone de Surveillance';
     } else {
       const rawNom = a.num || a.nom || a.name || '';
-      camNom = (rawNom && !/^[a-f0-9]{8,36}$/i.test(String(rawNom).trim())) ? rawNom : 'Caméra 1';
+      camNom = (rawNom && !/^[a-f0-9]{8,36}$/i.test(String(rawNom).trim())) ? rawNom : 'Caméra supprimée';
       loc = [a.batiment, a.piece].filter(Boolean).join(' · ') || 'Zone de Surveillance';
     }
     return {
@@ -5315,6 +5317,7 @@ const btn = { background: '#0284c7', border: 'none', color: '#fff', padding: '9p
 const btnSuppr = { background: '#fee2e2', border: 'none', color: '#dc2626', width: '30px', height: '30px', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 };
 
 function OrganisationView() {
+  const statuts = useStatutsCameras();
   const [onglet, setOnglet] = useState('comptes');
   const [comptes, setComptes] = useState([]);
   const [batiments, setBatiments] = useState([]);
@@ -5356,6 +5359,8 @@ function OrganisationView() {
           <p className="welcome-sub">Comptes, bâtiments, pièces et caméras — réservé aux administrateurs</p>
         </div>
       </div>
+
+      <BandeauEtat sujet="entreprise" cameras={cameras} pieces={pieces} statuts={statuts} onVoirCameras={() => setOnglet('cameras')} />
 
       <div className="subtab-pills-bar no-scrollbar" style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'nowrap' }}>
         {onglets.map((o) => {
@@ -5400,14 +5405,15 @@ function OrganisationView() {
       )}
 
       {onglet === 'comptes' && <SectionComptes comptes={comptes} onChange={charger} />}
-      {onglet === 'batiments' && <SectionBatiments batiments={batiments} comptes={comptes} onChange={charger} />}
-      {onglet === 'pieces' && <SectionPieces pieces={pieces} batiments={batiments} onChange={charger} />}
-      {onglet === 'cameras' && <SectionCameras cameras={cameras} pieces={pieces} onChange={charger} />}
+      {onglet === 'batiments' && <SectionBatiments batiments={batiments} comptes={comptes} pieces={pieces} cameras={cameras} onChange={charger} />}
+      {onglet === 'pieces' && <SectionPieces pieces={pieces} batiments={batiments} cameras={cameras} onChange={charger} />}
+      {onglet === 'cameras' && <SectionCameras cameras={cameras} pieces={pieces} statuts={statuts} onChange={charger} />}
     </div>
   );
 }
 
 function SectionComptes({ comptes = [], onChange }) {
+  const { demander, modale } = useConfirmation();
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
   const [email, setEmail] = useState('');
@@ -5427,11 +5433,17 @@ function SectionComptes({ comptes = [], onChange }) {
     } catch (e2) { setErr(e2.message); } finally { setEnvoi(false); }
   };
 
-  const supprimer = async (c) => {
-    const chemin = c.role === 'admin' ? `/utilisateurs/admins/${c.id}` : `/utilisateurs/users/${c.id}`;
-    await appelApiOrg(chemin, { method: 'DELETE' }).catch((e2) => setErr(e2.message));
-    onChange();
-  };
+  const supprimer = (c) => demander({
+    titre: 'Supprimer ce compte ?',
+    message: `Le compte de ${c.prenom} ${c.nom} sera supprimé définitivement : cette personne ne pourra plus se connecter. Cette action est irréversible.`,
+    lignes: [['Compte', `${c.prenom} ${c.nom}`], ['Email', c.email]],
+    confirmText: 'Supprimer le compte',
+    action: async () => {
+      const chemin = c.role === 'admin' ? `/utilisateurs/admins/${c.id}` : `/utilisateurs/users/${c.id}`;
+      await appelApiOrg(chemin, { method: 'DELETE' }).catch((e2) => setErr(e2.message));
+      onChange();
+    },
+  });
 
   return (
     <div style={carte}>
@@ -5470,19 +5482,7 @@ function SectionComptes({ comptes = [], onChange }) {
                   <td style={{ padding: '8px', textAlign: 'right', display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                     <button
                       style={{ ...btnSuppr, width: 'auto', padding: '4px 8px', background: '#f0f9ff', color: '#0284c7', borderColor: '#bae6fd', fontSize: '0.75rem' }}
-                      onClick={async () => {
-                        const nmp = prompt(`Nouveau mot de passe pour ${c.prenom} ${c.nom} :`);
-                        if (nmp && nmp.trim()) {
-                          try {
-                            const chemin = c.role === 'admin' ? `/utilisateurs/admins/${c.id}` : `/utilisateurs/users/${c.id}`;
-                            await appelApiOrg(chemin, { method: 'PUT', body: JSON.stringify({ mot_de_passe: nmp.trim() }) });
-                            alert(`Le mot de passe de ${c.prenom} a bien été réinitialisé !`);
-                            onChange();
-                          } catch (errM) {
-                            alert(`Erreur : ${errM.message}`);
-                          }
-                        }
-                      }}
+                      onClick={() => demanderReinitMdp(c, demander, onChange)}
                       title="Réinitialiser le mot de passe"
                     >
                       Réinitialiser Pass
@@ -5512,19 +5512,7 @@ function SectionComptes({ comptes = [], onChange }) {
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid var(--border-light)', paddingTop: '10px', marginTop: '4px' }}>
               <button
                 style={{ ...btnSuppr, width: 'auto', padding: '6px 14px', background: '#f0f9ff', color: '#0284c7', borderColor: '#bae6fd', fontSize: '0.78rem', fontWeight: 700 }}
-                onClick={async () => {
-                  const nmp = prompt(`Nouveau mot de passe pour ${c.prenom} ${c.nom} :`);
-                  if (nmp && nmp.trim()) {
-                    try {
-                      const chemin = c.role === 'admin' ? `/utilisateurs/admins/${c.id}` : `/utilisateurs/users/${c.id}`;
-                      await appelApiOrg(chemin, { method: 'PUT', body: JSON.stringify({ mot_de_passe: nmp.trim() }) });
-                      alert(`Le mot de passe de ${c.prenom} a bien été réinitialisé !`);
-                      onChange();
-                    } catch (errM) {
-                      alert(`Erreur : ${errM.message}`);
-                    }
-                  }
-                }}
+                onClick={() => demanderReinitMdp(c, demander, onChange)}
               >
                 Réinitialiser Pass
               </button>
@@ -5537,11 +5525,13 @@ function SectionComptes({ comptes = [], onChange }) {
           </div>
         ))}
       </div>
+      {modale}
     </div>
   );
 }
 
-function SectionBatiments({ batiments = [], comptes = [], onChange }) {
+function SectionBatiments({ batiments = [], comptes = [], pieces = [], cameras = [], onChange }) {
+  const { demander, modale } = useConfirmation();
   const [nom, setNom] = useState('');
   const [lieu, setLieu] = useState('');
   const [responsableId, setResponsableId] = useState('');
@@ -5562,9 +5552,21 @@ function SectionBatiments({ batiments = [], comptes = [], onChange }) {
       setNom(''); setLieu(''); setResponsableId(''); onChange();
     } catch (e2) { setErr(e2.message); }
   };
-  const supprimer = async (b) => {
-    await appelApiOrg(`/batiments/${b.id}`, { method: 'DELETE' }).catch((e2) => setErr(e2.message));
-    onChange();
+  const supprimer = (b) => {
+    const piecesB = (pieces || []).filter((p) => p.batiment_id === b.id);
+    const idsB = new Set(piecesB.map((p) => p.id));
+    const camsB = (cameras || []).filter((c) => idsB.has(c.piece_id));
+    demander({
+      titre: 'Supprimer ce bâtiment ?',
+      message: `Le bâtiment « ${b.nom} » sera supprimé avec ses ${piecesB.length} pièce${piecesB.length > 1 ? 's' : ''} et ses ${camsB.length} caméra${camsB.length > 1 ? 's' : ''} : les flux seront arrêtés et les zones surveillées effacées. L'historique des alertes est conservé. Cette action est irréversible.`,
+      lignes: [['Bâtiment', b.nom], ['Pièces supprimées', String(piecesB.length)], ['Caméras supprimées', String(camsB.length)]],
+      requireText: piecesB.length > 0 ? b.nom : null,
+      confirmText: 'Supprimer le bâtiment',
+      action: async () => {
+        await appelApiOrg(`/batiments/${b.id}`, { method: 'DELETE' }).catch((e2) => setErr(e2.message));
+        onChange();
+      },
+    });
   };
 
   const nomResponsable = (id) => {
@@ -5617,11 +5619,13 @@ function SectionBatiments({ batiments = [], comptes = [], onChange }) {
           );
         })}
       </div>
+      {modale}
     </div>
   );
 }
 
-function SectionPieces({ pieces = [], batiments = [], onChange }) {
+function SectionPieces({ pieces = [], batiments = [], cameras = [], onChange }) {
+  const { demander, modale } = useConfirmation();
   const [nom, setNom] = useState('');
   const [batimentId, setBatimentId] = useState('');
   const [err, setErr] = useState('');
@@ -5633,9 +5637,21 @@ function SectionPieces({ pieces = [], batiments = [], onChange }) {
       setNom(''); onChange();
     } catch (e2) { setErr(e2.message); }
   };
-  const supprimer = async (p) => {
-    await appelApiOrg(`/pieces/${p.id}`, { method: 'DELETE' }).catch((e2) => setErr(e2.message));
-    onChange();
+  const supprimer = (p) => {
+    const camsP = (cameras || []).filter((c) => c.piece_id === p.id);
+    demander({
+      titre: 'Supprimer cette pièce ?',
+      message: camsP.length > 0
+        ? `La pièce « ${p.nom} » sera supprimée avec ses ${camsP.length} caméra${camsP.length > 1 ? 's' : ''} : les flux seront arrêtés et les zones surveillées effacées. Le bâtiment n'est pas supprimé. L'historique des alertes est conservé. Cette action est irréversible.`
+        : `La pièce « ${p.nom} » sera supprimée définitivement. Le bâtiment n'est pas supprimé.`,
+      lignes: [['Pièce', p.nom], ['Caméras supprimées', String(camsP.length)]],
+      requireText: camsP.length > 0 ? p.nom : null,
+      confirmText: 'Supprimer la pièce',
+      action: async () => {
+        await appelApiOrg(`/pieces/${p.id}`, { method: 'DELETE' }).catch((e2) => setErr(e2.message));
+        onChange();
+      },
+    });
   };
   const nomBatiment = (id) => (batiments || []).find((b) => b.id === id)?.nom || '?';
 
@@ -5660,11 +5676,14 @@ function SectionPieces({ pieces = [], batiments = [], onChange }) {
           </div>
         ))}
       </div>
+      {modale}
     </div>
   );
 }
 
-function SectionCameras({ cameras = [], pieces = [], onChange }) {
+function SectionCameras({ cameras = [], pieces = [], statuts = null, titre = null, sousTitre = null, onChange }) {
+  const { demander, modale } = useConfirmation();
+  const [edition, setEdition] = useState(null);
   const [num, setNum] = useState('');
   const [pieceId, setPieceId] = useState('');
   const [ipUrl, setIpUrl] = useState('');
@@ -5731,22 +5750,59 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
     } catch (e2) { setErr(e2.message); }
   };
 
-  const supprimer = async (c) => {
-    await supprimerCamera(c.id).catch((e2) => setErr(e2.message));
-    onChange();
-  };
-
   const nomPiece = (id) => (pieces || []).find((p) => p.id === id)?.nom || '?';
+
+  const supprimer = (c) => demander({
+    titre: 'Supprimer cette caméra ?',
+    message: `La caméra « ${c.num} » sera supprimée définitivement : son flux est arrêté et sa zone surveillée effacée. L'historique de ses alertes est conservé. Cette action est irréversible.`,
+    lignes: [['Caméra', c.num], ['Pièce', nomPiece(c.piece_id)]],
+    confirmText: 'Supprimer la caméra',
+    action: async () => {
+      await supprimerCamera(c.id).catch((e2) => setErr(e2.message));
+      onChange();
+    },
+  });
+
+  const ouvrirEdition = (c) => setEdition({ id: c.id, num: c.num || '', pieceId: c.piece_id || '', url: c.url_flux || '', estEntree: !!c.est_entree, original: c });
+
+  const enregistrerEdition = (e) => {
+    e.preventDefault(); setErr('');
+    const o = edition.original;
+    const nouveauNum = edition.num.trim();
+    const nouvelleUrl = normaliserUrl(edition.url);
+    const modifs = {};
+    const lignes = [];
+    if (nouveauNum && nouveauNum !== (o.num || '')) { modifs.num = nouveauNum; lignes.push(['Nom', `${o.num} → ${nouveauNum}`]); }
+    if (edition.pieceId && edition.pieceId !== o.piece_id) { modifs.pieceId = edition.pieceId; lignes.push(['Pièce', `${nomPiece(o.piece_id)} → ${nomPiece(edition.pieceId)}`]); }
+    if (nouvelleUrl !== (o.url_flux || '')) { modifs.urlFlux = nouvelleUrl; lignes.push(['Adresse réseau', nouvelleUrl ? 'modifiée (le flux redémarre)' : "retirée (le flux s'arrête)"]); }
+    if (edition.estEntree !== !!o.est_entree) { modifs.estEntree = edition.estEntree; lignes.push(["Point d'accès", edition.estEntree ? 'oui' : 'non']); }
+    if (lignes.length === 0) { setEdition(null); return; }
+    demander({
+      titre: 'Enregistrer ces modifications ?',
+      danger: false,
+      confirmText: 'Enregistrer',
+      loadingText: 'Enregistrement...',
+      message: `La caméra « ${o.num} » sera modifiée avec les changements suivants.`,
+      lignes,
+      action: async () => {
+        try {
+          await mettreAJourCamera(o.id, { idAdmin: idAdmin(), ...modifs });
+          setEdition(null);
+          onChange();
+        } catch (e2) { setErr(e2.message); }
+      },
+    });
+  };
 
   return (
     <div style={carte}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
           <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, color: 'var(--ink-primary)' }}>
-            Caméras de Surveillance ({(cameras || []).length})
+            {titre || 'Caméras de Surveillance'} ({(cameras || []).length})
           </h3>
           <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
-            Connectez et associez les caméras de sécurité IP aux différentes pièces du bâtiment.
+            {sousTitre || 'Connectez et associez les caméras de sécurité IP aux différentes pièces du bâtiment.'}
           </p>
         </div>
       </div>
@@ -5769,7 +5825,7 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
           </select>
 
           <label style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', userSelect: 'none' }}>
-            <input type="checkbox" checked={estEntree} onChange={(e) => setEstEntree(e.target.checked)} /> Point de contrôle d'accès (Entrée)
+            <input type="checkbox" checked={estEntree} onChange={(e) => setEstEntree(e.target.checked)} /> Point d'accès (entrée de la zone surveillée)
           </label>
         </div>
 
@@ -5807,19 +5863,33 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
       {err && <p style={{ color: '#dc2626', fontSize: '0.8rem' }}>{err}</p>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {(cameras || []).map((c) => (
-          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: '10px' }}>
+        {(cameras || []).map((c) => (edition?.id === c.id ? (
+          <form key={c.id} onSubmit={enregistrerEdition} style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px', background: '#f8fafc', border: '1px solid #bae6fd', borderRadius: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <input style={{ ...champ, flex: 1, minWidth: '160px' }} value={edition.num} onChange={(e) => setEdition({ ...edition, num: e.target.value })} placeholder="Nom de la caméra" required />
+              <select style={{ ...champ, minWidth: '160px' }} value={edition.pieceId} onChange={(e) => setEdition({ ...edition, pieceId: e.target.value })} required>
+                {(pieces || []).map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+              </select>
+            </div>
+            <input style={{ ...champ, fontFamily: 'monospace' }} value={edition.url} onChange={(e) => setEdition({ ...edition, url: e.target.value })} placeholder="Adresse réseau de la caméra" />
+            <label style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <input type="checkbox" checked={edition.estEntree} onChange={(e) => setEdition({ ...edition, estEntree: e.target.checked })} /> Point d'accès (entrée de la zone surveillée)
+            </label>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button type="button" style={{ ...btn, background: '#f1f5f9', color: '#334155' }} onClick={() => setEdition(null)}>Annuler</button>
+              <button type="submit" style={btn}><Check size={15} /> Enregistrer</button>
+            </div>
+          </form>
+        ) : (
+          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '12px 14px', background: '#ffffff', border: `1px solid ${statuts && statuts[c.id] === 'deconnectee' ? '#fecaca' : 'var(--border-light)'}`, borderRadius: '10px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <strong style={{ color: 'var(--ink-primary)', fontSize: '0.92rem' }}>{c.num}</strong>
               <span style={{ color: 'var(--ink-muted)', fontSize: '0.84rem' }}>· Pièce : {nomPiece(c.piece_id)}</span>
-              {c.est_entree && <span style={{ fontSize: '0.7rem', fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '999px' }}>ENTRÉE PRINCIPALE</span>}
-              {c.url_flux ? (
-                <span style={{ fontSize: '0.74rem', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '2px 8px', borderRadius: '6px', fontFamily: 'monospace' }}>
-                  🟢 Flux réseau : {c.url_flux}
-                </span>
-              ) : (
-                <span style={{ fontSize: '0.74rem', background: '#f8fafc', border: '1px solid var(--border-light)', color: 'var(--ink-muted)', padding: '2px 8px', borderRadius: '6px' }}>
-                  Caméra connectée
+              {c.est_entree && <span style={{ fontSize: '0.7rem', fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '3px 8px', borderRadius: '999px' }}>POINT D'ACCÈS</span>}
+              <BadgeStatutCamera statut={statuts ? statuts[c.id] : undefined} />
+              {c.url_flux && (
+                <span style={{ fontSize: '0.74rem', background: '#f8fafc', border: '1px solid var(--border-light)', color: 'var(--ink-muted)', padding: '2px 8px', borderRadius: '6px', fontFamily: 'monospace' }}>
+                  {c.url_flux}
                 </span>
               )}
             </div>
@@ -5830,12 +5900,20 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
                 style={{ ...btn, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', padding: '6px 12px', fontSize: '0.78rem' }}
                 title="Voir le flux vidéo continu en direct"
               >
-                👁️ Voir le direct
+                <Eye size={14} /> Voir le direct
+              </button>
+              <button
+                type="button"
+                onClick={() => ouvrirEdition(c)}
+                style={{ ...btnSuppr, background: '#f0f9ff', color: '#0284c7' }}
+                title="Modifier la caméra"
+              >
+                <Pencil size={14} />
               </button>
               <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer la caméra"><Trash2 size={14} /></button>
             </div>
           </div>
-        ))}
+        )))}
       </div>
 
       {/* Modal / Supervision en direct */}
@@ -5850,9 +5928,454 @@ function SectionCameras({ cameras = [], pieces = [], onChange }) {
           onClose={() => setCameraFluxEnDirect(null)}
         />
       )}
+      {modale}
     </div>
   );
 }
+
+// ============================================================================
+// OUTILS PARTAGÉS : confirmation, statut des caméras, bandeau d'état
+// (utilisés par Organisation ET par Particuliers)
+// ============================================================================
+
+// Toute suppression ou modification passe par une confirmation explicite.
+// `demander({ titre, message, lignes, confirmText, danger, requireText, loadingText, action })`
+function useConfirmation() {
+  const [cfg, setCfg] = useState(null);
+  const [enCours, setEnCours] = useState(false);
+  const demander = (c) => setCfg(c);
+  const fermer = () => { if (!enCours) setCfg(null); };
+  const confirmer = async () => {
+    if (!cfg) return;
+    setEnCours(true);
+    try { await cfg.action(); } catch (e) { console.error(e); } finally { setEnCours(false); setCfg(null); }
+  };
+  const modale = (
+    <ConfirmModal
+      isOpen={!!cfg}
+      onClose={fermer}
+      onConfirm={confirmer}
+      title={cfg?.titre || ''}
+      message={cfg?.message || ''}
+      confirmText={cfg?.confirmText || 'Confirmer'}
+      dangerLevel={cfg?.danger === false ? 'warning' : 'danger'}
+      lignes={cfg?.lignes}
+      requireText={cfg?.requireText}
+      loadingText={cfg?.loadingText || 'Suppression en cours...'}
+      loading={enCours}
+    />
+  );
+  return { demander, modale };
+}
+
+// Statut de connexion de chaque caméra : { [id]: 'connectee'|'deconnectee'|'inconnue' },
+// `null` tant que le premier chargement n'a pas répondu. Relu toutes les 10 s.
+function useStatutsCameras() {
+  const [statuts, setStatuts] = useState(null);
+  useEffect(() => {
+    let annule = false;
+    const charger = () => chargerStatutsCameras()
+      .then((liste) => {
+        if (!annule && Array.isArray(liste)) setStatuts(Object.fromEntries(liste.map((x) => [x.id, x.statut])));
+      })
+      .catch(() => { if (!annule) setStatuts((prev) => prev || {}); });
+    charger();
+    const t = setInterval(charger, 10000);
+    return () => { annule = true; clearInterval(t); };
+  }, []);
+  return statuts;
+}
+
+function BadgeStatutCamera({ statut }) {
+  const [texte, fond, couleur] = ({
+    connectee: ['Connectée', '#dcfce7', '#166534'],
+    deconnectee: ['Déconnectée', '#fee2e2', '#991b1b'],
+  })[statut] || ['Statut inconnu', '#f1f5f9', '#475569'];
+  return (
+    <span style={{ fontSize: '0.72rem', fontWeight: 700, background: fond, color: couleur, padding: '3px 9px', borderRadius: '999px' }}>
+      {texte}
+    </span>
+  );
+}
+
+// Bandeau « Votre maison / entreprise est protégée, sauf… ».
+// `statuts` vaut null tant que l'état des caméras n'est pas connu : rien n'est
+// affiché plutôt qu'un faux « tout va bien ».
+function BandeauEtat({ sujet, cameras = [], pieces = [], statuts, onVoirCameras }) {
+  const [alarme, setAlarme] = useState({ lampe: false, sirene: false });
+  useEffect(() => {
+    let annule = false;
+    const charger = () => chargerEtatAlarme().then((e) => { if (!annule && e) setAlarme(e); }).catch(() => {});
+    charger();
+    const t = setInterval(charger, 5000);
+    return () => { annule = true; clearInterval(t); };
+  }, []);
+
+  if (statuts === null) return null;
+
+  const lieu = sujet === 'maison' ? 'maison' : 'entreprise';
+  const deconnectees = cameras.filter((c) => statuts[c.id] === 'deconnectee');
+  const inconnues = cameras.filter((c) => !statuts[c.id] || statuts[c.id] === 'inconnue');
+  const nomPiece = (id) => pieces.find((p) => p.id === id)?.nom || 'zone inconnue';
+  const piecesTouchees = [...new Set(deconnectees.map((c) => nomPiece(c.piece_id)))];
+
+  let niveau; let titre; let detail; let Icone;
+  if (alarme.sirene) {
+    niveau = 'danger'; Icone = ShieldAlert;
+    titre = "Alerte en cours : l'alarme est déclenchée";
+    detail = "Une alerte critique est active. Consultez l'onglet Alertes.";
+  } else if (cameras.length === 0) {
+    niveau = 'neutre'; Icone = Info;
+    titre = 'Aucune caméra enregistrée';
+    detail = `Ajoutez une caméra pour protéger votre ${lieu}.`;
+  } else if (deconnectees.length > 0) {
+    niveau = 'alerte'; Icone = AlertTriangle;
+    const reste = piecesTouchees.length - 1;
+    titre = `Votre ${lieu} est protégée, sauf « ${piecesTouchees[0]} »${reste > 0 ? ` et ${reste} autre${reste > 1 ? 's' : ''} zone${reste > 1 ? 's' : ''}` : ''}`;
+    detail = `${deconnectees.length} caméra${deconnectees.length > 1 ? 's ne répondent' : ' ne répond'} plus : ${deconnectees.map((c) => c.num).join(', ')}.`;
+  } else if (inconnues.length === cameras.length) {
+    niveau = 'neutre'; Icone = Info;
+    titre = 'État des caméras en attente';
+    detail = "Aucune image reçue depuis le démarrage du serveur. L'état s'affichera dès qu'une caméra enverra une image.";
+  } else {
+    niveau = 'ok'; Icone = ShieldCheck;
+    titre = `Votre ${lieu} est protégée`;
+    detail = inconnues.length > 0
+      ? `Les caméras connectées fonctionnent. ${inconnues.length} caméra${inconnues.length > 1 ? 's' : ''} sans statut pour le moment.`
+      : 'Toutes les caméras sont connectées.';
+  }
+
+  const couleurs = {
+    ok: ['#dcfce7', '#bbf7d0', '#166534'],
+    alerte: ['#fef3c7', '#fde68a', '#92400e'],
+    danger: ['#fee2e2', '#fecaca', '#991b1b'],
+    neutre: ['#f1f5f9', '#e2e8f0', '#475569'],
+  }[niveau];
+
+  return (
+    <div role="status" style={{ background: couleurs[0], border: `1px solid ${couleurs[1]}`, color: couleurs[2], borderRadius: '18px', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: '16px' }}>
+      <Icone size={28} aria-hidden="true" />
+      <div style={{ flex: 1, minWidth: '200px' }}>
+        <div style={{ fontWeight: 800, fontSize: '0.98rem' }}>{titre}</div>
+        <div style={{ fontSize: '0.82rem', marginTop: '2px' }}>{detail}</div>
+      </div>
+      {niveau === 'alerte' && onVoirCameras && (
+        <button type="button" style={btn} onClick={onVoirCameras}><Eye size={15} /> Voir les caméras</button>
+      )}
+    </div>
+  );
+}
+
+// Réinitialisation de mot de passe : saisie, puis confirmation explicite.
+function demanderReinitMdp(c, demander, onChange) {
+  const nmp = prompt(`Nouveau mot de passe pour ${c.prenom} ${c.nom} :`);
+  if (!nmp || !nmp.trim()) return;
+  demander({
+    titre: 'Réinitialiser le mot de passe ?',
+    danger: false,
+    confirmText: 'Réinitialiser',
+    loadingText: 'Réinitialisation...',
+    message: `Le mot de passe de ${c.prenom} ${c.nom} sera remplacé. L'ancien ne fonctionnera plus.`,
+    lignes: [['Compte', `${c.prenom} ${c.nom}`], ['Email', c.email]],
+    action: async () => {
+      try {
+        const chemin = c.role === 'admin' ? `/utilisateurs/admins/${c.id}` : `/utilisateurs/users/${c.id}`;
+        await appelApiOrg(chemin, { method: 'PUT', body: JSON.stringify({ mot_de_passe: nmp.trim() }) });
+        alert(`Le mot de passe de ${c.prenom} a bien été réinitialisé !`);
+        onChange();
+      } catch (errM) {
+        alert(`Erreur : ${errM.message}`);
+      }
+    },
+  });
+}
+
+// ============================================================================
+// SECTION : PARTICULIERS (domicile : pièces / caméras / proches / famille)
+// ============================================================================
+// Même structure que Organisation, pour le profil « particulier ». Le domicile
+// est le bâtiment « Mon domicile » créé automatiquement à l'inscription
+// (Infrastructure/profil_usage.py) ; s'il n'existe pas, un formulaire le crée.
+
+const ongletsParticuliers = [
+  { id: 'pieces', label: 'Pièces', icon: DoorOpen },
+  { id: 'cameras', label: 'Caméras', icon: Cctv },
+  { id: 'proches', label: 'Proches', icon: Users },
+  { id: 'famille', label: 'Membres de la famille', icon: ShieldCheck },
+];
+
+function ParticuliersView({ personnes = [] }) {
+  const [onglet, setOnglet] = useState('pieces');
+  const [batiments, setBatiments] = useState([]);
+  const [pieces, setPieces] = useState([]);
+  const [cameras, setCameras] = useState([]);
+  const [proches, setProches] = useState([]);
+  const [charge, setCharge] = useState(false);
+  const [erreur, setErreur] = useState('');
+  const statuts = useStatutsCameras();
+
+  async function charger() {
+    try {
+      const [b, p, cam, u] = await Promise.all([
+        appelApiOrg('/batiments').catch(() => []),
+        appelApiOrg('/pieces').catch(() => []),
+        appelApiOrg('/cameras').catch(() => []),
+        appelApiOrg('/utilisateurs/users').catch(() => []),
+      ]);
+      const liste = (x, cle) => (Array.isArray(x) ? x : (Array.isArray(x?.[cle]) ? x[cle] : []));
+      setBatiments(liste(b, 'batiments'));
+      setPieces(liste(p, 'pieces'));
+      setCameras(liste(cam, 'cameras'));
+      setProches(liste(u, 'utilisateurs'));
+      setErreur('');
+    } catch (e) {
+      setErreur(e.message);
+    } finally {
+      setCharge(true);
+    }
+  }
+
+  useEffect(() => { charger(); }, []);
+
+  const domicile = batiments.find((b) => (b.nom || '').trim().toLowerCase() === 'mon domicile') || batiments[0] || null;
+  const piecesDomicile = domicile ? pieces.filter((p) => p.batiment_id === domicile.id) : [];
+  const idsPieces = new Set(piecesDomicile.map((p) => p.id));
+  const camerasDomicile = cameras.filter((c) => idsPieces.has(c.piece_id));
+
+  return (
+    <div className="content-body">
+      <div className="welcome-header">
+        <div>
+          <h1 className="welcome-heading">Gestion de mon <span>domicile</span></h1>
+          <p className="welcome-sub">Pièces, caméras, proches et famille de votre maison</p>
+        </div>
+      </div>
+
+      {charge && !domicile ? (
+        <CreerDomicile onChange={charger} />
+      ) : (
+        <>
+          <BandeauEtat sujet="maison" cameras={camerasDomicile} pieces={piecesDomicile} statuts={statuts} onVoirCameras={() => setOnglet('cameras')} />
+
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            {ongletsParticuliers.map((o) => {
+              const Icon = o.icon;
+              return (
+                <button
+                  key={o.id}
+                  onClick={() => setOnglet(o.id)}
+                  style={{
+                    background: onglet === o.id ? '#0284c7' : '#ffffff',
+                    color: onglet === o.id ? '#fff' : 'var(--ink-secondary)',
+                    border: '1px solid var(--border-light)',
+                    padding: '9px 16px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
+                    boxShadow: onglet === o.id ? '0 2px 8px rgba(2,132,199,0.3)' : 'none',
+                  }}
+                >
+                  <Icon size={16} /> {o.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {erreur && <p style={{ color: '#dc2626', fontSize: '0.85rem', marginBottom: '14px' }}>{erreur}</p>}
+
+          {domicile && onglet === 'pieces' && (
+            <SectionPiecesDomicile domicile={domicile} pieces={piecesDomicile} cameras={camerasDomicile} statuts={statuts} onChange={charger} />
+          )}
+          {domicile && onglet === 'cameras' && (
+            <SectionCameras
+              cameras={camerasDomicile}
+              pieces={piecesDomicile}
+              statuts={statuts}
+              titre="Caméras de mon domicile"
+              sousTitre="Connectez vos caméras IP et associez-les à une pièce de la maison."
+              onChange={charger}
+            />
+          )}
+          {domicile && onglet === 'proches' && <SectionProches proches={proches} onChange={charger} />}
+          {domicile && onglet === 'famille' && (
+            <div>
+              <div style={{ ...carte, marginBottom: '16px', background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1', fontSize: '0.86rem', display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <Info size={18} />
+                <span><strong>Proches</strong> : personnes prévenues par notification en cas d'alerte. <strong>Membres de la famille</strong> : personnes reconnues par les caméras, elles ne déclenchent jamais d'alerte chez vous.</span>
+              </div>
+              <PersonnesFaceIdView items={personnes} profil="particulier" />
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function CreerDomicile({ onChange }) {
+  const [nom, setNom] = useState('Mon domicile');
+  const [lieu, setLieu] = useState('');
+  const [err, setErr] = useState('');
+  const creer = async (e) => {
+    e.preventDefault(); setErr('');
+    try {
+      await appelApiOrg('/batiments', { method: 'POST', body: JSON.stringify({ id_admin: idAdmin(), nom, lieu, responsable_id: null }) });
+      onChange();
+    } catch (e2) { setErr(e2.message); }
+  };
+  return (
+    <div style={carte}>
+      <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '4px' }}>Créez votre domicile</h3>
+      <p style={{ margin: '0 0 16px 0', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
+        Aucun domicile n'est encore enregistré. Donnez-lui un nom et un lieu pour pouvoir ajouter vos pièces et vos caméras.
+      </p>
+      <form onSubmit={creer} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', background: '#f8fafc', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
+        <input style={{ ...champ, flex: 1, minWidth: '180px' }} placeholder="Nom (ex: Mon domicile)" value={nom} onChange={(e) => setNom(e.target.value)} required />
+        <input style={{ ...champ, flex: 1, minWidth: '180px' }} placeholder="Quartier / Ville (ex: Ouagadougou)" value={lieu} onChange={(e) => setLieu(e.target.value)} required />
+        <button style={btn} type="submit"><Plus size={15} /> Créer mon domicile</button>
+      </form>
+      {err && <p style={{ color: '#dc2626', fontSize: '0.8rem', marginTop: '10px' }}>{err}</p>}
+    </div>
+  );
+}
+
+function SectionPiecesDomicile({ domicile, pieces = [], cameras = [], statuts, onChange }) {
+  const [nom, setNom] = useState('');
+  const [err, setErr] = useState('');
+  const { demander, modale } = useConfirmation();
+
+  const creer = async (e) => {
+    e.preventDefault(); setErr('');
+    try {
+      await appelApiOrg('/pieces', { method: 'POST', body: JSON.stringify({ id_admin: idAdmin(), nom, batiment_id: domicile.id }) });
+      setNom(''); onChange();
+    } catch (e2) { setErr(e2.message); }
+  };
+
+  const supprimer = (p) => {
+    const camsPiece = cameras.filter((c) => c.piece_id === p.id);
+    demander({
+      titre: 'Supprimer cette pièce ?',
+      message: camsPiece.length > 0
+        ? `La pièce « ${p.nom} » sera supprimée avec ses ${camsPiece.length} caméra${camsPiece.length > 1 ? 's' : ''} : les flux seront arrêtés et les zones surveillées effacées. Votre domicile, lui, n'est pas supprimé. L'historique des alertes est conservé. Cette action est irréversible.`
+        : `La pièce « ${p.nom} » sera supprimée définitivement. Votre domicile n'est pas supprimé.`,
+      lignes: [['Pièce', p.nom], ['Caméras supprimées', String(camsPiece.length)]],
+      requireText: camsPiece.length > 0 ? p.nom : null,
+      confirmText: 'Supprimer la pièce',
+      action: async () => {
+        await appelApiOrg(`/pieces/${p.id}`, { method: 'DELETE' }).catch((e2) => setErr(e2.message));
+        onChange();
+      },
+    });
+  };
+
+  const resume = (p) => {
+    const cams = cameras.filter((c) => c.piece_id === p.id);
+    if (cams.length === 0) return <span style={{ fontSize: '0.78rem', color: 'var(--ink-muted)' }}>Aucune caméra</span>;
+    const nb = (s) => cams.filter((c) => (statuts || {})[c.id] === s).length;
+    const decon = nb('deconnectee');
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: 'var(--ink-muted)' }}>
+        {cams.length} caméra{cams.length > 1 ? 's' : ''}
+        {decon > 0 ? <BadgeStatutCamera statut="deconnectee" /> : (nb('connectee') === cams.length ? <BadgeStatutCamera statut="connectee" /> : <BadgeStatutCamera statut="inconnue" />)}
+      </span>
+    );
+  };
+
+  return (
+    <div style={carte}>
+      <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '4px' }}>Pièces de mon domicile ({pieces.length})</h3>
+      <p style={{ margin: '0 0 16px 0', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
+        Ajoutez les pièces ou zones de votre maison : salon, garage, jardin…
+      </p>
+      <form onSubmit={creer} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '18px', background: '#f8fafc', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
+        <input style={{ ...champ, flex: 1, minWidth: '200px' }} placeholder="Nom de la pièce (ex: Salon)" value={nom} onChange={(e) => setNom(e.target.value)} required />
+        <button style={btn} type="submit"><Plus size={15} /> Créer la pièce</button>
+      </form>
+      {err && <p style={{ color: '#dc2626', fontSize: '0.8rem' }}>{err}</p>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {pieces.map((p) => (
+          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '12px 16px', background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: '10px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: '0.95rem', color: 'var(--ink-primary)' }}>{p.nom}</strong>
+              {resume(p)}
+            </div>
+            <button style={btnSuppr} onClick={() => supprimer(p)} title="Supprimer cette pièce"><Trash2 size={14} /></button>
+          </div>
+        ))}
+      </div>
+      {modale}
+    </div>
+  );
+}
+
+function SectionProches({ proches = [], onChange }) {
+  const [nom, setNom] = useState('');
+  const [prenom, setPrenom] = useState('');
+  const [email, setEmail] = useState('');
+  const [motDePasse, setMotDePasse] = useState('');
+  const [err, setErr] = useState('');
+  const { demander, modale } = useConfirmation();
+
+  const creer = async (e) => {
+    e.preventDefault(); setErr('');
+    try {
+      await appelApiOrg('/utilisateurs/users', { method: 'POST', body: JSON.stringify({ id_admin: idAdmin(), nom, prenom, email, mot_de_passe: motDePasse }) });
+      setNom(''); setPrenom(''); setEmail(''); setMotDePasse('');
+      onChange();
+    } catch (e2) { setErr(e2.message); }
+  };
+
+  const supprimer = (c) => demander({
+    titre: 'Supprimer ce proche ?',
+    message: `${c.prenom} ${c.nom} ne recevra plus les alertes de votre maison et ne pourra plus se connecter. Cette action est irréversible.`,
+    lignes: [['Proche', `${c.prenom} ${c.nom}`], ['Email', c.email]],
+    confirmText: 'Supprimer le proche',
+    action: async () => {
+      await appelApiOrg(`/utilisateurs/users/${c.id}`, { method: 'DELETE' }).catch((e2) => setErr(e2.message));
+      onChange();
+    },
+  });
+
+  return (
+    <div style={carte}>
+      <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '4px' }}>Proches notifiés ({proches.length})</h3>
+      <p style={{ margin: '0 0 16px 0', fontSize: '0.82rem', color: 'var(--ink-muted)' }}>
+        Ces personnes reçoivent les alertes de votre maison. Communiquez-leur l'email et le mot de passe choisis ici pour qu'elles se connectent.
+      </p>
+      <form onSubmit={creer} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '18px', background: '#f8fafc', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
+        <input style={champ} placeholder="Prénom" value={prenom} onChange={(e) => setPrenom(e.target.value)} required />
+        <input style={champ} placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} required />
+        <input style={champ} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input style={champ} type="password" placeholder="Mot de passe" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} required />
+        <button style={btn} type="submit"><Plus size={15} /> Ajouter un proche</button>
+      </form>
+      {err && <p style={{ color: '#dc2626', fontSize: '0.8rem' }}>{err}</p>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {proches.map((c) => (
+          <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '12px 16px', background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: '10px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: '0.95rem' }}>{c.prenom} {c.nom}</strong>
+              <span style={{ color: 'var(--ink-muted)', fontSize: '0.84rem' }}>{c.email}</span>
+              <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '3px 9px', borderRadius: '999px', fontWeight: 700, fontSize: '0.72rem' }}>Proche</span>
+            </div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                style={{ ...btnSuppr, width: 'auto', padding: '0 12px', background: '#f0f9ff', color: '#0284c7', fontSize: '0.78rem', fontWeight: 700 }}
+                onClick={() => demanderReinitMdp(c, demander, onChange)}
+                title="Réinitialiser le mot de passe"
+              >
+                Réinitialiser Pass
+              </button>
+              <button style={btnSuppr} onClick={() => supprimer(c)} title="Supprimer ce proche"><Trash2 size={14} /></button>
+            </div>
+          </div>
+        ))}
+        {proches.length === 0 && <p style={{ color: 'var(--ink-muted)', fontSize: '0.85rem' }}>Aucun proche pour le moment.</p>}
+      </div>
+      {modale}
+    </div>
+  );
+}
+
 
 // ============================================================================
 // ORCHESTRATEUR : Admin (page /admin et /default-admin)
@@ -5898,7 +6421,7 @@ function jouerBip(audioCtxRef) {
 }
 
 // Titre à afficher pour une situation personne (Surveillance Comportementale)
-function titreSituationPersonne(item) {
+function titreSituationPersonne(item, libelleConnu = 'Collaborateur') {
   if (item.intrusionZoneActive) return '🚨 Intrusion en zone non autorisée';
   if (item.rodage && item.rodage !== 'Normal' && !item.rodage.startsWith('En observation') && item.riskPct >= 40) {
     return item.rodage;
@@ -5909,7 +6432,7 @@ function titreSituationPersonne(item) {
   if (item.regard && item.regard.startsWith('Scanne') && item.riskPct >= 40) {
     return `Balayage visuel anormal (${item.regard})`;
   }
-  if (item.nom) return `${item.nom} (Collaborateur identifié)`;
+  if (item.nom) return `${item.nom} (${libelleConnu} identifié)`;
   if (item.visage === 'Oui') return 'Personne détectée (Visage visible)';
   return 'Présence normale';
 }
@@ -5924,6 +6447,36 @@ export default function Admin() {
   const nom = sessionStorage.getItem('previa_utilisateur_nom') || 'Utilisateur';
   const role = sessionStorage.getItem('previa_utilisateur_role') || 'user';
   const estParDefaut = sessionStorage.getItem('previa_est_par_defaut') === 'oui';
+
+  // Profil d'usage (« particulier » ou « entreprise »), lu une fois depuis le
+  // serveur. `null` tant que la réponse n'est pas arrivée : les onglets qui
+  // dépendent du profil restent alors masqués plutôt que de clignoter.
+  const [profil, setProfil] = useState(null);
+  const [libellesProfil, setLibellesProfil] = useState({});
+  useEffect(() => {
+    let annule = false;
+    obtenirProfil()
+      .then((d) => {
+        if (annule) return;
+        setProfil(d?.profil === 'particulier' ? 'particulier' : 'entreprise');
+        setLibellesProfil(d?.libelles || {});
+      })
+      .catch(() => { if (!annule) setProfil('entreprise'); });
+    return () => { annule = true; };
+  }, []);
+  const afficherOrganisation = profil === 'entreprise' && estParDefaut;
+  const afficherParticuliers = profil === 'particulier' && estParDefaut;
+  const afficherPersonnes = profil === 'entreprise';
+  const libellePersonneConnue = profil === 'particulier' ? 'Membre de la famille' : 'Collaborateur';
+  // Ordre des onglets : le même que dans la Sidebar (raccourcis clavier 1-9).
+  const ordreOnglets = [
+    'dashboard', 'cameras',
+    ...(afficherPersonnes ? ['personnes'] : []),
+    'events', 'alerts', 'reports',
+    ...(afficherOrganisation ? ['organisation'] : []),
+    ...(afficherParticuliers ? ['particuliers'] : []),
+  ];
+  const cleOrdreOnglets = ordreOnglets.join('|');
 
   const [vueEnsemble, setVueEnsemble] = useState(null);
   const [personnes, setPersonnes] = useState([]);
@@ -6069,9 +6622,9 @@ export default function Admin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Raccourcis clavier (1-9), étendus à l'onglet Organisation quand présent.
+  // Raccourcis clavier (1-9) : uniquement les onglets réellement visibles.
   useEffect(() => {
-    const tabs = ['dashboard', 'cameras', 'personnes', 'events', 'alerts', 'reports', 'organisation'];
+    const tabs = cleOrdreOnglets.split('|');
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const num = parseInt(e.key, 10);
@@ -6079,7 +6632,13 @@ export default function Admin() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [estParDefaut]);
+  }, [cleOrdreOnglets]);
+
+  // Garde : si l'onglet affiché n'est pas (ou plus) autorisé pour ce profil
+  // ou ce compte, retour au tableau de bord.
+  useEffect(() => {
+    if (profil && !cleOrdreOnglets.split('|').includes(currentTab)) setCurrentTab('dashboard');
+  }, [profil, cleOrdreOnglets, currentTab]);
 
   function seDeconnecter() {
     sessionStorage.clear();
@@ -6112,8 +6671,8 @@ export default function Admin() {
   const cibles = [...personnes, ...objetsAnormaux].sort((a, b) => b.riskPct - a.riskPct);
   const situations = cibles.slice(0, 4).map((item) => ({
     id: item.id,
-    title: item.isObject ? item.label : (item.nom ? `${item.nom} (Collaborateur)` : titreSituationPersonne(item)),
-    subtitle: `${item.camCtx?.batiment || 'Bâtiment'} · ${item.camCtx?.piece || 'Pièce'} · ${(item.camCtx?.num && !/^[a-f0-9]{8,36}$/i.test(item.camCtx.num)) ? item.camCtx.num : 'Caméra 1'}`,
+    title: item.isObject ? item.label : (item.nom ? `${item.nom} (${libellePersonneConnue})` : titreSituationPersonne(item, libellePersonneConnue)),
+    subtitle: `${item.camCtx?.batiment || 'Bâtiment'} · ${item.camCtx?.piece || 'Pièce'} · ${(item.camCtx?.num && !/^[a-f0-9]{8,36}$/i.test(item.camCtx.num)) ? item.camCtx.num : 'Caméra supprimée'}`,
     riskLevel: item.riskLevel,
     _item: item,
   }));
@@ -6142,12 +6701,12 @@ export default function Admin() {
     if (camTrouvee) {
       const bat = camTrouvee.batiment || camTrouvee.location || '';
       const pie = camTrouvee.piece || '';
-      const nom = (camTrouvee.num && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.num)) ? camTrouvee.num : (camTrouvee.name && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.name)) ? camTrouvee.name : 'Caméra 1';
+      const nom = (camTrouvee.num && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.num)) ? camTrouvee.num : (camTrouvee.name && !/^[a-f0-9]{8,36}$/i.test(camTrouvee.name)) ? camTrouvee.name : 'Caméra supprimée';
       return [bat, pie, nom].filter(Boolean).join(' · ');
     }
     const bat = a.batiment || '';
     const pie = a.piece || '';
-    const nom = (a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra 1';
+    const nom = (a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra supprimée';
     return [bat, pie, nom].filter(Boolean).join(' · ') || 'Zone sous surveillance';
   };
 
@@ -6197,7 +6756,7 @@ export default function Admin() {
       id: a.id,
       title: a.description,
       time: a.horodatage ? new Date(a.horodatage * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '',
-      cam: (a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra 1',
+      cam: (a.num && !/^[a-f0-9]{8,36}$/i.test(a.num)) ? a.num : 'Caméra supprimée',
       type: ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(a.type_evenement) ? 'critical' : 'warning',
     }));
 
@@ -6218,7 +6777,7 @@ export default function Admin() {
       case 'cameras':
         return <CamerasView cameras={camerasReelles} personnes={personnes} alertes={alertes} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
       case 'personnes':
-        return <PersonnesFaceIdView items={personnes} />;
+        return afficherPersonnes ? <PersonnesFaceIdView items={personnes} /> : null;
       case 'events':
         return <EventsView alertesReelles={alertes} cameras={camerasReelles} onRefresh={rafraichir} onSelectTab={setCurrentTab} />;
       case 'alerts':
@@ -6226,7 +6785,9 @@ export default function Admin() {
       case 'reports':
         return <ReportsView alertesReelles={alertes} kpis={kpis} />;
       case 'organisation':
-        return <OrganisationView />;
+        return afficherOrganisation ? <OrganisationView /> : null;
+      case 'particuliers':
+        return afficherParticuliers ? <ParticuliersView personnes={personnes} /> : null;
       default:
         return (
           <DashboardView
@@ -6264,9 +6825,11 @@ export default function Admin() {
     alerts: 'Alertes',
     reports: 'Rapports',
     organisation: 'Organisation',
+    particuliers: 'Particuliers',
   };
 
   return (
+    <ProfilContext.Provider value={{ profil, libelles: libellesProfil }}>
     <div className="app-container">
       {/* PERSISTENT SAPPHIRE SIDEBAR IDENTICAL ACROSS ALL VIEWS */}
       <Sidebar
@@ -6279,7 +6842,9 @@ export default function Admin() {
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
         unreadAlerts={alertesNonLues}
-        showOrganisation={estParDefaut}
+        showOrganisation={afficherOrganisation}
+        showParticuliers={afficherParticuliers}
+        showPersonnes={afficherPersonnes}
         joursRestantsLicence={licence.jours_restants}
       />
 
@@ -6368,16 +6933,31 @@ export default function Admin() {
             <span className="mobile-tab-label">Historique</span>
           </button>
 
-          <button
-            type="button"
-            className={`mobile-tab-btn ${currentTab === 'personnes' && !isMoreSheetOpen ? 'active' : ''}`}
-            onClick={() => { setCurrentTab('personnes'); setIsMoreSheetOpen(false); }}
-          >
-            <div className="mobile-tab-icon-wrap">
-              <Users size={20} />
-            </div>
-            <span className="mobile-tab-label">Personnel</span>
-          </button>
+          {/* 4e onglet selon le profil : Personnel (entreprise) ou Particuliers (domicile) */}
+          {afficherPersonnes && (
+            <button
+              type="button"
+              className={`mobile-tab-btn ${currentTab === 'personnes' && !isMoreSheetOpen ? 'active' : ''}`}
+              onClick={() => { setCurrentTab('personnes'); setIsMoreSheetOpen(false); }}
+            >
+              <div className="mobile-tab-icon-wrap">
+                <Users size={20} />
+              </div>
+              <span className="mobile-tab-label">Personnel</span>
+            </button>
+          )}
+          {afficherParticuliers && (
+            <button
+              type="button"
+              className={`mobile-tab-btn ${currentTab === 'particuliers' && !isMoreSheetOpen ? 'active' : ''}`}
+              onClick={() => { setCurrentTab('particuliers'); setIsMoreSheetOpen(false); }}
+            >
+              <div className="mobile-tab-icon-wrap">
+                <Heart size={20} />
+              </div>
+              <span className="mobile-tab-label">Particuliers</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -6410,7 +6990,7 @@ export default function Admin() {
               </div>
 
               <div className="mobile-sheet-items">
-                {estParDefaut && (
+                {afficherOrganisation && (
                   <button
                     type="button"
                     className={`mobile-sheet-item ${currentTab === 'organisation' ? 'active' : ''}`}
@@ -6478,5 +7058,6 @@ export default function Admin() {
         )}
       </div>
     </div>
+    </ProfilContext.Provider>
   );
 }

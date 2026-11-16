@@ -37,7 +37,7 @@ const LIENS: Lien[] = [
   {
     groupe: 'Postes de travail',
     titre: 'Tableau de bord',
-    description: 'Surveillance, caméras, alertes, analyses, événements, rapports, configuration — et Organisation pour le compte admin par défaut.',
+    description: 'Surveillance, caméras, alertes, analyses, événements, rapports, configuration — et, pour le compte admin par défaut, Organisation (profil entreprise) ou Particuliers (profil domicile).',
     href: '/admin',
   },
   {

@@ -724,25 +724,54 @@ def modifier_batiment(id_batiment: str, demande: DemandeModificationBatiment):
     return b
 
 
+def _supprimer_camera_et_nettoyer(id_camera: str) -> bool:
+    """Supprime UNE caméra et tout ce qui en dépend en mémoire/disque :
+    flux vidéo, dernière image, zone dessinée, suivi des personnes.
+    Utilisé par la suppression d'une caméra ET par la suppression en
+    cascade d'une pièce ou d'un bâtiment (un seul endroit, pour qu'aucun
+    flux ne continue à tourner sur une caméra qui n'existe plus).
+    L'historique (alertes, clips, événements) est conservé volontairement."""
+    if not camera.supprimer_camera(id_camera):
+        return False
+    rtsp_service.arreter_worker_camera(id_camera)
+    derniere_image.oublier(id_camera)
+    zone_module.supprimer_zone(id_camera)
+    oublier_suivi_personnes(id_camera)
+    return True
+
+
+def _supprimer_piece_en_cascade(id_piece: str) -> int:
+    """Supprime les caméras de la pièce puis la pièce. Renvoie le nombre
+    de caméras supprimées. Le bâtiment n'est JAMAIS touché."""
+    cameras = camera.lister_par_piece(id_piece)
+    for c in cameras:
+        _supprimer_camera_et_nettoyer(c["id"])
+    piece.supprimer_piece(id_piece)
+    return len(cameras)
+
+
 @app.delete(
     "/batiments/{id_batiment}",
     dependencies=[Depends(session.exiger_admin)],
     tags=["Bâtiments"],
     summary="Supprimer un bâtiment",
-    description="Refusé (409) si le bâtiment a encore des pièces — les supprimer (ou les déplacer) d'abord.",
-    responses={
-        404: {"description": "Aucun bâtiment avec cet id"},
-        409: {"description": "Le bâtiment a encore des pièces"},
-    },
+    description=(
+        "Supprime le bâtiment ET, en cascade, toutes ses pièces et toutes leurs caméras "
+        "(IRRÉVERSIBLE — l'interface demande une confirmation détaillée avant l'appel). "
+        "L'historique (alertes, clips, événements) est conservé."
+    ),
+    responses={404: {"description": "Aucun bâtiment avec cet id"}},
 )
 def supprimer_batiment(id_batiment: str):
     if batiment.trouver_par_id(id_batiment) is None:
         raise HTTPException(404, "Aucun bâtiment avec cet id")
-    pieces_restantes = piece.lister_par_batiment(id_batiment)
-    if pieces_restantes:
-        raise HTTPException(409, f"Le bâtiment a encore {len(pieces_restantes)} pièce(s) — impossible de le supprimer")
+    nb_pieces = 0
+    nb_cameras = 0
+    for p in piece.lister_par_batiment(id_batiment):
+        nb_cameras += _supprimer_piece_en_cascade(p["id"])
+        nb_pieces += 1
     batiment.supprimer_batiment(id_batiment)
-    return {"supprime": True}
+    return {"supprime": True, "pieces_supprimees": nb_pieces, "cameras_supprimees": nb_cameras}
 
 
 # ========================================================================
@@ -757,6 +786,7 @@ def supprimer_batiment(id_batiment: str):
     responses={
         403: {"description": "id_admin ne correspond à aucun compte admin"},
         404: {"description": "Aucun bâtiment avec ce batiment_id"},
+        409: {"description": "Une pièce porte déjà ce nom dans ce bâtiment"},
     },
 )
 def creer_piece(demande: DemandeCreationPiece):
@@ -764,6 +794,8 @@ def creer_piece(demande: DemandeCreationPiece):
         return admin.creer_piece(demande.id_admin, demande.nom, demande.batiment_id)
     except admin.AccesRefuse as exc:
         raise HTTPException(403, str(exc))
+    except piece.NomDejaUtilise as exc:
+        raise HTTPException(409, str(exc))
     except ValueError as exc:
         raise HTTPException(404, str(exc))
 
@@ -807,6 +839,8 @@ def voir_piece(id_piece: str):
 def modifier_piece(id_piece: str, demande: DemandeModificationPiece):
     try:
         p = piece.modifier_piece(id_piece, nom=demande.nom, batiment_id=demande.batiment_id)
+    except piece.NomDejaUtilise as exc:
+        raise HTTPException(409, str(exc))
     except ValueError as exc:
         raise HTTPException(404, str(exc))
     if p is None:
@@ -819,20 +853,18 @@ def modifier_piece(id_piece: str, demande: DemandeModificationPiece):
     dependencies=[Depends(session.exiger_admin)],
     tags=["Pièces"],
     summary="Supprimer une pièce",
-    description="Refusé (409) si la pièce a encore des caméras — les supprimer (ou les déplacer) d'abord.",
-    responses={
-        404: {"description": "Aucune pièce avec cet id"},
-        409: {"description": "La pièce a encore des caméras"},
-    },
+    description=(
+        "Supprime la pièce ET, en cascade, toutes ses caméras (IRRÉVERSIBLE — l'interface demande "
+        "une confirmation détaillée avant l'appel). Le bâtiment n'est jamais supprimé. "
+        "L'historique (alertes, clips, événements) est conservé."
+    ),
+    responses={404: {"description": "Aucune pièce avec cet id"}},
 )
 def supprimer_piece(id_piece: str):
     if piece.trouver_par_id(id_piece) is None:
         raise HTTPException(404, "Aucune pièce avec cet id")
-    cameras_restantes = camera.lister_par_piece(id_piece)
-    if cameras_restantes:
-        raise HTTPException(409, f"La pièce a encore {len(cameras_restantes)} caméra(s) — impossible de la supprimer")
-    piece.supprimer_piece(id_piece)
-    return {"supprime": True}
+    nb_cameras = _supprimer_piece_en_cascade(id_piece)
+    return {"supprime": True, "cameras_supprimees": nb_cameras}
 
 
 # ========================================================================
@@ -865,6 +897,7 @@ def demarrer_services_arriere_plan():
     responses={
         403: {"description": "id_admin ne correspond à aucun compte admin"},
         404: {"description": "Aucune pièce avec ce piece_id"},
+        409: {"description": "Une caméra porte déjà ce nom dans cette pièce"},
     },
 )
 def creer_camera(demande: DemandeCreationCamera):
@@ -875,6 +908,8 @@ def creer_camera(demande: DemandeCreationCamera):
         return res
     except admin.AccesRefuse as exc:
         raise HTTPException(403, str(exc))
+    except camera.NomDejaUtilise as exc:
+        raise HTTPException(409, str(exc))
     except ValueError as exc:
         raise HTTPException(404, str(exc))
 
@@ -890,6 +925,35 @@ def lister_cameras(piece_id: str | None = None):
     if piece_id is not None:
         return camera.lister_par_piece(piece_id)
     return camera.lister_cameras()
+
+
+SEUIL_CAMERA_DECONNECTEE_S = float(os.environ.get("PREVIA_CAMERA_DECONNECTEE_S", "30"))
+
+
+@app.get(
+    "/cameras-statuts",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Caméras"],
+    summary="État de connexion de chaque caméra",
+    description=(
+        "Pour chaque caméra : `connectee` (image reçue il y a moins de 30 s), `deconnectee` "
+        "(plus d'image depuis plus de 30 s, ou caméra réseau qui n'a jamais répondu depuis le "
+        "démarrage) ou `inconnue` (caméra sans adresse réseau qui n'a encore rien envoyé "
+        "depuis le démarrage du serveur)."
+    ),
+)
+def statuts_cameras():
+    resultat = []
+    for c in camera.lister_cameras():
+        age = derniere_image.age_secondes(c["id"])
+        if age is not None and age <= SEUIL_CAMERA_DECONNECTEE_S:
+            statut = "connectee"
+        elif age is not None or c.get("url_flux"):
+            statut = "deconnectee"
+        else:
+            statut = "inconnue"
+        resultat.append({"id": c["id"], "statut": statut, "age_s": None if age is None else round(age, 1)})
+    return resultat
 
 
 @app.get(
@@ -936,6 +1000,8 @@ def modifier_camera(id_camera: str, demande: DemandeModificationCamera):
             rtsp_service.demarrer_worker_camera(id_camera, demande.url_flux)
         elif demande.url_flux == "":
             rtsp_service.arreter_worker_camera(id_camera)
+    except camera.NomDejaUtilise as exc:
+        raise HTTPException(409, str(exc))
     except ValueError as exc:
         raise HTTPException(404, str(exc))
     if c is None:
@@ -978,12 +1044,8 @@ def changer_rotation_camera(id_camera: str, demande: DemandeRotationCamera):
     responses={404: {"description": "Aucune caméra avec cet id"}},
 )
 def supprimer_camera(id_camera: str):
-    if not camera.supprimer_camera(id_camera):
+    if not _supprimer_camera_et_nettoyer(id_camera):
         raise HTTPException(404, "Aucune caméra avec cet id")
-    rtsp_service.arreter_worker_camera(id_camera)
-    derniere_image.oublier(id_camera)
-    zone_module.supprimer_zone(id_camera)
-    oublier_suivi_personnes(id_camera)
     return {"supprime": True}
 
 

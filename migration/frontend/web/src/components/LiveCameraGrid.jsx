@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { VideoOff, Cctv } from 'lucide-react';
 import { useFluxDirect } from '../lib/useFluxDirect.js';
 import { FluxCamera } from './FluxCamera.jsx';
+import { useProfil, nomOngletConfiguration } from '../lib/profilContext.js';
 
 // `cameras` : branché sur les vraies caméras enregistrées (voir
 // GET /vue-ensemble côté pages/admin.jsx) — remplace les 6 caméras
@@ -70,6 +71,7 @@ function CartePreviewCamera({ cam, onSelectCamera }) {
 }
 
 export function LiveCameraGrid({ cameras = [], isLoading = false, onSelectCamera }) {
+  const { profil } = useProfil();
   if (isLoading) {
     return (
       <div className="live-camera-section">
@@ -114,7 +116,7 @@ export function LiveCameraGrid({ cameras = [], isLoading = false, onSelectCamera
               Aucune caméra connectée
             </h4>
             <p style={{ margin: '4px 0 0 0', color: 'var(--ink-muted)', fontSize: '0.86rem' }}>
-              Ajoutez ou configurez une caméra dans l'onglet <strong>Organisation</strong> pour visualiser les flux en temps réel.
+              Ajoutez ou configurez une caméra dans l'onglet <strong>{nomOngletConfiguration(profil)}</strong> pour visualiser les flux en temps réel.
             </p>
           </div>
         </div>

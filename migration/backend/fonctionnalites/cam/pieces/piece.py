@@ -13,6 +13,18 @@ from pathlib import Path
 
 from fonctionnalites.cam.batiment import batiment
 
+class NomDejaUtilise(ValueError):
+    """Une pièce porte déjà ce nom dans ce bâtiment (la route renvoie 409,
+    à distinguer des ValueError « bâtiment introuvable » qui font 404)."""
+
+
+def _verifier_nom_libre(nom: str, batiment_id: str, sauf_id: str | None = None) -> None:
+    nom_net = nom.strip().lower()
+    for p in lister_par_batiment(batiment_id):
+        if p["id"] != sauf_id and p.get("nom", "").strip().lower() == nom_net:
+            raise NomDejaUtilise(f"Une pièce nommée '{nom.strip()}' existe déjà dans ce bâtiment.")
+
+
 PIECES_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent / "db" / "cam" / "pieces"
 
 
@@ -49,6 +61,7 @@ def creer_piece(nom: str, batiment_id: str) -> dict:
     existant."""
     if batiment.trouver_par_id(batiment_id) is None:
         raise ValueError(f"Aucun bâtiment avec l'id {batiment_id}")
+    _verifier_nom_libre(nom, batiment_id)
 
     piece = {
         "id": uuid.uuid4().hex,
@@ -72,6 +85,9 @@ def modifier_piece(id_piece: str, nom: str | None = None, batiment_id: str | Non
         if batiment.trouver_par_id(batiment_id) is None:
             raise ValueError(f"Aucun bâtiment avec l'id {batiment_id}")
         p["batiment_id"] = batiment_id
+    nouveau_nom = nom if nom is not None else p.get("nom", "")
+    if nom is not None or batiment_id is not None:
+        _verifier_nom_libre(nouveau_nom, p["batiment_id"], sauf_id=id_piece)
     if nom is not None:
         p["nom"] = nom.strip()
     with open(_chemin(id_piece), "w", encoding="utf-8") as f:

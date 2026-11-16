@@ -19,7 +19,9 @@ const MOCK_IDS = new Set(['emp_001', 'emp_002', 'emp_003', 'emp_004']);
 // Personnel initial vide (base propre pour enrôlement direct)
 const PERSONNEL_INITIAL = [];
 
-export function PersonnesFaceIdView({ items = [] }) {
+export function PersonnesFaceIdView({ items = [], profil = 'entreprise' }) {
+  const famille = profil === 'particulier';
+  const posteParDefaut = famille ? 'Membre de la famille' : 'Collaborateur';
   // Personnel autorisé persistant (état local & cache)
   const [personnel, setPersonnel] = useState(() => {
     try {
@@ -262,7 +264,7 @@ export function PersonnesFaceIdView({ items = [] }) {
         prenom: formValues.prenom.trim(),
         nom: formValues.nom.trim(),
         matricule: formValues.matricule.trim(),
-        poste: formValues.poste.trim() || 'Collaborateur',
+        poste: formValues.poste.trim() || posteParDefaut,
         departement: formValues.departement,
         zonesAutorisees: formValues.zones.split(',').map((z) => z.trim()).filter(Boolean),
         statut: formValues.statut,
@@ -292,7 +294,7 @@ export function PersonnesFaceIdView({ items = [] }) {
         prenom: formValues.prenom.trim(),
         nom: formValues.nom.trim(),
         matricule: formValues.matricule.trim() || `PRV-${Math.floor(1000 + Math.random() * 9000)}`,
-        poste: formValues.poste.trim() || 'Collaborateur',
+        poste: formValues.poste.trim() || posteParDefaut,
         departement: formValues.departement,
         statut: formValues.statut,
         zonesAutorisees: formValues.zones.split(',').map((z) => z.trim()).filter(Boolean),
@@ -408,14 +410,16 @@ export function PersonnesFaceIdView({ items = [] }) {
       )}
 
       {/* HEADER SECTION */}
-      <div className="welcome-header" style={{ marginBottom: '24px' }}>
+      <div className="welcome-header" style={{ marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 className="welcome-heading" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <ShieldCheck size={32} color="#0284c7" />
-            Personnel <span>Autorisé & Face ID</span>
+            {famille ? <>Membres de la famille <span>& Face ID</span></> : <>Personnel <span>Autorisé & Face ID</span></>}
           </h1>
           <p className="welcome-sub">
-            Registre du personnel autorisé à accéder aux locaux. Enrôlez les collaborateurs pour la reconnaissance faciale automatique.
+            {famille
+              ? 'Personnes reconnues par vos caméras : elles ne déclenchent jamais d\'alerte chez vous. Enrôlez chaque membre de la famille pour la reconnaissance faciale automatique.'
+              : 'Registre du personnel autorisé à accéder aux locaux. Enrôlez les collaborateurs pour la reconnaissance faciale automatique.'}
           </p>
         </div>
 
@@ -530,7 +534,7 @@ export function PersonnesFaceIdView({ items = [] }) {
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               onClick={() => setFiltreStatut('tous')}
               style={btnFiltreStyle(filtreStatut === 'tous')}
@@ -1016,10 +1020,10 @@ export function PersonnesFaceIdView({ items = [] }) {
 
               <div className="form-grid-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={labelStyle}>Poste / Fonction</label>
+                  <label style={labelStyle}>{famille ? 'Lien (ex: Épouse, Aide-ménagère)' : 'Poste / Fonction'}</label>
                   <input
                     type="text"
-                    placeholder="Ex: Développeur"
+                    placeholder={famille ? 'Ex: Épouse' : 'Ex: Développeur'}
                     value={formValues.poste}
                     onChange={(e) => setFormValues({ ...formValues, poste: e.target.value })}
                     style={inputStyle}

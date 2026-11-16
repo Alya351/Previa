@@ -107,6 +107,11 @@ export function mettreAJourCamera(idCamera, { idAdmin, num, pieceId, estEntree, 
   }).then(jsonOuErreur);
 }
 
+// 4b. État de connexion de chaque caméra : [{ id, statut: 'connectee'|'deconnectee'|'inconnue', age_s }]
+export function chargerStatutsCameras() {
+  return fetchAvecAuth(`${API_BASE}/cameras-statuts`).then(jsonOuErreur);
+}
+
 // 5. Supprimer une caméra
 export function supprimerCamera(idCamera) {
   return fetchAvecAuth(`${API_BASE}/cameras/${idCamera}`, { method: 'DELETE' }).then(jsonOuErreur);

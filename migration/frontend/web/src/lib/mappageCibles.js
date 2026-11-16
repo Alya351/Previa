@@ -254,7 +254,7 @@ export function construireFicheDetail(item) {
   if (!item) return null;
   const lieu = `${item.camCtx?.batiment || '?'} / ${item.camCtx?.piece || '?'}`;
   const rawCam = item.camCtx?.num || item.camCtx?.id_camera || '';
-  const camera = (rawCam && !/^[a-f0-9]{8,36}$/i.test(String(rawCam).trim())) ? rawCam : 'Caméra 1';
+  const camera = (rawCam && !/^[a-f0-9]{8,36}$/i.test(String(rawCam).trim())) ? rawCam : 'Caméra supprimée';
   const image = item.photo || (item.camCtx?.id_camera ? `/cameras/${item.camCtx.id_camera}/image` : '');
   const isUrgent = item.riskLevel === 'high' || item.est_suspect;
   const status = isUrgent ? 'Danger Immédiat' : item.riskLevel === 'med' ? 'À surveiller' : 'Normal';

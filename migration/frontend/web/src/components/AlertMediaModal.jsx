@@ -45,7 +45,7 @@ export function AlertMediaModal({ alerte, onClose, onDelete, onGoToCamera }) {
   const isCrit = alerte.critique || ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(alerte.type_evenement || alerte.rawType);
   const typeLabel = alerte.type || alerte.title || 'Incident de sécurité';
   const rawCam = alerte.cam || alerte.cameraName || alerte.num || '';
-  const cameraLabel = (rawCam && !/^[a-f0-9]{8,36}$/i.test(String(rawCam).trim())) ? rawCam : 'Caméra 1';
+  const cameraLabel = (rawCam && !/^[a-f0-9]{8,36}$/i.test(String(rawCam).trim())) ? rawCam : 'Caméra supprimée';
   const desc = humaniserDurees(alerte.desc || alerte.description || '');
   const dateStr = alerte.date ? `${alerte.date} à ${alerte.time}` : (alerte.timeAgo || (alerte.horodatage ? new Date(alerte.horodatage * 1000).toLocaleString('fr-FR') : 'à l\'instant'));
 

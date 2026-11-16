@@ -6,6 +6,7 @@ import {
   Bell,
   FileText,
   Building2,
+  Heart,
   Users,
   X
 } from 'lucide-react';
@@ -17,17 +18,21 @@ import PreviaLogo from './PreviaLogo';
 // cette interface, réservée au compte admin par défaut (voir App.jsx).
 export function Sidebar({
   currentTab, onSelectTab, isCollapsed = false, isMobileOpen = false, onCloseMobile, unreadAlerts = 3, showOrganisation = false,
+  showParticuliers = false, showPersonnes = true,
   joursRestantsLicence = null,
 }) {
   const menuItems = [
     { id: 'dashboard', label: 'Tableau de bord', icon: Home },
     { id: 'cameras', label: 'Caméras', icon: Cctv },
-    { id: 'personnes', label: 'Personnel & Face ID', icon: Users },
+    ...(showPersonnes ? [{ id: 'personnes', label: 'Personnel & Face ID', icon: Users }] : []),
     { id: 'events', label: 'Historique', icon: FileVideo },
     { id: 'alerts', label: 'Alertes', icon: Bell, badge: unreadAlerts },
     { id: 'reports', label: 'Rapports', icon: FileText },
     ...(showOrganisation ? [
       { id: 'organisation', label: 'Organisation', icon: Building2 },
+    ] : []),
+    ...(showParticuliers ? [
+      { id: 'particuliers', label: 'Particuliers', icon: Heart },
     ] : []),
   ];
 

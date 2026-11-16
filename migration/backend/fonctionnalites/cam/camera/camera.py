@@ -18,6 +18,18 @@ from pathlib import Path
 
 from fonctionnalites.cam.pieces import piece
 
+class NomDejaUtilise(ValueError):
+    """Une caméra porte déjà ce nom dans cette pièce (la route renvoie
+    409, à distinguer des ValueError « pièce introuvable » qui font 404)."""
+
+
+def _verifier_nom_libre(num, piece_id: str, sauf_id: str | None = None) -> None:
+    nom_net = str(num).strip().lower()
+    for c in lister_par_piece(piece_id):
+        if c["id"] != sauf_id and str(c.get("num", "")).strip().lower() == nom_net:
+            raise NomDejaUtilise(f"Une caméra nommée '{str(num).strip()}' existe déjà dans cette pièce.")
+
+
 CAMERAS_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent / "db" / "cam" / "cameras"
 
 
@@ -56,6 +68,7 @@ def creer_camera(num: str, piece_id: str, est_entree: bool = False, url_flux: st
 
     if piece.trouver_par_id(piece_id) is None:
         raise ValueError(f"Aucune pièce avec l'id {piece_id}")
+    _verifier_nom_libre(num, piece_id)
 
     url_propre = url_flux.strip() if url_flux else None
     camera = {
@@ -85,6 +98,8 @@ def modifier_camera(
         if piece.trouver_par_id(piece_id) is None:
             raise ValueError(f"Aucune pièce avec l'id {piece_id}")
         c["piece_id"] = piece_id
+    if num is not None or piece_id is not None:
+        _verifier_nom_libre(num if num is not None else c.get("num", ""), piece_id if piece_id is not None else c["piece_id"], sauf_id=id_camera)
     if num is not None:
         c["num"] = num.strip() if isinstance(num, str) else num
     if est_entree is not None:
