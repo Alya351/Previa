@@ -27,7 +27,6 @@ import {
   IconCheck,
   IconX,
   IconPhone,
-  IconPlus,
   IconMoreVertical,
   IconUser,
 } from '../components/Icons';
@@ -88,20 +87,15 @@ export const HomeScreen = ({
           </View>
         )}
 
-        {/* CARTE HERO STATUS (Fidèle à 100% à la carte supérieure de la référence) */}
+        {/* CARTE HERO STATUS (Protection Active avec indicateur de sécurité) */}
         <View style={styles.heroStatusCard}>
           <View style={styles.heroStatusLeft}>
             <Text style={styles.heroStatusCategory}>SURVEILLANCE DU SITE</Text>
             <Text style={styles.heroStatusVal}>Protection Active</Text>
           </View>
-          <TouchableOpacity
-            style={styles.heroStatusPlusBtn}
-            onPress={() => onNavigate('direct')}
-            activeOpacity={0.8}
-            accessibilityLabel="Contrôle ou direct caméras"
-          >
-            <IconPlus size={20} color={PREVIA_COLORS.bluePrimary} />
-          </TouchableOpacity>
+          <View style={styles.heroStatusShieldWrap}>
+            <IconShieldCheck size={22} color="#10B981" />
+          </View>
         </View>
 
         {/* APERÇU VIDÉO DIRECT RAPIDE (Positionné avant l'historique) */}
@@ -1106,20 +1100,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748B',
   },
-  heroStatusPlusBtn: {
+  heroStatusShieldWrap: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#ECFDF5',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
     borderWidth: 1,
-    borderColor: 'rgba(2, 132, 199, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
   },
 
   // CAMERA GRID
