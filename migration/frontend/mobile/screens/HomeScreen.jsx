@@ -164,6 +164,32 @@ export const HomeScreen = ({
           </View>
         </TouchableOpacity>
 
+        {/* BOUTON D'URGENCE : CONTACT D'URGENCE (Positionné avant les dernières alertes) */}
+        <TouchableOpacity
+          style={styles.callGuardsBanner}
+          onPress={() => {
+            const telClean = (numeroGardiennerie || '').replace(/\s+/g, '');
+            if (telClean) {
+              Linking.openURL(`tel:${telClean}`).catch(() => {});
+            }
+          }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Contacter le contact d'urgence"
+        >
+          <View style={styles.callGuardsLeft}>
+            <View style={styles.callGuardsIconCircle}>
+              <IconPhone size={22} color="#FFFFFF" />
+            </View>
+            <View style={styles.callGuardsTexts}>
+              <Text style={styles.callGuardsTitle}>Contact d'urgence</Text>
+            </View>
+          </View>
+          <View style={styles.callGuardsPill}>
+            <Text style={styles.callGuardsPillText}>APPELER</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* SECTION : DERNIÈRES ALERTES (Recent transactions equivalent) */}
         <View style={styles.sectionHeaderRow}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
@@ -240,32 +266,6 @@ export const HomeScreen = ({
             </View>
           </TouchableOpacity>
         </View>
-
-        {/* BOUTON D'URGENCE : CONTACT D'URGENCE */}
-        <TouchableOpacity
-          style={styles.callGuardsBanner}
-          onPress={() => {
-            const telClean = (numeroGardiennerie || '').replace(/\s+/g, '');
-            if (telClean) {
-              Linking.openURL(`tel:${telClean}`).catch(() => {});
-            }
-          }}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Contacter le contact d'urgence"
-        >
-          <View style={styles.callGuardsLeft}>
-            <View style={styles.callGuardsIconCircle}>
-              <IconPhone size={22} color="#FFFFFF" />
-            </View>
-            <View style={styles.callGuardsTexts}>
-              <Text style={styles.callGuardsTitle}>Contact d'urgence</Text>
-            </View>
-          </View>
-          <View style={styles.callGuardsPill}>
-            <Text style={styles.callGuardsPillText}>APPELER</Text>
-          </View>
-        </TouchableOpacity>
       </ScrollView>
 
       {/* MODALE D'INFORMATIONS ANALYSES */}
