@@ -75,7 +75,7 @@ const ADRESSE_SERVEUR = detecterAdresseServeur();
 // ou la saisir sur l'écran de connexion (« Adresse du serveur »).
 const ADRESSE_DISTANTE = String(Constants.expoConfig?.extra?.adresseServeurDistant || '').trim();
 
-export let API_BASE = ADRESSE_SERVEUR ? `http://${ADRESSE_SERVEUR}:8080` : null;
+export let API_BASE = ADRESSE_SERVEUR ? `http://${ADRESSE_SERVEUR}:8012` : null;
 
 function decouvrirParMdns(delaiMs = 4000) {
   if (Platform.OS === 'web') return Promise.resolve(null);
@@ -178,7 +178,7 @@ async function chercherServeur() {
   // adresseServeurDistant (app.json) peut contenir plusieurs adresses séparées par des virgules
   // (ex. le lien public https://... et le nom Tailscale).
   const distantes = ADRESSE_DISTANTE.split(',').map((a) => normaliserAdresse(a));
-  const candidats = [...distantes, 'http://previa.local:8080', 'http://previa:8080'].filter(Boolean);
+  const candidats = [...distantes, 'https://16.171.13.89:8012', 'http://16.171.13.89:8012', 'http://localhost:8012', 'http://127.0.0.1:8012', 'http://previa.local:8080', 'http://previa:8080'].filter(Boolean);
   const taches = [...new Set(candidats)].map((base) => sondePrevia(base));
   taches.push(decouvrirParMdns().then((base) => sondePrevia(base)));
   return premierServeurJoignable(taches);

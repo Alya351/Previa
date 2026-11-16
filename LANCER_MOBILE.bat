@@ -8,15 +8,15 @@ echo       PREVIA - DEMARRAGE AUTOMATIQUE POSTE NOMADE MOBILE
 echo ======================================================================
 echo.
 
-REM 1. Verification et Lancement Automatique du Backend + BD (port 8080)
-netstat -aon | findstr :8080 | findstr LISTENING >nul 2>&1
+REM 1. Verification et Lancement Automatique du Backend + BD (port 8012 / 8080)
+netstat -aon | findstr :8012 | findstr LISTENING >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo [*] Le backend et la base de donnees ne sont pas encore lances.
-    echo [*] Démarrage automatique du serveur Backend PREVIA (Port 8080)...
+    echo [*] Le backend local n'est pas encore lance.
+    echo [*] Demarrage automatique du serveur Backend PREVIA (Port 8012 HTTPS)...
     start "PREVIA - BACKEND & BD" cmd /c "%~dp0LANCER_BACKEND_LOCAL.bat"
     timeout /t 3 >nul
 ) else (
-    echo [OK] Backend PREVIA & BD deja actifs sur le port 8080.
+    echo [OK] Backend PREVIA deja actif sur le port 8012.
 )
 
 REM 2. Liberation du port Metro (8081) si necessaire

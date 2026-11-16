@@ -51,7 +51,7 @@
       ]
     ],
     "extra": {
-      "adresseServeurDistant": "https://previa.tailf07749.ts.net,previa.tailf07749.ts.net",
+      "adresseServeurDistant": "https://16.171.13.89:8012,http://16.171.13.89:8012",
       "eas": {
         "projectId": "44b1927c-ca89-42ef-b7da-5427ab4d567e"
       }

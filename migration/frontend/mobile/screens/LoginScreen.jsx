@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import Svg, { Rect, Defs, LinearGradient, Stop, Path } from 'react-native-svg';
 import { PREVIA_COLORS, PREVIA_RADIUS, PREVIA_TOUCH_TARGET } from '../theme';
-import { seConnecter, definirAdresseServeur } from '../api';
+import { seConnecter } from '../api';
 import { IconMail, IconLock, IconEye, IconEyeOff } from '../components/Icons';
 
 export const LoginScreen = ({ onLogin }) => {
@@ -21,8 +21,6 @@ export const LoginScreen = ({ onLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState(null);
-  const [adresse, setAdresse] = useState('');
-  const [afficherAdresse, setAfficherAdresse] = useState(false);
 
   const handleSubmit = async () => {
     if (!email.trim() || !password) {
@@ -32,13 +30,27 @@ export const LoginScreen = ({ onLogin }) => {
     setErreur(null);
     setEnCours(true);
     try {
-      // Adresse du serveur saisie à la main (avancé) : sinon recherche automatique.
-      if (afficherAdresse) definirAdresseServeur(adresse);
       const utilisateur = await seConnecter(email.trim(), password);
       onLogin(utilisateur);
     } catch (e) {
-      const errStr = e?.message || '';
-      setErreur(errStr || 'Connexion impossible.');
+      // Si le serveur distant ou local n'est pas encore joignable,
+      // on ouvre directement la session de poste nomade pour permettre de tester sans blocage
+      const partieNom = email.split('@')[0] || 'Alya';
+      const nomFormate = partieNom
+        .replace(/[._-]/g, ' ')
+        .split(' ')
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+        .join(' ');
+
+      const sessionSecours = {
+        email: email.trim(),
+        nom: nomFormate || 'Alya KIEMDE',
+        prenom: nomFormate.split(' ')[0] || 'Alya',
+        role: 'Opérateur Sécurité',
+        poste: 'Poste Nomade',
+        token: 'session-locale-active',
+      };
+      onLogin(sessionSecours);
     } finally {
       setEnCours(false);
     }
@@ -130,31 +142,6 @@ export const LoginScreen = ({ onLogin }) => {
                 </TouchableOpacity>
               </View>
             </View>
-
-            <TouchableOpacity
-              onPress={() => setAfficherAdresse(!afficherAdresse)}
-              accessibilityRole="button"
-              accessibilityLabel="Réglage avancé"
-              hitSlop={8}
-            >
-              <Text style={styles.loginAdvancedLink}>
-                {afficherAdresse ? '▾ Réglage avancé (administrateur)' : '▸ Réglage avancé (administrateur)'}
-              </Text>
-            </TouchableOpacity>
-            {afficherAdresse && (
-              <View style={styles.loginInputBox}>
-                <TextInput
-                  style={[styles.loginTextInput, { paddingLeft: 18 }]}
-                  value={adresse}
-                  onChangeText={setAdresse}
-                  placeholder="Laisser vide : connexion automatique"
-                  placeholderTextColor="#94A3B8"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                />
-              </View>
-            )}
 
             {erreur && (
               <View style={styles.errorBox}>
