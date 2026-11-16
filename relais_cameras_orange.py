@@ -10,8 +10,12 @@ Fonctionnement :
 4. L'IA sur AWS (YOLO11x + ArcFace) analyse le flux et l'affiche sur l'app web pour l'encadrant.
 """
 
+import os
 import time
 import threading
+
+# Lecture RTSP à faible latence : pas de mise en tampon côté FFmpeg
+os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay")
 import cv2
 import requests
 import urllib3
@@ -152,14 +156,40 @@ def worker_relais_camera(camera_info):
         if VIDEO_WEBRTC and not etat.get("video_lancee"):
             etat["video_lancee"] = emetteur_webrtc.demarrer(SERVEUR_WSS, cam_id, nom, SERVEURS_ICE)
 
+        # Un fil dédié lit la caméra EN CONTINU et ne garde que la dernière
+        # image : si le traitement prend du retard, on saute des images au
+        # lieu d'accumuler un décalage qui grandit sans fin.
+        lecteur = {"image": None, "n": 0, "fin": False}
+
+        def lire_camera(cap=cap, lecteur=lecteur):
+            while not lecteur["fin"]:
+                ok, img = cap.read()
+                if not ok or img is None:
+                    lecteur["fin"] = True
+                    break
+                lecteur["image"] = img
+                lecteur["n"] += 1
+
+        threading.Thread(target=lire_camera, daemon=True).start()
+
         dernier_apercu = 0.0
+        deja_vu = 0
+        stats = {"t": time.time(), "lues": 0, "traitees": 0}
         while True:
-            # Lecture continue au rythme de la caméra : aucune image ne
-            # s'accumule dans le tampon, donc aucun retard.
-            ret, frame = cap.read()
-            if not ret or frame is None:
+            if lecteur["fin"]:
                 print(f"[{nom}] Perte de trame. Reconnexion...")
                 break
+            if lecteur["n"] == deja_vu:
+                time.sleep(0.005)
+                continue
+            stats["lues"] += lecteur["n"] - deja_vu
+            stats["traitees"] += 1
+            deja_vu = lecteur["n"]
+            frame = lecteur["image"]
+            if time.time() - stats["t"] >= 30:
+                duree = time.time() - stats["t"]
+                print(f"[{nom}] Caméra : {stats['lues']/duree:.0f} img/s reçues, {stats['traitees']/duree:.0f} img/s traitées (le reste est sauté, pas de retard)", flush=True)
+                stats.update({"t": time.time(), "lues": 0, "traitees": 0})
             maintenant = time.time()
             hauteur, largeur = frame.shape[:2]
 
