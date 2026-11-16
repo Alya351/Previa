@@ -104,6 +104,72 @@ export const HomeScreen = ({
           </TouchableOpacity>
         </View>
 
+        {/* APERÇU VIDÉO DIRECT RAPIDE (Positionné avant l'historique) */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            DIRECT VIDÉO
+          </Text>
+          <TouchableOpacity
+            onPress={() => onNavigate('direct')}
+            activeOpacity={0.7}
+            style={styles.sectionLinkBtn}
+          >
+            <Text style={styles.sectionLinkText}>Voir tout</Text>
+            <IconChevronRight size={14} color={PREVIA_COLORS.bluePrimary} />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.livePeekCard, isDark && styles.livePeekCardDark]}
+          onPress={() => onNavigate('direct')}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Accéder au flux direct de la caméra ${nomCamPrincipale}`}
+        >
+          <View style={styles.livePeekViewport}>
+            {imageApercu ? (
+              <Image
+                source={{ uri: imageApercu }}
+                style={styles.livePeekImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.livePeekPlaceholder}>
+                <Image
+                  source={require('../assets/logo_previa_transparent.png')}
+                  style={styles.placeholderLogo}
+                  resizeMode="contain"
+                />
+                <Text style={styles.placeholderText}>Caméra prête</Text>
+              </View>
+            )}
+
+            {/* OVERLAY CAMÉRA */}
+            <View style={styles.liveOverlayTop}>
+              {imageApercu ? (
+                <View style={styles.livePulsePill}>
+                  <View style={styles.livePulseDot} />
+                  <Text style={styles.livePulseText}>EN DIRECT</Text>
+                </View>
+              ) : (
+                <View style={[styles.livePulsePill, { backgroundColor: 'rgba(100, 116, 139, 0.85)' }]}>
+                  <Text style={styles.livePulseText}>EN VEILLE</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.liveOverlayBottom}>
+              <View style={styles.liveCamInfo}>
+                <Text style={styles.liveCamTitle}>{nomCamPrincipale}</Text>
+                <Text style={styles.liveCamSubtitle}>{imageApercu ? 'En direct' : 'Standby'}</Text>
+              </View>
+              <View style={styles.livePlayButton}>
+                <IconPlay size={14} color="#FFFFFF" />
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+
         {/* SECTION : DERNIÈRES ALERTES (Recent transactions equivalent) */}
         <View style={styles.sectionHeaderRow}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
@@ -180,72 +246,6 @@ export const HomeScreen = ({
             </View>
           </TouchableOpacity>
         </View>
-
-        {/* APERÇU VIDÉO DIRECT RAPIDE */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            DIRECT VIDÉO
-          </Text>
-          <TouchableOpacity
-            onPress={() => onNavigate('direct')}
-            activeOpacity={0.7}
-            style={styles.sectionLinkBtn}
-          >
-            <Text style={styles.sectionLinkText}>Voir tout</Text>
-            <IconChevronRight size={14} color={PREVIA_COLORS.bluePrimary} />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.livePeekCard, isDark && styles.livePeekCardDark]}
-          onPress={() => onNavigate('direct')}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel={`Accéder au flux direct de la caméra ${nomCamPrincipale}`}
-        >
-          <View style={styles.livePeekViewport}>
-            {imageApercu ? (
-              <Image
-                source={{ uri: imageApercu }}
-                style={styles.livePeekImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.livePeekPlaceholder}>
-                <Image
-                  source={require('../assets/logo_previa_transparent.png')}
-                  style={styles.placeholderLogo}
-                  resizeMode="contain"
-                />
-                <Text style={styles.placeholderText}>Caméra prête</Text>
-              </View>
-            )}
-
-            {/* OVERLAY CAMÉRA */}
-            <View style={styles.liveOverlayTop}>
-              {imageApercu ? (
-                <View style={styles.livePulsePill}>
-                  <View style={styles.livePulseDot} />
-                  <Text style={styles.livePulseText}>EN DIRECT</Text>
-                </View>
-              ) : (
-                <View style={[styles.livePulsePill, { backgroundColor: 'rgba(100, 116, 139, 0.85)' }]}>
-                  <Text style={styles.livePulseText}>EN VEILLE</Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.liveOverlayBottom}>
-              <View style={styles.liveCamInfo}>
-                <Text style={styles.liveCamTitle}>{nomCamPrincipale}</Text>
-                <Text style={styles.liveCamSubtitle}>{imageApercu ? 'En direct' : 'Standby'}</Text>
-              </View>
-              <View style={styles.livePlayButton}>
-                <IconPlay size={14} color="#FFFFFF" />
-              </View>
-            </View>
-          </View>
-        </TouchableOpacity>
 
         {/* BOUTON D'URGENCE : CONTACT D'URGENCE */}
         <TouchableOpacity
