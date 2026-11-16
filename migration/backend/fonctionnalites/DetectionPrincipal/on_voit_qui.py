@@ -673,7 +673,11 @@ def _get_models_impl():
                     allowed_modules=["detection", "recognition", "genderage", "landmark_3d_68"],
                     root=str(MODELS_DIR / "insightface"),
                 )
-                face_app.prepare(ctx_id=-1, det_size=(640, 640) if (DEVICE != "cpu" or os.name == "nt") else (320, 320))
+                # 320 px sur CPU Linux rend les visages minuscules (une image de
+                # 1024 px est réduite 3x) -> reconnaissance faible. 640 par défaut
+                # partout ; surchargeable via FACE_DET_SIZE (ex. 960 pour de la distance).
+                _det = int(os.environ.get("FACE_DET_SIZE", "640"))
+                face_app.prepare(ctx_id=-1, det_size=(_det, _det))
             except Exception as e:
                 print(f"[on_voit_qui] face_app ignoré : {e}", flush=True)
 

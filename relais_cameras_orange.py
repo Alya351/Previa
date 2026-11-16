@@ -32,6 +32,10 @@ SERVEUR_AWS = "https://16.171.13.89:8012"
 LARGEUR_ENVOI = 1024
 QUALITE_JPEG = 68
 
+# Image envoyée à l'analyse IA (visages) : plus grande et moins compressée que l'aperçu
+LARGEUR_ANALYSE = 1920
+QUALITE_ANALYSE = 90
+
 # Apercu fluide : images par seconde envoyees sans analyse
 FPS_APERCU = 4.0
 # Analyse IA : une image toutes les N secondes par camera
@@ -205,6 +209,7 @@ def worker_relais_camera(camera_info):
             if not (apercu_du or analyse_due):
                 continue
 
+            frame_pleine = frame  # résolution caméra, pour l'analyse (visages)
             if largeur > LARGEUR_ENVOI:
                 echelle = LARGEUR_ENVOI / float(largeur)
                 frame = cv2.resize(frame, (LARGEUR_ENVOI, int(hauteur * echelle)), interpolation=cv2.INTER_AREA)
@@ -212,6 +217,16 @@ def worker_relais_camera(camera_info):
             if not succes:
                 continue
             jpeg_bytes = jpeg_buf.tobytes()
+            jpeg_analyse = jpeg_bytes
+            if analyse_due:
+                # L'analyse (visages) reçoit une image plus grande et moins compressée
+                # que l'aperçu : un visage lointain garde assez de pixels pour ArcFace.
+                if largeur > LARGEUR_ANALYSE:
+                    e2 = LARGEUR_ANALYSE / float(largeur)
+                    frame_pleine = cv2.resize(frame_pleine, (LARGEUR_ANALYSE, int(hauteur * e2)), interpolation=cv2.INTER_AREA)
+                ok2, buf2 = cv2.imencode(".jpg", frame_pleine, [cv2.IMWRITE_JPEG_QUALITY, QUALITE_ANALYSE])
+                if ok2:
+                    jpeg_analyse = buf2.tobytes()
 
             # 1. Aperçu JPEG (secours si la vidéo ne passe pas + statut "connectée")
             if apercu_du and envois_en_vol.acquire(blocking=False):
@@ -222,7 +237,7 @@ def worker_relais_camera(camera_info):
             if analyse_due:
                 analyse_en_cours.set()
                 etat["derniere_analyse"] = maintenant
-                threading.Thread(target=analyser, args=(jpeg_bytes,), daemon=True).start()
+                threading.Thread(target=analyser, args=(jpeg_analyse,), daemon=True).start()
 
         cap.release()
         time.sleep(2)
