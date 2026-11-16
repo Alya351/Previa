@@ -16,6 +16,8 @@ import cv2
 import requests
 import urllib3
 
+import emetteur_webrtc
+
 # Désactiver les avertissements SSL pour le certificat autosigné d'AWS
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -32,6 +34,18 @@ FPS_APERCU = 4.0
 DELAI_ANALYSE_S = 1.5
 # Nombre d'envois d'apercu simultanes par camera
 ENVOIS_PARALLELES = 3
+
+# --- Vidéo en direct WebRTC (voir emetteur_webrtc.py) -----------------------
+VIDEO_WEBRTC = True
+SERVEUR_WSS = SERVEUR_AWS.replace("https://", "wss://")
+LARGEUR_VIDEO = 640
+# Aperçu JPEG réduit pendant que quelqu'un regarde la vidéo (économise le débit)
+FPS_APERCU_PENDANT_VIDEO = 1.0
+SERVEURS_ICE = [
+    {"urls": "stun:stun.l.google.com:19302"},
+    {"urls": ["turn:16.171.13.89:3478?transport=udp", "turn:16.171.13.89:3478?transport=tcp"],
+     "username": "previa", "credential": "PreviaDHpycsD6PLrT0Wjz"},
+]
 
 # Configuration des Caméras Réelles d'Orange
 CAMERAS = [
@@ -135,39 +149,50 @@ def worker_relais_camera(camera_info):
 
         print(f"[{nom}] Diffusion en cours vers AWS ({SERVEUR_AWS}) — apercu {camera_info.get('fps_cible', FPS_APERCU)} img/s, analyse toutes les {DELAI_ANALYSE_S}s")
 
+        if VIDEO_WEBRTC and not etat.get("video_lancee"):
+            etat["video_lancee"] = emetteur_webrtc.demarrer(SERVEUR_WSS, cam_id, nom, SERVEURS_ICE)
+
+        dernier_apercu = 0.0
         while True:
-            t_debut = time.time()
-            for _ in range(2):
-                cap.grab()
+            # Lecture continue au rythme de la caméra : aucune image ne
+            # s'accumule dans le tampon, donc aucun retard.
             ret, frame = cap.read()
             if not ret or frame is None:
                 print(f"[{nom}] Perte de trame. Reconnexion...")
                 break
-
+            maintenant = time.time()
             hauteur, largeur = frame.shape[:2]
+
+            # 0. Vidéo WebRTC : image réduite publiée pour l'émetteur
+            if etat.get("video_lancee"):
+                h_video = int(hauteur * LARGEUR_VIDEO / float(largeur)) // 2 * 2
+                emetteur_webrtc.publier_image(cam_id, cv2.resize(frame, (LARGEUR_VIDEO, h_video), interpolation=cv2.INTER_AREA))
+
+            regarde_en_video = emetteur_webrtc.spectateurs.get(cam_id, 0) > 0
+            fps_apercu = FPS_APERCU_PENDANT_VIDEO if regarde_en_video else camera_info.get("fps_cible", FPS_APERCU)
+            apercu_du = maintenant - dernier_apercu >= 1.0 / fps_apercu
+            analyse_due = (maintenant - etat["derniere_analyse"] >= DELAI_ANALYSE_S) and not analyse_en_cours.is_set()
+            if not (apercu_du or analyse_due):
+                continue
+
             if largeur > LARGEUR_ENVOI:
                 echelle = LARGEUR_ENVOI / float(largeur)
                 frame = cv2.resize(frame, (LARGEUR_ENVOI, int(hauteur * echelle)), interpolation=cv2.INTER_AREA)
-
             succes, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, QUALITE_JPEG])
             if not succes:
                 continue
             jpeg_bytes = jpeg_buf.tobytes()
 
-            # 1. Apercu : envoye EN PARALLELE (jusqu'a ENVOIS_PARALLELES a la fois)
-            # pour que la capture n'attende jamais la fin d'un televersement.
-            if envois_en_vol.acquire(blocking=False):
+            # 1. Aperçu JPEG (secours si la vidéo ne passe pas + statut "connectée")
+            if apercu_du and envois_en_vol.acquire(blocking=False):
+                dernier_apercu = maintenant
                 threading.Thread(target=envoyer_apercu, args=(jpeg_bytes,), daemon=True).start()
 
-            # 2. Analyse : en arriere-plan, a cadence reduite
-            if (time.time() - etat["derniere_analyse"] >= DELAI_ANALYSE_S) and not analyse_en_cours.is_set():
+            # 2. Analyse IA en arrière-plan
+            if analyse_due:
                 analyse_en_cours.set()
-                etat["derniere_analyse"] = time.time()
+                etat["derniere_analyse"] = maintenant
                 threading.Thread(target=analyser, args=(jpeg_bytes,), daemon=True).start()
-
-            reste = delai - (time.time() - t_debut)
-            if reste > 0:
-                time.sleep(reste)
 
         cap.release()
         time.sleep(2)

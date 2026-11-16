@@ -4,7 +4,18 @@ import { urlDirectRegarder } from '../api.js';
 // Même serveur STUN que côté émetteur (voir camera.jsx, CONFIG_ICE) —
 // aide à établir la connexion WebRTC, ne voit jamais la vidéo
 // elle-même.
-const CONFIG_ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+// + serveur TURN sur AWS : relaie la vidéo quand la caméra (connexion 4G,
+// NAT d'opérateur) et le spectateur ne peuvent pas se joindre directement.
+const CONFIG_ICE = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    {
+      urls: ['turn:16.171.13.89:3478?transport=udp', 'turn:16.171.13.89:3478?transport=tcp'],
+      username: 'previa',
+      credential: 'PreviaDHpycsD6PLrT0Wjz',
+    },
+  ],
+};
 
 // Se connecte à .../cameras/{id}/direct/regarder (voir
 // Infrastructure/signalisation_webrtc.py côté backend) et négocie une
@@ -16,10 +27,17 @@ const CONFIG_ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 // habituelle (GET .../image) dans ce cas-là.
 export function useFluxDirect(idCamera) {
   const [stream, setStream] = useState(null);
+  // Incrémenté pour relancer la négociation après une coupure
+  const [essai, setEssai] = useState(0);
 
   useEffect(() => {
     setStream(null);
     if (!idCamera) return;
+    let relance = null;
+    const relancer = () => {
+      if (relance) return;
+      relance = setTimeout(() => setEssai((n) => n + 1), 5000);
+    };
 
     let ws;
     try {
@@ -32,6 +50,15 @@ export function useFluxDirect(idCamera) {
 
     pc.ontrack = (evt) => {
       setStream(evt.streams[0]);
+    };
+
+    // Vidéo coupée (relais arrêté, réseau perdu) : on revient à l'aperçu
+    // image et on renégocie quelques secondes plus tard.
+    pc.onconnectionstatechange = () => {
+      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+        setStream(null);
+        relancer();
+      }
     };
 
     pc.onicecandidate = (evt) => {
@@ -61,11 +88,15 @@ export function useFluxDirect(idCamera) {
       // "bienvenue" : rien à faire, juste informatif côté serveur.
     };
 
+    ws.onclose = () => relancer();
+
     return () => {
+      if (relance) clearTimeout(relance);
+      ws.onclose = null;
       ws.close();
       pc.close();
     };
-  }, [idCamera]);
+  }, [idCamera, essai]);
 
   return stream;
 }
