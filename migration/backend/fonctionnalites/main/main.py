@@ -1122,6 +1122,25 @@ def voir(id_camera: str, file: UploadFile = File(..., description="Image JPEG ca
 
 
 @app.post(
+    "/cameras/{id_camera}/trame",
+    tags=["Analyse"],
+    summary="Envoyer une image pour l'aperçu en direct, sans analyse",
+    description=(
+        "Reçoit une image (multipart/form-data) et la garde en mémoire pour "
+        "GET /cameras/{id_camera}/image. N'exécute AUCUN modèle : sert à "
+        "garder l'aperçu fluide quand l'analyse (/voir, /qui) tourne à une "
+        "cadence plus basse."
+    ),
+    responses={404: {"description": "Aucune caméra enregistrée avec cet id"}},
+)
+def trame(id_camera: str, file: UploadFile = File(..., description="Image JPEG capturée par la caméra")):
+    if camera.trouver_par_id(id_camera) is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    derniere_image.enregistrer(id_camera, file.file.read())
+    return {"ok": True}
+
+
+@app.post(
     "/cameras/{id_camera}/qui",
     tags=["Analyse"],
     summary="Identifier et décrire les personnes vues par cette caméra",

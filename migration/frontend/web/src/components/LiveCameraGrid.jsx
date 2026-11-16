@@ -11,6 +11,9 @@ function CartePreviewCamera({ cam, onSelectCamera }) {
   const streamDirect = useFluxDirect(cam.urlFlux ? null : cam.id);
   // État réel du flux, remonté par FluxCamera : 'connexion' | 'direct' | 'hors_ligne'
   const [etatFlux, setEtatFlux] = useState('connexion');
+  // Rafraîchissement propre à la vignette : l'aperçu ne dépend plus du
+  // rechargement des données de la page (toutes les 2 s), mais de son
+  // propre minuteur — le serveur reçoit ~2 images/s via /trame.
 
   const handleClick = () => {
     if (onSelectCamera) onSelectCamera(cam);
@@ -56,6 +59,7 @@ function CartePreviewCamera({ cam, onSelectCamera }) {
       <FluxCamera
         stream={streamDirect}
         imageRepli={cam.urlFlux ? `/cameras/${cam.id}/flux` : cam.image}
+        rafraichirMs={350}
         alt={cam.name}
         className="camera-feed-img"
         afficherEtat

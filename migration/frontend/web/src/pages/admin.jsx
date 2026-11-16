@@ -425,7 +425,7 @@ function SectionZones({ cameras, initialCameraId }) {
   }, [cameras.map((c) => c.id).join(',')]);
 
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 2000);
+    const id = setInterval(() => setTick((t) => t + 1), 400);
     return () => clearInterval(id);
   }, []);
 
@@ -1572,7 +1572,7 @@ function CamerasView({ cameras = [], personnes = [], alertes = [], onRefresh, on
   const playerContainerRef = useRef(null);
 
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 2000);
+    const id = setInterval(() => setTick((t) => t + 1), 400);
     return () => clearInterval(id);
   }, []);
 

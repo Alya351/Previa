@@ -17,7 +17,7 @@ const DELAI_HORS_LIGNE_MS = 15000;
 // écrans gardent exactement leur rendu d'origine.
 export function FluxCamera({
   stream, imageRepli, alt, className, style, onError, onLoad, detections = [], onVideoRef,
-  onStatusChange, afficherEtat = false,
+  onStatusChange, afficherEtat = false, rafraichirMs = 0,
 }) {
   const videoRef = useRef(null);
   const minuterieRef = useRef(null);
@@ -48,6 +48,15 @@ export function FluxCamera({
   useEffect(() => {
     if (onStatusChange) onStatusChange(etat);
   }, [etat, onStatusChange]);
+
+  // Rafraîchissement périodique de l'aperçu : on remplace UNIQUEMENT la source
+  // de l'image, sans repasser par l'état « connexion ».
+  useEffect(() => {
+    if (!rafraichirMs || hasActiveWebRtcTrack || !imageRepli) return undefined;
+    const base = imageRepli.split('?')[0];
+    const id = setInterval(() => setImgSrc(`${base}?t=${Date.now()}`), rafraichirMs);
+    return () => clearInterval(id);
+  }, [rafraichirMs, hasActiveWebRtcTrack, imageRepli]);
 
   useEffect(() => {
     if (videoRef.current && hasActiveWebRtcTrack) {
