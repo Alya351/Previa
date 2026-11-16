@@ -23,13 +23,15 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 SERVEUR_AWS = "https://16.171.13.89:8012"
 
 # Taille et qualité des images envoyées (connexion mobile : rester léger)
-LARGEUR_ENVOI = 960
-QUALITE_JPEG = 62
+LARGEUR_ENVOI = 1024
+QUALITE_JPEG = 68
 
 # Apercu fluide : images par seconde envoyees sans analyse
 FPS_APERCU = 4.0
 # Analyse IA : une image toutes les N secondes par camera
 DELAI_ANALYSE_S = 1.5
+# Nombre d'envois d'apercu simultanes par camera
+ENVOIS_PARALLELES = 3
 
 # Configuration des Caméras Réelles d'Orange
 CAMERAS = [
@@ -38,22 +40,20 @@ CAMERAS = [
         "id": "7711bf8da3d94380b0024768615aa691",
         # URLs possibles (testées automatiquement dans l'ordre)
         "urls": [
-            "rtsp://admin:11Avril2002@@192.168.11.101:554/Streaming/Channels/102",
             "rtsp://admin:11Avril2002@@192.168.11.101:554/Streaming/Channels/101",
             "rtsp://admin:admin@192.168.11.102:554/11",
             "rtsp://admin:11Avril2002@@192.168.11.102:554/Streaming/Channels/101"
         ],
-        "fps_cible": 4.0
+        "fps_cible": 6.0
     },
     {
         "nom": "Camera_Exterieure",
         "id": "8929369b01524ff79190bdc37d60be92",
         "urls": [
-            "rtsp://admin:11Avril2002@@192.168.11.103:554/Streaming/Channels/102",
             "rtsp://admin:11Avril2002@@192.168.11.103:554/Streaming/Channels/101",
             "rtsp://admin:admin@192.168.11.103:554/11"
         ],
-        "fps_cible": 4.0
+        "fps_cible": 6.0
     }
 ]
 
@@ -96,6 +96,23 @@ def worker_relais_camera(camera_info):
     analyse_en_cours = threading.Event()
     etat = {"derniere_analyse": 0.0, "compteur": 0, "envois": 0, "cumul": 0.0}
 
+    envois_en_vol = threading.Semaphore(ENVOIS_PARALLELES)
+
+    def envoyer_apercu(jpeg_bytes):
+        try:
+            t_envoi = time.time()
+            session.post(endpoint_trame, files={"file": ("frame.jpg", jpeg_bytes, "image/jpeg")},
+                         verify=False, timeout=8.0)
+            etat["envois"] += 1
+            etat["cumul"] += time.time() - t_envoi
+            if etat["envois"] % 25 == 0:
+                moyenne = etat["cumul"] / max(1, etat["envois"])
+                print(f"[{nom}] {len(jpeg_bytes)//1024} Ko par image — envoi moyen {moyenne:.2f}s", flush=True)
+        except Exception:
+            pass
+        finally:
+            envois_en_vol.release()
+
     def analyser(jpeg_bytes):
         try:
             session.post(endpoint_voir, files={"file": ("frame.jpg", jpeg_bytes, "image/jpeg")},
@@ -137,18 +154,10 @@ def worker_relais_camera(camera_info):
                 continue
             jpeg_bytes = jpeg_buf.tobytes()
 
-            # 1. Apercu : rapide, sans IA
-            try:
-                t_envoi = time.time()
-                session.post(endpoint_trame, files={"file": ("frame.jpg", jpeg_bytes, "image/jpeg")},
-                             verify=False, timeout=8.0)
-                etat["envois"] += 1
-                etat["cumul"] += time.time() - t_envoi
-                if etat["envois"] % 25 == 0:
-                    moyenne = etat["cumul"] / etat["envois"]
-                    print(f"[{nom}] {len(jpeg_bytes)//1024} Ko par image — envoi moyen {moyenne:.2f}s", flush=True)
-            except Exception:
-                pass
+            # 1. Apercu : envoye EN PARALLELE (jusqu'a ENVOIS_PARALLELES a la fois)
+            # pour que la capture n'attende jamais la fin d'un televersement.
+            if envois_en_vol.acquire(blocking=False):
+                threading.Thread(target=envoyer_apercu, args=(jpeg_bytes,), daemon=True).start()
 
             # 2. Analyse : en arriere-plan, a cadence reduite
             if (time.time() - etat["derniere_analyse"] >= DELAI_ANALYSE_S) and not analyse_en_cours.is_set():

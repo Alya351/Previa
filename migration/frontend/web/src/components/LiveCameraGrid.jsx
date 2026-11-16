@@ -59,7 +59,7 @@ function CartePreviewCamera({ cam, onSelectCamera }) {
       <FluxCamera
         stream={streamDirect}
         imageRepli={cam.urlFlux ? `/cameras/${cam.id}/flux` : cam.image}
-        rafraichirMs={350}
+        rafraichirMs={80}
         alt={cam.name}
         className="camera-feed-img"
         afficherEtat

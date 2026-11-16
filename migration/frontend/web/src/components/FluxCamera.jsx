@@ -49,14 +49,28 @@ export function FluxCamera({
     if (onStatusChange) onStatusChange(etat);
   }, [etat, onStatusChange]);
 
-  // Rafraîchissement périodique de l'aperçu : on remplace UNIQUEMENT la source
-  // de l'image, sans repasser par l'état « connexion ».
+  // Rafraîchissement SÉQUENTIEL : la prochaine image n'est demandée qu'une fois
+  // la précédente affichée. Un minuteur fixe lançait plusieurs requêtes en
+  // parallèle, qui revenaient dans le désordre : l'aperçu semblait revenir en
+  // arrière (effet de boucle). Ici une seule image est en vol à la fois.
+  const planifierRef = useRef(null);
+  const rafraichirRef = useRef(rafraichirMs);
+  rafraichirRef.current = rafraichirMs;
+
+  const planifierProchaine = useCallback(() => {
+    if (!rafraichirRef.current || hasActiveWebRtcTrack || !imageRepli) return;
+    if (planifierRef.current) clearTimeout(planifierRef.current);
+    const base = imageRepli.split('?')[0];
+    planifierRef.current = setTimeout(() => {
+      setImgSrc(`${base}?t=${Date.now()}`);
+    }, rafraichirRef.current);
+  }, [hasActiveWebRtcTrack, imageRepli]);
+
   useEffect(() => {
     if (!rafraichirMs || hasActiveWebRtcTrack || !imageRepli) return undefined;
-    const base = imageRepli.split('?')[0];
-    const id = setInterval(() => setImgSrc(`${base}?t=${Date.now()}`), rafraichirMs);
-    return () => clearInterval(id);
-  }, [rafraichirMs, hasActiveWebRtcTrack, imageRepli]);
+    planifierProchaine();
+    return () => { if (planifierRef.current) clearTimeout(planifierRef.current); };
+  }, [rafraichirMs, hasActiveWebRtcTrack, imageRepli, planifierProchaine]);
 
   useEffect(() => {
     if (videoRef.current && hasActiveWebRtcTrack) {
@@ -71,10 +85,12 @@ export function FluxCamera({
     if (minuterieRef.current) clearTimeout(minuterieRef.current);
     setEtat('direct');
     if (onLoad) onLoad(e);
+    planifierProchaine();
   };
 
   const handleImgError = (e) => {
     if (onError) onError(e);
+    if (rafraichirRef.current) { planifierProchaine(); return; }
     // Auto-réessaie le flux vidéo continu MJPEG avec un timestamp anti-cache
     setTimeout(() => {
       if (imageRepli) {
