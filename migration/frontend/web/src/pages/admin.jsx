@@ -4785,46 +4785,6 @@ function AlertsView({ alertesReelles = [], cameras = [], camerasParId = {}, onRe
                     {item.description}
                   </p>
 
-                  {/* CE QUE LE SYSTÈME A FAIT AUTOMATIQUEMENT */}
-                  {item.critique && (
-                    <div className="alert-auto-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <div
-                        style={{
-                          background: etatAlarme.lampe ? '#fef3c7' : '#f8fafc',
-                          color: etatAlarme.lampe ? '#92400e' : '#64748b',
-                          border: `1px solid ${etatAlarme.lampe ? '#fde68a' : '#e2e8f0'}`,
-                          padding: '4px 10px',
-                          borderRadius: '8px',
-                          fontSize: '0.76rem',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        <Lightbulb size={14} />
-                        <span>{etatAlarme.lampe ? '💡 Projecteur allumé' : '💡 Éclairage en veille'}</span>
-                      </div>
-
-                      <div
-                        style={{
-                          background: etatAlarme.sirene ? '#fee2e2' : '#ecfdf5',
-                          color: etatAlarme.sirene ? '#dc2626' : '#059669',
-                          border: `1px solid ${etatAlarme.sirene ? '#fca5a5' : '#bbf7d0'}`,
-                          padding: '4px 10px',
-                          borderRadius: '8px',
-                          fontSize: '0.76rem',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        <Volume2 size={14} />
-                        <span>{etatAlarme.sirene ? '🚨 Sirène active' : '🔊 Sirène prête'}</span>
-                      </div>
-                    </div>
-                  )}
 
 
                 </div>
