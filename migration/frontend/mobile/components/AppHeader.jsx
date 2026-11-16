@@ -142,10 +142,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
   },
-});
-
-    borderColor: PREVIA_COLORS.white,
-  },
   badgeText: {
     color: '#FFFFFF',
     fontSize: 9,
