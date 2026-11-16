@@ -14,13 +14,28 @@ import './admin.css';
 // /utilisateurs/amorcer l'exige pour créer le tout premier compte admin
 // : un vrai code d'amorçage obtenu sur previa-SV, vérifié en ligne puis
 // actif 1 an (voir Infrastructure/licence.py côté backend).
+// Espace choisi sur la page d'aiguillage /acces (option « un seul lien ») :
+// cookie `previa_espace` = 'particulier' | 'entreprise', et code saisi là-bas
+// gardé dans localStorage pour pré-remplir l'inscription. Absents quand le
+// site est ouvert directement (IP:5173) : rien ne change dans ce cas.
+function lireEspace() {
+  try {
+    const m = document.cookie.match(/(?:^|;\s*)previa_espace=(particulier|entreprise)/);
+    return m ? m[1] : null;
+  } catch { return null; }
+}
+function lireCodeEspace() {
+  try { return localStorage.getItem('previa_code_espace') || ''; } catch { return ''; }
+}
+
 export default function Login({ onLoginSuccess }) {
+  const espace = lireEspace();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [codeSecret, setCodeSecret] = useState('');
-  const [profil, setProfil] = useState('entreprise');
+  const [codeSecret, setCodeSecret] = useState(() => (espace ? lireCodeEspace() : ''));
+  const [profil, setProfil] = useState(espace === 'particulier' ? 'particulier' : 'entreprise');
   const [demandeProfil, setDemandeProfil] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -185,7 +200,13 @@ export default function Login({ onLoginSuccess }) {
               </div>
             </div>
 
-            {isSignUp && (
+            {/* Espace imposé par la page d'aiguillage : le type d'installation est déjà fixé */}
+            {isSignUp && espace && (
+              <div style={{ padding: '10px 12px', borderRadius: '10px', background: '#e0f2fe', color: '#0369a1', fontSize: '0.84rem', fontWeight: 700 }}>
+                Type d'installation : {espace === 'particulier' ? 'Mon domicile / mon commerce' : 'Une entreprise'}
+              </div>
+            )}
+            {isSignUp && !espace && (
               <div style={{ display: 'flex', gap: '8px' }}>
                 {[['particulier', 'Mon domicile / mon commerce'], ['entreprise', 'Une entreprise']].map(([valeur, texte]) => (
                   <button key={valeur} type="button" onClick={() => setProfil(valeur)}
@@ -277,6 +298,14 @@ export default function Login({ onLoginSuccess }) {
               {isSignUp ? 'Se connecter' : "S'inscrire"}
             </button>
           </div>
+
+          {espace && (
+            <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
+              Espace : <strong>{espace === 'particulier' ? 'Particulier (domicile / commerce)' : 'Entreprise'}</strong>
+              {' · '}
+              <a href="/changer-espace" style={{ color: '#0284c7', fontWeight: 700 }}>Changer d'espace</a>
+            </div>
+          )}
         </div>
       </div>
     </div>
