@@ -14,28 +14,35 @@ import './admin.css';
 // /utilisateurs/amorcer l'exige pour créer le tout premier compte admin
 // : un vrai code d'amorçage obtenu sur previa-SV, vérifié en ligne puis
 // actif 1 an (voir Infrastructure/licence.py côté backend).
-// Espace choisi sur la page d'aiguillage /acces (option « un seul lien ») :
-// cookie `previa_espace` = 'particulier' | 'entreprise', et code saisi là-bas
-// gardé dans localStorage pour pré-remplir l'inscription. Absents quand le
-// site est ouvert directement (IP:5173) : rien ne change dans ce cas.
+// Mode « lien unique » : le site est servi par Caddy sur un nom de domaine
+// (https://previa-bf.duckdns.org, sans numéro de port). Deux installations
+// PREVIA tournent derrière : ENTREPRISE et PARTICULIER. Le cookie
+// `previa_espace` dit à Caddy vers laquelle envoyer chaque requête :
+//   - à l'inscription : l'espace = le type d'installation choisi ;
+//   - à la connexion : on essaie l'espace mémorisé, puis l'autre si le compte n'y est pas.
+// Accès direct par IP:port (5173, 5174) ou en local : rien ne change.
+const MODE_LIEN_UNIQUE = typeof window !== 'undefined'
+  && window.location.port === ''
+  && !/^\d+\.\d+\.\d+\.\d+$/.test(window.location.hostname)
+  && window.location.hostname !== 'localhost';
+
 function lireEspace() {
   try {
     const m = document.cookie.match(/(?:^|;\s*)previa_espace=(particulier|entreprise)/);
     return m ? m[1] : null;
   } catch { return null; }
 }
-function lireCodeEspace() {
-  try { return localStorage.getItem('previa_code_espace') || ''; } catch { return ''; }
+function definirEspace(espace) {
+  document.cookie = `previa_espace=${espace}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
 }
 
 export default function Login({ onLoginSuccess }) {
-  const espace = lireEspace();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [codeSecret, setCodeSecret] = useState(() => (espace ? lireCodeEspace() : ''));
-  const [profil, setProfil] = useState(espace === 'particulier' ? 'particulier' : 'entreprise');
+  const [codeSecret, setCodeSecret] = useState('');
+  const [profil, setProfil] = useState('entreprise');
   const [demandeProfil, setDemandeProfil] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -57,6 +64,7 @@ export default function Login({ onLoginSuccess }) {
       if (isSignUp) {
         const [prenom, ...reste] = fullName.trim().split(' ');
         const nom = reste.join(' ') || prenom;
+        if (MODE_LIEN_UNIQUE) definirEspace(profil);
         const res = await fetch(`${API_BASE}/utilisateurs/amorcer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -69,12 +77,28 @@ export default function Login({ onLoginSuccess }) {
         setPassword('');
         setSucces('Compte créé — tu peux te connecter maintenant.');
       } else {
-        const res = await fetch(`${API_BASE}/utilisateurs/connexion`, {
+        const seConnecter = () => fetch(`${API_BASE}/utilisateurs/connexion`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, mot_de_passe: password }),
         });
-        const data = await res.json().catch(() => null);
+        let res;
+        let data;
+        if (MODE_LIEN_UNIQUE) {
+          const premier = lireEspace() || 'entreprise';
+          const ordre = [premier, premier === 'entreprise' ? 'particulier' : 'entreprise'];
+          for (const espaceEssai of ordre) {
+            definirEspace(espaceEssai);
+            res = await seConnecter();
+            data = await res.json().catch(() => null);
+            // Compte absent ou refusé dans cet espace : on essaie l'autre.
+            if (res.ok || ![400, 401, 403, 404].includes(res.status)) break;
+          }
+          if (!res.ok) definirEspace(premier);
+        } else {
+          res = await seConnecter();
+          data = await res.json().catch(() => null);
+        }
         if (!res.ok) throw new Error(data?.detail || `Erreur ${res.status}`);
         sessionStorage.setItem('previa_connecte', 'oui');
         sessionStorage.setItem('previa_utilisateur_id', data.id);
@@ -200,13 +224,7 @@ export default function Login({ onLoginSuccess }) {
               </div>
             </div>
 
-            {/* Espace imposé par la page d'aiguillage : le type d'installation est déjà fixé */}
-            {isSignUp && espace && (
-              <div style={{ padding: '10px 12px', borderRadius: '10px', background: '#e0f2fe', color: '#0369a1', fontSize: '0.84rem', fontWeight: 700 }}>
-                Type d'installation : {espace === 'particulier' ? 'Mon domicile / mon commerce' : 'Une entreprise'}
-              </div>
-            )}
-            {isSignUp && !espace && (
+            {isSignUp && (
               <div style={{ display: 'flex', gap: '8px' }}>
                 {[['particulier', 'Mon domicile / mon commerce'], ['entreprise', 'Une entreprise']].map(([valeur, texte]) => (
                   <button key={valeur} type="button" onClick={() => setProfil(valeur)}
@@ -298,14 +316,6 @@ export default function Login({ onLoginSuccess }) {
               {isSignUp ? 'Se connecter' : "S'inscrire"}
             </button>
           </div>
-
-          {espace && (
-            <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
-              Espace : <strong>{espace === 'particulier' ? 'Particulier (domicile / commerce)' : 'Entreprise'}</strong>
-              {' · '}
-              <a href="/changer-espace" style={{ color: '#0284c7', fontWeight: 700 }}>Changer d'espace</a>
-            </div>
-          )}
         </div>
       </div>
     </div>
