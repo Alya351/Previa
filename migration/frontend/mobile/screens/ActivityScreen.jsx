@@ -14,6 +14,7 @@ import {
   IconUser,
   IconLock,
   IconCheck,
+  IconShieldCheck,
   IconAlertTriangle,
   IconChevronRight,
   IconChevronDown,
@@ -55,7 +56,7 @@ export const ActivityScreen = ({ onNavigate, isDark = false, totalEvents = 132 }
           <View style={styles.chartHeader}>
             <View>
               <Text style={styles.chartSub}>Total Événements</Text>
-              <Text style={styles.chartVal}>{totalEvents} Analyses</Text>
+              <Text style={styles.chartVal}>{totalEvents} Détections</Text>
             </View>
             <View style={styles.periodPill}>
               <Text style={styles.periodText}>{selectedPeriod}</Text>
@@ -104,7 +105,7 @@ export const ActivityScreen = ({ onNavigate, isDark = false, totalEvents = 132 }
             {/* DONUT CENTER TEXT */}
             <View style={styles.donutCenter}>
               <Text style={styles.donutCenterVal}>99.2%</Text>
-              <Text style={styles.donutCenterLabel}>Taux Conforme</Text>
+              <Text style={styles.donutCenterLabel}>Site Sécurisé</Text>
             </View>
           </View>
 
@@ -156,38 +157,56 @@ export const ActivityScreen = ({ onNavigate, isDark = false, totalEvents = 132 }
           </View>
         </View>
 
-        {/* SECTION : HISTORIQUE RECENT */}
+        {/* SECTION : HISTORIQUE RECENT (Actions réelles et intelligibles) */}
         <View style={styles.sectionWrap}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Historique Récent</Text>
-            <TouchableOpacity><Text style={styles.linkText}>Voir tout</Text></TouchableOpacity>
+            <Text style={styles.sectionTitle}>Dernières Réactions</Text>
+            <TouchableOpacity onPress={() => onNavigate && onNavigate('alerts')}>
+              <Text style={styles.linkText}>Voir tout</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.historyList}>
+            {/* ACTION 1 : ALERTE TRAITÉE */}
             <View style={styles.historyCard}>
               <View style={styles.historyLeft}>
-                <View style={[styles.historyIcon, { backgroundColor: '#F1F5F9' }]}>
-                  <IconCheck size={18} color="#10B981" />
+                <View style={[styles.historyIcon, { backgroundColor: '#ECFDF5' }]}>
+                  <IconCheck size={18} color="#059669" />
                 </View>
                 <View>
-                  <Text style={styles.historyTitle}>Audit de conformité IA</Text>
-                  <Text style={styles.historySub}>Auto-check système · 12:00</Text>
+                  <Text style={styles.historyTitle}>Alerte vérifiée & acquittée</Text>
+                  <Text style={styles.historySub}>Intrusion FabLab · 14:10</Text>
                 </View>
               </View>
-              <Text style={styles.historyBadgeGreen}>100% OK</Text>
+              <Text style={styles.historyBadgeGreen}>Acquittée</Text>
             </View>
 
+            {/* ACTION 2 : LEVÉE DE DOUTE */}
             <View style={styles.historyCard}>
               <View style={styles.historyLeft}>
-                <View style={[styles.historyIcon, { backgroundColor: '#F0FDF4' }]}>
-                  <IconCheck size={18} color="#16A34A" />
+                <View style={[styles.historyIcon, { backgroundColor: '#F0F9FF' }]}>
+                  <IconCamera size={18} color="#0284C7" />
                 </View>
                 <View>
-                  <Text style={styles.historyTitle}>Synchronisation Edge RTSP</Text>
-                  <Text style={styles.historySub}>Flux 2 caméras · 11:30</Text>
+                  <Text style={styles.historyTitle}>Levée de doute en direct</Text>
+                  <Text style={styles.historySub}>Caméra Cour Extérieure · 13:59</Text>
                 </View>
               </View>
-              <Text style={styles.historyBadgeGreen}>Fluide</Text>
+              <Text style={[styles.historyBadgeGreen, { color: '#0284C7' }]}>Consulté</Text>
+            </View>
+
+            {/* ACTION 3 : VÉRIFICATION SYSTÈME */}
+            <View style={styles.historyCard}>
+              <View style={styles.historyLeft}>
+                <View style={[styles.historyIcon, { backgroundColor: '#ECFDF5' }]}>
+                  <IconShieldCheck size={18} color="#10B981" />
+                </View>
+                <View>
+                  <Text style={styles.historyTitle}>Surveillance active</Text>
+                  <Text style={styles.historySub}>Toutes les caméras opérationnelles · 12:00</Text>
+                </View>
+              </View>
+              <Text style={styles.historyBadgeGreen}>En veille</Text>
             </View>
           </View>
         </View>
