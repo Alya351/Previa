@@ -104,67 +104,6 @@ export const HomeScreen = ({
           </TouchableOpacity>
         </View>
 
-        {/* SECTION : CAMÉRAS EN DIRECT (Upcoming payment equivalent) */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Caméras en direct
-          </Text>
-          <TouchableOpacity
-            onPress={() => onNavigate('direct')}
-            activeOpacity={0.7}
-            style={styles.sectionLinkBtn}
-          >
-            <Text style={styles.sectionLinkText}>Voir tout</Text>
-            <IconChevronRight size={14} color={PREVIA_COLORS.bluePrimary} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.cameraGridRow}>
-          {/* CARTE 1 : PRIMAIRE SAPPHIRE */}
-          <TouchableOpacity
-            style={styles.cameraCardPrimary}
-            onPress={() => onNavigate('direct')}
-            activeOpacity={0.85}
-          >
-            <View style={styles.cameraCardTop}>
-              <View style={styles.cameraIconCirclePrimary}>
-                <IconCamera size={18} color="#FFFFFF" />
-              </View>
-              <IconMoreVertical size={16} color="rgba(255,255,255,0.7)" />
-            </View>
-            <View>
-              <Text style={styles.cameraCardTitlePrimary}>ODC · FabLab</Text>
-              <Text style={styles.cameraCardSubPrimary}>1080p · 25 FPS</Text>
-              <View style={styles.cameraLivePillPrimary}>
-                <View style={styles.cameraLiveDot} />
-                <Text style={styles.cameraLiveTextPrimary}>FLUX LIVE</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {/* CARTE 2 : SECONDAIRE BLANCHE */}
-          <TouchableOpacity
-            style={styles.cameraCardSecondary}
-            onPress={() => onNavigate('direct')}
-            activeOpacity={0.85}
-          >
-            <View style={styles.cameraCardTop}>
-              <View style={styles.cameraIconCircleSecondary}>
-                <IconCamera size={18} color={PREVIA_COLORS.bluePrimary} />
-              </View>
-              <IconMoreVertical size={16} color="#94A3B8" />
-            </View>
-            <View>
-              <Text style={styles.cameraCardTitleSecondary}>École Du Code</Text>
-              <Text style={styles.cameraCardSubSecondary}>Cour Extérieure</Text>
-              <View style={styles.cameraLivePillSecondary}>
-                <View style={[styles.cameraLiveDot, { backgroundColor: '#10B981' }]} />
-                <Text style={styles.cameraLiveTextSecondary}>ACTIF</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        </View>
-
         {/* SECTION : DERNIÈRES ALERTES (Recent transactions equivalent) */}
         <View style={styles.sectionHeaderRow}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
@@ -333,6 +272,139 @@ export const HomeScreen = ({
             <Text style={styles.callGuardsPillText}>APPELER</Text>
           </View>
         </TouchableOpacity>
+
+        {/* ACCÈS RAPIDE */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            ACCÈS RAPIDE
+          </Text>
+        </View>
+
+        {isLoading ? (
+          <View style={styles.grid}>
+            <HomeCardSkeleton />
+            <HomeCardSkeleton />
+            <HomeCardSkeleton />
+            <HomeCardSkeleton />
+          </View>
+        ) : (
+          <View style={styles.grid}>
+            {/* CARTE 1 : CAMÉRAS */}
+            <TouchableOpacity
+              style={[styles.card, isDark && styles.cardDark]}
+              onPress={() => onNavigate('direct')}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Caméras, Visionner vos flux en direct"
+            >
+              <View style={styles.cardHeaderRow}>
+                <View style={[styles.iconCircle, { backgroundColor: '#009FE3' }]}>
+                  <IconCamera size={22} color="#FFFFFF" />
+                </View>
+                <View style={styles.cardPillBadge}>
+                  <Text style={styles.cardPillBadgeText}>
+                    {totalCameras} caméra{totalCameras > 1 ? 's' : ''} active{totalCameras > 1 ? 's' : ''}
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
+                Caméras
+              </Text>
+              <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>
+                Visionner vos flux en direct
+              </Text>
+            </TouchableOpacity>
+
+            {/* CARTE 2 : ALERTES */}
+            <TouchableOpacity
+              style={[styles.card, isDark && styles.cardDark, unreadCount > 0 && styles.cardAlertActive]}
+              onPress={() => onNavigate('alerts')}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Alertes, Gérer les incidents en cours${unreadCount > 0 ? `, ${unreadCount} non lus` : ''}`}
+            >
+              <View style={styles.cardHeaderRow}>
+                <View style={[styles.iconCircle, { backgroundColor: unreadCount > 0 ? '#DB2323' : '#014791' }]}>
+                  <IconBell size={22} color="#FFFFFF" />
+                </View>
+                {unreadCount > 0 ? (
+                  <View style={[styles.cardPillBadge, { backgroundColor: 'rgba(219, 35, 35, 0.12)' }]}>
+                    <Text style={[styles.cardPillBadgeText, { color: '#DB2323', fontWeight: '800' }]}>
+                      {unreadCount} incident{unreadCount > 1 ? 's' : ''} critique{unreadCount > 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.cardPillBadge, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                    <Text style={[styles.cardPillBadgeText, { color: '#10B981', fontWeight: '800' }]}>
+                      Calme
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
+                Alertes
+              </Text>
+              <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>
+                Gérer les incidents en cours
+              </Text>
+            </TouchableOpacity>
+
+            {/* CARTE 3 : APPEL CONTACT D'URGENCE */}
+            <TouchableOpacity
+              style={[styles.card, isDark && styles.cardDark, styles.cardGardien]}
+              onPress={() => {
+                const telClean = (numeroGardiennerie || '').replace(/\s+/g, '');
+                if (telClean) {
+                  Linking.openURL(`tel:${telClean}`).catch(() => {});
+                }
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Contacter le contact d'urgence"
+            >
+              <View style={styles.cardHeaderRow}>
+                <View style={[styles.iconCircle, { backgroundColor: '#059669' }]}>
+                  <IconPhone size={20} color="#FFFFFF" />
+                </View>
+                <View style={[styles.cardPillBadge, { backgroundColor: 'rgba(5, 150, 105, 0.12)' }]}>
+                  <Text style={[styles.cardPillBadgeText, { color: '#059669', fontWeight: '800' }]}>
+                    Contact direct
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
+                Contact Urgence
+              </Text>
+              <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>
+                Appel direct configuré
+              </Text>
+            </TouchableOpacity>
+
+            {/* CARTE 4 : RAPPORTS & AUDIT */}
+            <TouchableOpacity
+              style={[styles.card, isDark && styles.cardDark]}
+              onPress={() => setStatsModalOpen(true)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Journal de bord, Historique détaillé"
+            >
+              <View style={styles.cardHeaderRow}>
+                <View style={[styles.iconCircle, { backgroundColor: '#152E4C' }]}>
+                  <IconFileText size={22} color="#FFFFFF" />
+                </View>
+                <View style={styles.cardPillBadge}>
+                  <Text style={styles.cardPillBadgeText}>Rapport 24h</Text>
+                </View>
+              </View>
+              <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
+                Journal de bord
+              </Text>
+              <Text style={[styles.cardSubtitle, isDark && styles.cardSubtitleDark]}>
+                Historique détaillé des événements
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* SECTION DERNIÈRES DÉTECTIONS */}
         <View style={styles.sectionHeaderRow}>
