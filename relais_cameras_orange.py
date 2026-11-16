@@ -33,7 +33,7 @@ CAMERAS = [
             "rtsp://admin:admin@192.168.11.102:554/11",
             "rtsp://admin:11Avril2002@@192.168.11.102:554/Streaming/Channels/101"
         ],
-        "fps_cible": 2.0  # 2 trames/sec pour fluidité et économie de bande passante
+        "fps_cible": 0.2
     },
     {
         "nom": "Camera_Exterieure",
@@ -42,7 +42,7 @@ CAMERAS = [
             "rtsp://admin:11Avril2002@@192.168.11.103:554/Streaming/Channels/101",
             "rtsp://admin:admin@192.168.11.103:554/11"
         ],
-        "fps_cible": 2.0
+        "fps_cible": 0.2
     }
 ]
 
