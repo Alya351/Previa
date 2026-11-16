@@ -222,7 +222,7 @@ export default function Login({ onLoginSuccess }) {
 
             {isSignUp && (
               <div style={{ display: 'flex', gap: '8px' }}>
-                {[['particulier', 'Mon domicile / mon commerce'], ['entreprise', 'Une entreprise']].map(([valeur, texte]) => (
+                {[['particulier', 'Mon domicile'], ['entreprise', 'Une entreprise']].map(([valeur, texte]) => (
                   <button key={valeur} type="button" onClick={() => setProfil(valeur)}
                     style={{ flex: 1, padding: '10px 12px', borderRadius: '10px', cursor: 'pointer', fontWeight: 700,
                       fontSize: '0.84rem', lineHeight: 1.25,

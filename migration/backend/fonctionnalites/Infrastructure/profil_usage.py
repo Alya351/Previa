@@ -1,4 +1,4 @@
-"""Profil d'usage : « particulier » (maison, petit commerce) ou « entreprise »."""
+"""Profil d'usage : « particulier » (domicile) ou « entreprise »."""
 import json
 from pathlib import Path
 
@@ -19,7 +19,7 @@ _LIBELLES = {
     "particulier": {
         "lieu": "Lieu",
         "lieux": "Mes lieux surveillés",
-        "intro_lieux": "Votre domicile est déjà créé. Ajoutez un autre lieu (résidence secondaire, boutique...) seulement si besoin.",
+        "intro_lieux": "Votre domicile est déjà créé. Ajoutez un autre lieu (résidence secondaire, garage...) seulement si besoin.",
         "placeholder_lieu": "Nom du lieu (ex: Maison, Garage)",
         "placeholder_adresse": "Quartier / Ville (ex: Ouagadougou)",
         "personne_connue": "Membre de la famille",
