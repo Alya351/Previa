@@ -34,10 +34,10 @@ export const PREVIA_COLORS = {
   darkTextSecondary: '#D1D5DB',
 };
 
-// Échelle typographique
+// Échelle typographique harmonisée (alignée sur la charte PREVIA officielle : Montserrat)
 export const PREVIA_TYPOGRAPHY = {
-  fontFamily: 'Inter',
-  fontFamilyMono: 'JetBrains Mono',
+  fontFamily: 'Montserrat, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  fontFamilyMono: 'JetBrains Mono, monospace',
   sizes: {
     xs: 12,
     sm: 14,

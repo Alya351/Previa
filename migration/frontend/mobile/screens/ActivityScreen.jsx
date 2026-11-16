@@ -129,7 +129,7 @@ export const ActivityScreen = ({ onNavigate, isDark = false, totalEvents = 132 }
         {/* SECTION : ACTIONS DE RÉACTION RAPIDE (Tableau Mobile : Réagir, Couper alarme, Appeler) */}
         <View style={styles.sectionWrap}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Commandes Immédiates</Text>
+            <Text style={styles.sectionTitle}>COMMANDES IMMÉDIATES</Text>
             <TouchableOpacity><Text style={styles.linkText}>1 tap</Text></TouchableOpacity>
           </View>
 
@@ -160,7 +160,7 @@ export const ActivityScreen = ({ onNavigate, isDark = false, totalEvents = 132 }
         {/* SECTION : HISTORIQUE RECENT (Actions réelles et intelligibles) */}
         <View style={styles.sectionWrap}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Dernières Réactions</Text>
+            <Text style={styles.sectionTitle}>DERNIÈRES RÉACTIONS</Text>
             <TouchableOpacity onPress={() => onNavigate && onNavigate('alerts')}>
               <Text style={styles.linkText}>Voir tout</Text>
             </TouchableOpacity>
@@ -356,9 +356,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#334155',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   linkText: {
     fontSize: 12,

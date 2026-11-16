@@ -269,6 +269,28 @@ export default function App() {
   const { width } = useWindowDimensions();
   const isWebDesktop = Platform.OS === 'web' && width > 520;
 
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const fontId = 'previa-google-font-montserrat';
+      if (!document.getElementById(fontId)) {
+        const link = document.createElement('link');
+        link.id = fontId;
+        link.rel = 'stylesheet';
+        link.href = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap';
+        document.head.appendChild(link);
+
+        const style = document.createElement('style');
+        style.id = 'previa-global-font-style';
+        style.innerHTML = `
+          *, *::before, *::after, input, button, textarea, select {
+            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+  }, []);
+
   const appContent = (
     <SafeAreaProvider initialMetrics={initialWindowMetrics || undefined}>
       <MainApplication />

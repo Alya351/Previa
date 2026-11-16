@@ -193,7 +193,7 @@ export const HomeScreen = ({
         {/* SECTION : DERNIÈRES ALERTES (Recent transactions equivalent) */}
         <View style={styles.sectionHeaderRow}>
           <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Dernières Alertes
+            DERNIÈRES ALERTES
           </Text>
           <TouchableOpacity
             onPress={() => onNavigate('alerts')}
@@ -605,10 +605,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   sectionTitle: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '800',
-    color: PREVIA_COLORS.navyText,
+    color: '#334155',
     letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   sectionTitleDark: {
     color: '#93C5FD',
