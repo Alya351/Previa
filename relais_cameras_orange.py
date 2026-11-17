@@ -47,7 +47,7 @@ QUALITE_ANALYSE = 85
 # Apercu fluide : images par seconde envoyees sans analyse
 FPS_APERCU = 4.0
 # Analyse IA : une image toutes les N secondes par camera
-DELAI_ANALYSE_S = 1.5
+DELAI_ANALYSE_S = 1.0
 # Sans nouvelle image pendant ce délai, la caméra est jugée coupée
 DELAI_CAMERA_MUETTE_S = 6.0
 # Nombre d'envois d'apercu simultanes par camera
@@ -56,7 +56,7 @@ ENVOIS_PARALLELES = 3
 # --- Vidéo en direct WebRTC (voir emetteur_webrtc.py) -----------------------
 VIDEO_WEBRTC = True
 SERVEUR_WSS = SERVEUR_AWS.replace("https://", "wss://")
-LARGEUR_VIDEO = 640
+LARGEUR_VIDEO = 960
 # Aperçu JPEG réduit pendant que quelqu'un regarde la vidéo (économise le débit)
 FPS_APERCU_PENDANT_VIDEO = 1.0
 SERVEURS_ICE = [

@@ -6341,7 +6341,7 @@ function SectionProches({ proches = [], onChange }) {
 // ORCHESTRATEUR : Admin (page /admin et /default-admin)
 // ============================================================================
 
-const INTERVALLE_MS = 2000;
+const INTERVALLE_MS = 1000;
 
 async function appelApi(chemin) {
   const res = await fetch(`${API_BASE}${chemin}`, {

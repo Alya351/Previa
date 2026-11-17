@@ -181,7 +181,7 @@ async function chercherServeur() {
   // adresseServeurDistant (app.json) peut contenir plusieurs adresses séparées par des virgules
   // (ex. le lien public https://... et le nom Tailscale).
   const distantes = ADRESSE_DISTANTE.split(',').map((a) => normaliserAdresse(a));
-  const candidats = [ADRESSE_AWS_DEFAUT, ...distantes, 'https://16.171.13.89:8012', 'http://16.171.13.89:8012', 'http://localhost:8012', 'http://127.0.0.1:8012', 'http://previa.local:8080', 'http://previa:8080'].filter(Boolean);
+  const candidats = [ADRESSE_AWS_DEFAUT, ...distantes, 'https://13.63.163.100:8012', 'http://13.63.163.100:8012', 'http://localhost:8012', 'http://127.0.0.1:8012', 'http://previa.local:8080', 'http://previa:8080'].filter(Boolean);
   const taches = [...new Set(candidats)].map((base) => sondePrevia(base));
   taches.push(decouvrirParMdns().then((base) => sondePrevia(base)));
   return premierServeurJoignable(taches);
