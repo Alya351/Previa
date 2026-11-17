@@ -12,6 +12,10 @@ from fonctionnalites.zoneCam import enregitre as zone_registre
 # Délai minimum hors-zone (en secondes) avant de réarmer une nouvelle alerte
 # pour la même personne (évite le spam si la personne marche sur la ligne de démarcation)
 COOLDOWN_REENTREE_S = 12.0
+# Délai de grâce avant d'alerter sur une personne NON identifiée (laisse le temps à la
+# reconnaissance faciale de la reconnaître). Réglable : PREVIA_DELAI_IDENTIFICATION_S.
+import os as _os
+DELAI_IDENTIFICATION_INTRUSION_S = float(_os.environ.get("PREVIA_DELAI_IDENTIFICATION_S", "8"))
 
 # Durée d'expiration d'une session de tracking sans détection (60s)
 SESSION_EXPIRY_S = 60.0
@@ -254,6 +258,10 @@ def evaluer(
         except Exception:
             pass
 
+    if not emp_cible and pid:
+        # Personne suivie par son corps seul mais déjà rattachée à un collaborateur
+        emp_cible = alertes.employe_lie(pid)
+
     est_autorise = False
     if emp_cible and emp_cible.get("statut") == "actif":
         zones_permises = emp_cible.get("zonesAutorisees") or []
@@ -290,7 +298,13 @@ def evaluer(
 
         # Filtre anti-faux-positifs (Dwell Time / Persistance) :
         # L'alerte n'est confirmée que si l'individu persiste dans la zone au moins 0.8s ou 3 détections consécutives
-        if not session["alerte_envoyee"] and (duree_en_zone >= 0.8 or session["nb_vues_en_zone"] >= 3):
+        # Une personne pas encore identifiée n'est PAS un intrus tout de suite : la
+        # reconnaissance faciale a besoin de quelques images pour confirmer l'identité
+        # (FACE_CONFIRM_THRESHOLD). Sans ce délai de grâce, un collaborateur autorisé
+        # déclenchait une alerte dès son entrée dans la zone, avant d'être reconnu.
+        delai_identification = 0.0 if emp_cible else DELAI_IDENTIFICATION_INTRUSION_S
+        confirme = (duree_en_zone >= 0.8 or session["nb_vues_en_zone"] >= 3) and duree_en_zone >= delai_identification
+        if not session["alerte_envoyee"] and confirme:
             # NOUVELLE INTRUSION CONFIRMÉE : on déclenche la 1ère et UNIQUE alerte
             session["alerte_envoyee"] = True
             alerte_declenchee = True

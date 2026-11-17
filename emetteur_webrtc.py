@@ -42,7 +42,7 @@ except Exception as e:  # aiortc absent : le relais continue en mode JPEG
     DISPONIBLE = False
     ERREUR_IMPORT = e
 
-FPS_VIDEO = 15
+FPS_VIDEO = 10
 
 # Dernière image (déjà réduite) de chaque caméra, alimentée par le relais
 _images: dict[str, np.ndarray] = {}
@@ -51,8 +51,19 @@ _images: dict[str, np.ndarray] = {}
 spectateurs: dict[str, int] = {}
 
 
+_horodatages: dict[str, float] = {}
+# Au-delà, la caméra est considérée coupée : on n'envoie plus sa dernière image figée
+DELAI_IMAGE_PERIMEE_S = 3.0
+
+
 def publier_image(cam_id: str, image_bgr: np.ndarray) -> None:
     _images[cam_id] = image_bgr
+    _horodatages[cam_id] = time.time()
+
+
+def oublier_image(cam_id: str) -> None:
+    _images.pop(cam_id, None)
+    _horodatages.pop(cam_id, None)
 
 
 if DISPONIBLE:
@@ -76,6 +87,8 @@ if DISPONIBLE:
                 if attente > 0:
                     await asyncio.sleep(attente)
             image = _images.get(self.cam_id)
+            if image is not None and time.time() - _horodatages.get(self.cam_id, 0.0) > DELAI_IMAGE_PERIMEE_S:
+                image = None  # caméra coupée : écran noir plutôt qu'une image figée
             if image is None:
                 image = np.zeros((360, 640, 3), dtype=np.uint8)
             trame = av.VideoFrame.from_ndarray(image, format="bgr24")

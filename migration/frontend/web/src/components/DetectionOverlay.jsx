@@ -4,19 +4,23 @@ import React from 'react';
  * Overlay de détection en temps réel avec cadres HUD (Rouge pour Suspect, Vert pour Autorisé).
  * Se superpose directement sur le lecteur vidéo / flux de la caméra.
  */
-export function DetectionOverlay({ detections = [], width = 640, height = 480 }) {
+// `cadre` (px, optionnel) = zone réellement occupée par l'image dans son conteneur.
+// Avec object-fit: cover/contain l'image est rognée ou entourée de bandes : sans ce
+// cadre les pourcentages du backend se plaquent sur le conteneur et le cadre dérive
+// (ex. sur la poitrine au lieu du visage).
+export function DetectionOverlay({ detections = [], width = 640, height = 480, cadre = null }) {
   if (!detections || detections.length === 0) return null;
 
   return (
     <div
       style={{
         position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
+        top: cadre ? cadre.top : 0,
+        left: cadre ? cadre.left : 0,
+        width: cadre ? cadre.width : '100%',
+        height: cadre ? cadre.height : '100%',
         pointerEvents: 'none',
-        overflow: 'hidden',
+        overflow: cadre ? 'visible' : 'hidden',
         zIndex: 10,
       }}
     >

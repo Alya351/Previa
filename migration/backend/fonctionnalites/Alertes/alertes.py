@@ -137,6 +137,34 @@ def _est_autorise(pid: str | None) -> bool:
     return False
 
 
+def employe_lie(pid: str | None) -> dict | None:
+    """Fiche du collaborateur officiel auquel `pid` est rattaché (en suivant les liens
+    corps -> visage `lie_a`), ou None. Permet de reconnaître comme autorisée une personne
+    suivie par son corps seul (visage non visible) qui a déjà été vue avec son visage."""
+    if not pid:
+        return None
+    try:
+        vus = set()
+        cur = pid
+        while cur and cur not in vus:
+            vus.add(cur)
+            rec = db.reference(f"corps/registry/{cur}").get()
+            if not rec or "lie_a" not in rec:
+                break
+            cur = rec["lie_a"]
+        personnel_db = db.reference("personnel").get() or {}
+        liste = list(personnel_db.values()) if isinstance(personnel_db, dict) else (personnel_db if isinstance(personnel_db, list) else [])
+        for emp in liste:
+            if not emp:
+                continue
+            ids = {emp.get("id"), emp.get("face_id")} - {None}
+            if pid in ids or cur in ids:
+                return emp
+    except Exception:
+        pass
+    return None
+
+
 _dernieres_alertes_enregistrees: dict[str, float] = {}
 _lock_alertes = threading.Lock()
 DELAI_ANTI_FLOOD_S = 60.0  # Évite d'envoyer la même alerte en boucle toutes les secondes

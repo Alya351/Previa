@@ -151,7 +151,7 @@ function LicenceDisabledScreen({ statut, onActivee }) {
         </p>
 
         <a
-          href="https://previa-sv.vercel.app/code-amorcage"
+          href="https://previa-bf.com/code-amorcage"
           target="_blank"
           rel="noopener noreferrer"
           style={{
@@ -196,7 +196,7 @@ function LicenceDisabledScreen({ statut, onActivee }) {
         </form>
 
         <a
-          href="https://previa-sv.vercel.app"
+          href="https://previa-bf.com"
           target="_blank"
           rel="noopener noreferrer"
           style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 18, fontSize: '0.84rem', color: '#64748b', textDecoration: 'none' }}
@@ -6504,7 +6504,27 @@ export default function Admin() {
   const audioActifRef = useRef(true);
   audioActifRef.current = audioActif;
 
+  // Les alertes sont chargées à part, AVANT le reste : une erreur sur la vue d'ensemble
+  // ou sur l'état d'une caméra ne doit jamais empêcher de les afficher. En cas d'échec
+  // réseau on garde la liste précédente au lieu de la vider.
+  async function rafraichirAlertes() {
+    try {
+      const a = await appelApi('/alertes');
+      if (!Array.isArray(a)) return;
+      const idsConnus = alertesConnuesRef.current;
+      if (idsConnus !== null) {
+        const nouvelles = a.filter((al) => !idsConnus.has(al.id));
+        if (nouvelles.length > 0 && audioActifRef.current) jouerBip(audioCtxRef);
+      }
+      alertesConnuesRef.current = new Set(a.map((al) => al.id));
+      setAlertes(a);
+    } catch (err) {
+      // on conserve les alertes déjà affichées
+    }
+  }
+
   async function rafraichir() {
+    rafraichirAlertes();
     try {
       const v = await appelApi('/vue-ensemble');
       setVueEnsemble(v);
@@ -6561,15 +6581,6 @@ export default function Admin() {
       }
       setPersonnes(nouvellesPersonnes);
       setObjets(nouveauxObjets);
-
-      const a = await appelApi('/alertes');
-      const idsConnus = alertesConnuesRef.current;
-      if (idsConnus !== null) {
-        const nouvelles = a.filter((al) => !idsConnus.has(al.id));
-        if (nouvelles.length > 0 && audioActifRef.current) jouerBip(audioCtxRef);
-      }
-      alertesConnuesRef.current = new Set(a.map((al) => al.id));
-      setAlertes(a);
     } catch (err) {
       // silencieux : chaque vue affiche déjà un état vide correct sans données
     }
@@ -6674,7 +6685,10 @@ export default function Admin() {
     (a) =>
       ['feu_fumee', 'intrusion_zone', 'infiltration'].includes(String(a.type_evenement || '').toLowerCase()) &&
       a.horodatage &&
-      (Date.now() / 1000 - g_decalageServeurSec - a.horodatage) <= 120
+      // Le bandeau reste affiché tant que l'alerte n'est pas traitée ni supprimée
+      // (24 h au maximum), au lieu de disparaître après 2 minutes.
+      !a.statut_traitement &&
+      (Date.now() / 1000 - g_decalageServeurSec - a.horodatage) <= 24 * 3600
   );
 
   const alerteEnCours = derniereAlerteCritique ? {

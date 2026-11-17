@@ -61,7 +61,11 @@ try:
         DEVICE = "cpu"
         try:
             # Sur CPU (en particulier Raspberry Pi 4), limiter à 2 threads pour laisser 2 cœurs à FFmpeg et Uvicorn
-            torch.set_num_threads(max(1, min(2, (os.cpu_count() or 4) // 2)))
+            # Petite machine (<= 4 cœurs) : 2 threads max. Serveur plus gros : la moitié des
+            # cœurs (les deux caméras sont analysées en parallèle). Réglable : PREVIA_TORCH_THREADS.
+            _coeurs = os.cpu_count() or 4
+            _defaut_threads = max(1, min(2, _coeurs // 2)) if _coeurs <= 4 else _coeurs // 2
+            torch.set_num_threads(int(os.environ.get("PREVIA_TORCH_THREADS", "0") or 0) or _defaut_threads)
         except Exception:
             pass
 except Exception as _exc:
@@ -148,6 +152,10 @@ GENDER_MIN_CONF = 0.75  # seuil de confiance pour le modèle corps entier (le vi
 # perd dès que la personne sort du champ ou que le tracking décroche),
 # cette identité résiste à une absence temporaire.
 FACE_MATCH_THRESHOLD = 0.4  # similarité cosinus minimale pour "même visage" (ArcFace : calibré sur des vrais visages, même personne ~0.68+, personnes différentes <0.1)
+# Reconnaissance d'un collaborateur officiel : similarité minimale et écart minimal avec
+# le 2e meilleur collaborateur (réglables : PREVIA_FACE_EMP_THRESHOLD / PREVIA_FACE_EMP_MARGIN).
+FACE_EMP_THRESHOLD = float(os.environ.get("PREVIA_FACE_EMP_THRESHOLD", "0.38"))
+FACE_EMP_MARGIN = float(os.environ.get("PREVIA_FACE_EMP_MARGIN", "0.06"))
 FACE_CONFIRM_THRESHOLD = 5  # nombre de fois vu avant de devenir une identité confirmée
 
 # Ré-identification par apparence corporelle pour les personnes SANS
@@ -236,6 +244,9 @@ ORIENTATION_INTERVALLE_ESSAI_S = 5.0
 _orientations_candidates: dict[str, tuple] = {}   # id_camera -> (code_rotation, nb_confirmations)
 _orientations_dernier_essai: dict[str, float] = {}
 _dernier_segformer_ts: dict[str, float] = {}
+# Segmentation des vêtements (lente sur CPU) : au plus une fois toutes les N secondes par caméra.
+# Elle coûtait ~6 s sur ~8 s d'analyse (cache de 6 s jamais atteint) : 30 s par défaut.
+SEGFORMER_CACHE_S = float(os.environ.get("PREVIA_SEGFORMER_CACHE_S", "30"))
 _derniere_carte_vetements: dict[str, np.ndarray] = {}
 
 
@@ -276,6 +287,10 @@ IMGSZ_PERSONNES = int(os.environ.get("PREVIA_IMGSZ_PERSONNES", "0") or 0) or Non
 # valeur de gestion_thermique.py (640). Les régimes chauds réduisent
 # toujours, quelle que soit cette valeur.
 MAX_DIM_NOMINAL = int(os.environ.get("PREVIA_MAX_DIM", "0") or 0) or None
+# Auto-détection de l'orientation (essai des rotations 90/180/270 quand aucune personne
+# n'est vue). PREVIA_AUTO_ORIENTATION=0 la coupe : une caméra montée droite mais vue de
+# travers pouvait verrouiller une fausse rotation (cadres décalés, visages non trouvés).
+AUTO_ORIENTATION = os.environ.get("PREVIA_AUTO_ORIENTATION", "1") != "0"
 # id -> {"genre_votes": {"female": n, "male": n}, "genre_verrouille": str | None,
 #        "vetements": {(type_fr, couleur_fr): {"count": n, "last_seen": t}},
 #        "last_seen": float}
@@ -934,6 +949,40 @@ def _run_pose(model, frame, conf):
         return []
 
 
+def _boite_tete(keypoints, box_corps, frame_w, frame_h):
+    """Boîte [x1,y1,x2,y2] (pixels) de la TÊTE quand aucun visage n'est détecté
+    (visage de profil, penché, coupé par le cadre...). Utilise nez/yeux/oreilles de la
+    pose si disponibles, sinon le haut de la boîte du corps. None si rien d'exploitable."""
+    try:
+        if keypoints is not None and len(keypoints) >= 5:
+            pts = [(float(k[0]), float(k[1])) for k in keypoints[:5] if len(k) >= 3 and float(k[2]) > 0.25]
+            if pts:
+                xs = [p[0] for p in pts]
+                ys = [p[1] for p in pts]
+                cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
+                if len(pts) >= 2:
+                    taille = max(max(xs) - min(xs), max(ys) - min(ys)) * 2.4
+                elif box_corps:
+                    taille = (box_corps[3] - box_corps[1]) * 0.20
+                else:
+                    taille = 0.0
+                taille = max(taille, 0.05 * frame_h)
+                demi_l, demi_h = taille * 0.5, taille * 0.62
+                cy += taille * 0.08
+                return [round(max(0.0, cx - demi_l), 1), round(max(0.0, cy - demi_h), 1),
+                        round(min(float(frame_w), cx + demi_l), 1), round(min(float(frame_h), cy + demi_h), 1)]
+        if box_corps and len(box_corps) == 4:
+            x1, y1, x2, y2 = [float(v) for v in box_corps]
+            tete_h = (y2 - y1) * 0.22
+            tete_l = min(tete_h * 0.8, (x2 - x1) * 0.6)
+            cx = (x1 + x2) / 2.0
+            return [round(max(0.0, cx - tete_l / 2), 1), round(max(0.0, y1), 1),
+                    round(min(float(frame_w), cx + tete_l / 2), 1), round(min(float(frame_h), y1 + tete_h), 1)]
+    except Exception:
+        pass
+    return None
+
+
 def detect_faces(face_app, frame_bgr, poses=None):
     """Détection + embedding ArcFace + genre + orientation de tête en un
     seul passage (InsightFace, modèles SCRFD + w600k_r50 + genderage +
@@ -1195,6 +1244,7 @@ def identify_face(embedding: list | None, deja_pris: set | None = None) -> dict:
     personnel_db = db.reference("personnel").get() or {}
     personnel_items = personnel_db.items() if isinstance(personnel_db, dict) else []
     meilleur_emp_id, meilleure_sim_emp = None, -1.0
+    sims_par_emp: dict = {}
     for emp_id, emp in personnel_items:
         if not emp or emp_id in deja_pris:
             continue
@@ -1211,11 +1261,23 @@ def identify_face(embedding: list | None, deja_pris: set | None = None) -> dict:
                 if reg_entry.get("embedding") and isinstance(reg_entry["embedding"], list):
                     candidats_emb.append(reg_entry["embedding"])
 
+        sim_emp = -1.0
         for e_vec in candidats_emb:
             if len(e_vec) == len(embedding):
-                sim = _cosine_similarity(embedding, e_vec)
-                if sim >= 0.33 and sim > meilleure_sim_emp:
-                    meilleure_sim_emp, meilleur_emp_id = sim, emp_id
+                sim_emp = max(sim_emp, _cosine_similarity(embedding, e_vec))
+        if sim_emp >= 0:
+            sims_par_emp[emp_id] = sim_emp
+            if sim_emp > meilleure_sim_emp:
+                meilleure_sim_emp, meilleur_emp_id = sim_emp, emp_id
+
+    # Une identité n'est acceptée que si elle est assez sûre ET sans ambiguïté avec le
+    # 2e meilleur collaborateur (avant : seuil 0.33 seul, d'où des confusions entre
+    # personnes autorisées). Un cas ambigu retombe sur les étapes suivantes (inconnu).
+    if meilleur_emp_id is not None:
+        autres = [s for k, s in sims_par_emp.items() if k != meilleur_emp_id]
+        second = max(autres) if autres else -1.0
+        if meilleure_sim_emp < FACE_EMP_THRESHOLD or (meilleure_sim_emp - second) < FACE_EMP_MARGIN:
+            meilleur_emp_id, meilleure_sim_emp = None, -1.0
 
     if meilleur_emp_id is not None:
         db.reference(f"faces/registry/{meilleur_emp_id}/last_seen").set(now)
@@ -1544,7 +1606,8 @@ def analyser(id_camera: str, frame) -> dict:
     except Exception:
         _rot_profil = 0
     flux_deja_redresse = _rot_profil in (90, 180, 270)
-    rot_candidat = None if flux_deja_redresse else _orientations_camera.get(id_camera)
+    rot_candidat = None if (flux_deja_redresse or not AUTO_ORIENTATION) else _orientations_camera.get(id_camera)
+    rot_appliquee = rot_candidat  # rotation subie par `frame` (pour remettre les boîtes à l'endroit)
     if rot_candidat is not None:
         frame = cv2.rotate(frame, rot_candidat)
 
@@ -1573,7 +1636,7 @@ def analyser(id_camera: str, frame) -> dict:
     # tester les 3 autres orientations — au plus une fois toutes les
     # ORIENTATION_INTERVALLE_ESSAI_S secondes.
     meilleur_score_actuel = max((d.get("score", 0.0) for d in personnes), default=0.0)
-    if not flux_deja_redresse and rot_candidat is None and meilleur_score_actuel < 0.25 and (
+    if AUTO_ORIENTATION and not flux_deja_redresse and rot_candidat is None and meilleur_score_actuel < 0.25 and (
         now - _orientations_dernier_essai.get(id_camera, 0.0) >= ORIENTATION_INTERVALLE_ESSAI_S
     ):
         _orientations_dernier_essai[id_camera] = now
@@ -1598,6 +1661,7 @@ def analyser(id_camera: str, frame) -> dict:
                 _orientations_camera[id_camera] = rot_code
                 print(f"[on_voit_qui] orientation caméra {id_camera} verrouillée (rotation {rot_code}, score {score_m:.2f})", flush=True)
             frame = frame_rot
+            rot_appliquee = rot_code
             tous_candidats_personnes = candidats_rot
             personnes = found_rot
         else:
@@ -1678,7 +1742,7 @@ def analyser(id_camera: str, frame) -> dict:
     maintenant_seg = time.time()
     if (len(personnes) > 0 or len(faces) > 0) and not profil_th.get("skip_segmentation_vetements", False) and models["clothing_processor"] is not None and models["clothing_model"] is not None:
         carte_cache = _derniere_carte_vetements.get(id_camera)
-        if carte_cache is not None and (maintenant_seg - _dernier_segformer_ts.get(id_camera, 0)) < 6.0:
+        if carte_cache is not None and (maintenant_seg - _dernier_segformer_ts.get(id_camera, 0)) < SEGFORMER_CACHE_S:
             if carte_cache.shape[:2] != frame.shape[:2]:
                 carte_vetements = cv2.resize(carte_cache, (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_NEAREST)
             else:
@@ -2149,13 +2213,34 @@ def analyser(id_camera: str, frame) -> dict:
         frame_h, frame_w = frame.shape[:2]
         bx_corps = personne["box"]
         bx_visage = face["box"] if face is not None else None
-        bx_actif = bx_visage or bx_corps
+        # Cadre TOUJOURS sur la tête, jamais sur le corps entier : visage détecté, sinon
+        # tête estimée à partir des points-clés de pose, sinon haut de la silhouette.
+        bx_tete_est = None if bx_visage else _boite_tete(keypoints, bx_corps, frame_w, frame_h)
+        bx_actif = bx_visage or bx_tete_est or bx_corps
         box_norm = [
             round(float(bx_actif[0]) / max(1, frame_w), 4),
             round(float(bx_actif[1]) / max(1, frame_h), 4),
             round(float(bx_actif[2]) / max(1, frame_w), 4),
             round(float(bx_actif[3]) / max(1, frame_h), 4),
         ] if bx_actif and len(bx_actif) == 4 and frame_w > 0 and frame_h > 0 else None
+        # L'analyse a pu tourner sur une image PIVOTÉE (caméra montée de travers) alors
+        # que l'aperçu affiché est l'image brute : on remet la boîte normalisée dans le
+        # repère de l'image affichée, sinon le cadre tombe à côté de la personne.
+        if box_norm and rot_appliquee is not None:
+            u1, v1, u2, v2 = box_norm
+            if rot_appliquee == cv2.ROTATE_90_CLOCKWISE:
+                pts = [(v1, 1 - u1), (v2, 1 - u2)]
+            elif rot_appliquee == cv2.ROTATE_180:
+                pts = [(1 - u1, 1 - v1), (1 - u2, 1 - v2)]
+            elif rot_appliquee == cv2.ROTATE_90_COUNTERCLOCKWISE:
+                pts = [(1 - v1, u1), (1 - v2, u2)]
+            else:
+                pts = None
+            if pts:
+                box_norm = [
+                    round(min(pts[0][0], pts[1][0]), 4), round(min(pts[0][1], pts[1][1]), 4),
+                    round(max(pts[0][0], pts[1][0]), 4), round(max(pts[0][1], pts[1][1]), 4),
+                ]
 
         is_intrusion_active = bool(comportement.get("intrusion_zone", {}).get("intrusion"))
         if is_intrusion_active and not (employe_trouve and employe_trouve.get("statut") == "actif"):

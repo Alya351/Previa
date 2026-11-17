@@ -37,6 +37,14 @@ def trouver_ffmpeg() -> Optional[str]:
     dans_path = shutil.which("ffmpeg")
     if dans_path:
         return dans_path
+    # Binaire embarqué par le paquet pip `imageio-ffmpeg` (serveur Linux sans ffmpeg système)
+    try:
+        import imageio_ffmpeg
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if exe and os.path.exists(exe):
+            return exe
+    except Exception:
+        pass
     chemins_connus = [
         os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links\ffmpeg.exe"),
         r"C:\Users\alyak\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe",
@@ -65,6 +73,12 @@ def enregistrer_clip(id_alerte: str, id_camera: str) -> Optional[Path]:
     if not ffmpeg:
         return None
 
+    # Cadence réelle des trames (le relais envoie 1 à 6 images/s, pas 12) : sinon le clip
+    # est lu trop vite. Bornée entre 2 et 15 images/s.
+    duree = trames[-1][0] - trames[0][0]
+    cadence = len(trames) / duree if duree > 0.5 else 6.0
+    cadence = max(2.0, min(15.0, cadence))
+
     # Création du fichier MP4 via FFmpeg en injectant les JPEG dans stdin
     cmd = [
         ffmpeg,
@@ -72,7 +86,7 @@ def enregistrer_clip(id_alerte: str, id_camera: str) -> Optional[Path]:
         "-hide_banner",
         "-loglevel", "error",
         "-f", "image2pipe",
-        "-framerate", "12",
+        "-framerate", f"{cadence:.2f}",
         "-i", "-",
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
@@ -85,7 +99,7 @@ def enregistrer_clip(id_alerte: str, id_camera: str) -> Optional[Path]:
         for _, jpg in trames:
             proc.stdin.write(jpg)
         proc.stdin.close()
-        proc.wait(timeout=5)
+        proc.wait(timeout=30)
         if fichier_sortie.exists() and fichier_sortie.stat().st_size > 1000:
             print(f"[clips_service] Clip d'alerte généré : {fichier_sortie.name}", flush=True)
             return fichier_sortie

@@ -1140,6 +1140,21 @@ def trame(id_camera: str, file: UploadFile = File(..., description="Image JPEG c
     return {"ok": True}
 
 
+def _convertir_types_numpy(obj):
+    """Rend un résultat d'analyse sérialisable en JSON : numpy.float32/int64/array -> types Python.
+    Sans cela /qui répondait 500 (et le cadre n'était pas mis à jour) dès qu'un score numpy
+    se glissait dans la réponse."""
+    if isinstance(obj, dict):
+        return {k: _convertir_types_numpy(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_convertir_types_numpy(v) for v in obj]
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
+
+
 @app.post(
     "/cameras/{id_camera}/qui",
     tags=["Analyse"],
@@ -1168,7 +1183,7 @@ def qui(id_camera: str, file: UploadFile = File(..., description="Image JPEG cap
     if frame is None:
         raise HTTPException(400, "Image invalide")
 
-    resultat = analyser_qui(id_camera, frame)
+    resultat = _convertir_types_numpy(analyser_qui(id_camera, frame))
     # Appelé à chaque cycle caméra, mais n'écrit réellement sur disque
     # qu'au maximum toutes les SAUVEGARDE_INTERVALLE_S secondes (voir
     # etat_persistant.py) — négligeable comparé au temps que /qui prend
@@ -1215,6 +1230,10 @@ def image_camera(id_camera: str):
     if cam is None:
         raise HTTPException(404, "Aucune caméra avec cet id")
     contenu = derniere_image.lire(id_camera)
+    # Caméra coupée : on ne ressert pas indéfiniment la dernière image en mémoire.
+    age = derniere_image.age_secondes(id_camera)
+    if contenu is not None and age is not None and age > 6.0:
+        raise HTTPException(404, "Signal perdu : aucune image récente pour cette caméra")
     if contenu is None and cam.get("url_flux"):
         # Tente une capture fraîche depuis le flux RTSP
         contenu = rtsp_service.capturer_snapshot_unique(cam["url_flux"])

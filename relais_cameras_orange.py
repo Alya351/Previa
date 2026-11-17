@@ -6,7 +6,7 @@ PREVIA — Relais Direct des Caméras Physiques d'Orange vers le Serveur AWS EC2
 Fonctionnement :
 1. Se connecte aux caméras réelles sur le réseau local (192.168.11.x)
 2. Capture les trames en direct
-3. Les transmet en temps réel vers votre serveur Cloud AWS (16.171.13.89)
+3. Les transmet en temps réel vers votre serveur Cloud AWS (app.previa-bf.com)
 4. L'IA sur AWS (YOLO11x + ArcFace) analyse le flux et l'affiche sur l'app web pour l'encadrant.
 """
 
@@ -17,6 +17,9 @@ import threading
 # Lecture RTSP à faible latence : pas de mise en tampon côté FFmpeg
 os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay")
 import cv2
+# OpenCV lance un fil par coeur pour chaque resize/encodage et attend en boucle :
+# avec 2 caméras ça saturait le PC. Quelques fils suffisent.
+cv2.setNumThreads(1)
 import requests
 import urllib3
 
@@ -26,20 +29,27 @@ import emetteur_webrtc
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Configuration du Serveur AWS
-SERVEUR_AWS = "https://16.171.13.89:8012"
+SERVEUR_AWS = os.environ.get("PREVIA_SERVEUR", "https://app.previa-bf.com")  # ex. https://localhost:8012 pour tout faire tourner sur le PC
 
 # Taille et qualité des images envoyées (connexion mobile : rester léger)
-LARGEUR_ENVOI = 1024
-QUALITE_JPEG = 68
+LARGEUR_ENVOI = 800
+QUALITE_JPEG = 62
+
+# Identification (/qui) à chaque analyse (1) ou une analyse sur N
+QUI_TOUS_LES_N = 1
+# Détection d'objets (/voir) une analyse sur N (les personnes passent par /qui)
+VOIR_TOUS_LES_N = 3
 
 # Image envoyée à l'analyse IA (visages) : plus grande et moins compressée que l'aperçu
-LARGEUR_ANALYSE = 1920
-QUALITE_ANALYSE = 90
+LARGEUR_ANALYSE = 1600
+QUALITE_ANALYSE = 85
 
 # Apercu fluide : images par seconde envoyees sans analyse
 FPS_APERCU = 4.0
 # Analyse IA : une image toutes les N secondes par camera
 DELAI_ANALYSE_S = 1.5
+# Sans nouvelle image pendant ce délai, la caméra est jugée coupée
+DELAI_CAMERA_MUETTE_S = 6.0
 # Nombre d'envois d'apercu simultanes par camera
 ENVOIS_PARALLELES = 3
 
@@ -51,7 +61,7 @@ LARGEUR_VIDEO = 640
 FPS_APERCU_PENDANT_VIDEO = 1.0
 SERVEURS_ICE = [
     {"urls": "stun:stun.l.google.com:19302"},
-    {"urls": ["turn:16.171.13.89:3478?transport=udp", "turn:16.171.13.89:3478?transport=tcp"],
+    {"urls": ["turn:app.previa-bf.com:3478?transport=udp", "turn:app.previa-bf.com:3478?transport=tcp"],
      "username": "previa", "credential": "PreviaDHpycsD6PLrT0Wjz"},
 ]
 
@@ -62,11 +72,12 @@ CAMERAS = [
         "id": "7711bf8da3d94380b0024768615aa691",
         # URLs possibles (testées automatiquement dans l'ordre)
         "urls": [
+            "rtsp://admin:11Avril2002@@192.168.11.105:554/Streaming/Channels/101",
             "rtsp://admin:11Avril2002@@192.168.11.101:554/Streaming/Channels/101",
             "rtsp://admin:admin@192.168.11.102:554/11",
             "rtsp://admin:11Avril2002@@192.168.11.102:554/Streaming/Channels/101"
         ],
-        "fps_cible": 6.0
+        "fps_cible": 3.0
     },
     {
         "nom": "Camera_Exterieure",
@@ -75,7 +86,7 @@ CAMERAS = [
             "rtsp://admin:11Avril2002@@192.168.11.103:554/Streaming/Channels/101",
             "rtsp://admin:admin@192.168.11.103:554/11"
         ],
-        "fps_cible": 6.0
+        "fps_cible": 3.0
     }
 ]
 
@@ -136,16 +147,25 @@ def worker_relais_camera(camera_info):
             envois_en_vol.release()
 
     def analyser(jpeg_bytes):
+        t0 = time.time()
         try:
-            session.post(endpoint_voir, files={"file": ("frame.jpg", jpeg_bytes, "image/jpeg")},
-                         verify=False, timeout=20.0)
+            # /voir (objets) : une analyse sur VOIR_TOUS_LES_N ; /qui (personnes) à chaque fois.
+            # Le temps gagné raccourcit le cycle et donc le délai avant de voir une 2e personne.
+            if etat["compteur"] % VOIR_TOUS_LES_N == 0:
+                session.post(endpoint_voir, files={"file": ("frame.jpg", jpeg_bytes, "image/jpeg")},
+                             verify=False, timeout=20.0)
             etat["compteur"] += 1
-            if etat["compteur"] % 3 == 0:
+            # /qui produit le cadre et l'identité affichés : avec 1 appel sur 3 le cadre
+            # n'était rafraîchi que toutes les ~15-30 s et restait à l'ancienne position.
+            if etat["compteur"] % QUI_TOUS_LES_N == 0:
                 session.post(endpoint_qui, files={"file": ("frame.jpg", jpeg_bytes, "image/jpeg")},
                              verify=False, timeout=25.0)
         except Exception:
             pass
         finally:
+            etat["n_analyses"] = etat.get("n_analyses", 0) + 1
+            if etat["n_analyses"] % 5 == 0:
+                print(f"[{nom}] Analyse IA : {len(jpeg_bytes)//1024} Ko envoyés, cycle complet (envoi + IA + réponse) {time.time() - t0:.1f}s", flush=True)
             analyse_en_cours.clear()
 
     while True:
@@ -177,6 +197,7 @@ def worker_relais_camera(camera_info):
         threading.Thread(target=lire_camera, daemon=True).start()
 
         dernier_apercu = 0.0
+        derniere_nouvelle = time.time()
         deja_vu = 0
         stats = {"t": time.time(), "lues": 0, "traitees": 0}
         while True:
@@ -184,8 +205,16 @@ def worker_relais_camera(camera_info):
                 print(f"[{nom}] Perte de trame. Reconnexion...")
                 break
             if lecteur["n"] == deja_vu:
+                # Caméra muette (câble/alimentation coupé : la lecture peut rester bloquée
+                # sans erreur) : on coupe le flux et on se reconnecte.
+                if time.time() - derniere_nouvelle > DELAI_CAMERA_MUETTE_S:
+                    print(f"[{nom}] Aucune image depuis {DELAI_CAMERA_MUETTE_S:.0f}s (caméra coupée ?). Reconnexion...")
+                    lecteur["fin"] = True
+                    emetteur_webrtc.oublier_image(cam_id)
+                    break
                 time.sleep(0.005)
                 continue
+            derniere_nouvelle = time.time()
             stats["lues"] += lecteur["n"] - deja_vu
             stats["traitees"] += 1
             deja_vu = lecteur["n"]
@@ -198,7 +227,9 @@ def worker_relais_camera(camera_info):
             hauteur, largeur = frame.shape[:2]
 
             # 0. Vidéo WebRTC : image réduite publiée pour l'émetteur
-            if etat.get("video_lancee"):
+            # La vidéo est émise à 10 img/s : inutile de réduire/publier chaque image reçue
+            if etat.get("video_lancee") and maintenant - etat.get("derniere_pub_video", 0.0) >= 1.0 / 10:
+                etat["derniere_pub_video"] = maintenant
                 h_video = int(hauteur * LARGEUR_VIDEO / float(largeur)) // 2 * 2
                 emetteur_webrtc.publier_image(cam_id, cv2.resize(frame, (LARGEUR_VIDEO, h_video), interpolation=cv2.INTER_AREA))
 
@@ -239,7 +270,9 @@ def worker_relais_camera(camera_info):
                 etat["derniere_analyse"] = maintenant
                 threading.Thread(target=analyser, args=(jpeg_analyse,), daemon=True).start()
 
-        cap.release()
+        emetteur_webrtc.oublier_image(cam_id)
+        # release() dans un fil à part : il peut bloquer si la lecture est coincée
+        threading.Thread(target=cap.release, daemon=True).start()
         time.sleep(2)
 
 

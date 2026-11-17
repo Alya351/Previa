@@ -81,6 +81,42 @@ export function FluxCamera({
     }
   }, [stream, hasActiveWebRtcTrack, onVideoRef]);
 
+  // Zone réellement occupée par l'image (object-fit cover/contain) pour caler les cadres.
+  const conteneurRef = useRef(null);
+  const [cadre, setCadre] = useState(null);
+  const recalculerCadre = useCallback(() => {
+    const conteneur = conteneurRef.current;
+    const media = conteneur && conteneur.querySelector('video, img');
+    if (!media) return;
+    const nw = media.videoWidth || media.naturalWidth;
+    const nh = media.videoHeight || media.naturalHeight;
+    const fit = getComputedStyle(media).objectFit;
+    if (!nw || !nh || (fit !== 'cover' && fit !== 'contain')) { setCadre(null); return; }
+    const mr = media.getBoundingClientRect();
+    const cr = conteneur.getBoundingClientRect();
+    const echelle = fit === 'cover' ? Math.max(mr.width / nw, mr.height / nh) : Math.min(mr.width / nw, mr.height / nh);
+    const w = nw * echelle;
+    const h = nh * echelle;
+    const suivant = {
+      left: Math.round(mr.left - cr.left + (mr.width - w) / 2),
+      top: Math.round(mr.top - cr.top + (mr.height - h) / 2),
+      width: Math.round(w),
+      height: Math.round(h),
+    };
+    setCadre((ancien) => (ancien && ancien.left === suivant.left && ancien.top === suivant.top
+      && ancien.width === suivant.width && ancien.height === suivant.height ? ancien : suivant));
+  }, []);
+
+  useEffect(() => {
+    const conteneur = conteneurRef.current;
+    if (!conteneur) return undefined;
+    recalculerCadre();
+    const obs = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(recalculerCadre) : null;
+    if (obs) obs.observe(conteneur);
+    const minuteur = setInterval(recalculerCadre, 1000); // dimensions de l'image connues après coup
+    return () => { if (obs) obs.disconnect(); clearInterval(minuteur); };
+  }, [recalculerCadre, hasActiveWebRtcTrack]);
+
   const handleImgLoad = (e) => {
     if (minuterieRef.current) clearTimeout(minuterieRef.current);
     setEtat('direct');
@@ -90,7 +126,13 @@ export function FluxCamera({
 
   const handleImgError = (e) => {
     if (onError) onError(e);
-    if (rafraichirRef.current) { planifierProchaine(); return; }
+    if (rafraichirRef.current) {
+      // Plus d'image récente (caméra coupée) : on bascule en « Signal indisponible »
+      // au lieu de garder la dernière image figée ; le rafraîchissement continue.
+      setEtat('hors_ligne');
+      planifierProchaine();
+      return;
+    }
     // Auto-réessaie le flux vidéo continu MJPEG avec un timestamp anti-cache
     setTimeout(() => {
       if (imageRepli) {
@@ -106,7 +148,7 @@ export function FluxCamera({
   }, []);
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+    <div ref={conteneurRef} style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       {hasActiveWebRtcTrack ? (
         <video
           ref={videoRef}
@@ -157,7 +199,7 @@ export function FluxCamera({
       )}
 
       {/* Cadres de détection HUD superposés (Visages suspects / autorisés) */}
-      <DetectionOverlay detections={detections} />
+      <DetectionOverlay detections={detections} cadre={cadre} />
     </div>
   );
 }
