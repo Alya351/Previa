@@ -138,7 +138,9 @@ export function mapPersonneApi(p, idx, camCtx) {
   const avisIA = avisIADe(p);
   const id = p.id || `personne_${camCtx.id_camera}_${idx}`;
 
-  const isEmployee = Boolean(p.nom) || p.statut === 'connu' || p.statut === 'vient_d_etre_confirme';
+  // Employé = fiche du personnel retrouvée (`nom`). Le statut `connu`/`vient_d_etre_confirme`
+  // désigne aussi un simple visage revu plusieurs fois : il ne prouve pas l'enregistrement.
+  const isEmployee = Boolean(p.nom);
   const estSuspect = isZoneIntrusion && !isEmployee ? true : (p.est_suspect !== undefined ? p.est_suspect : (riskPct >= 60 || statut.cls === 'warn'));
 
   return {

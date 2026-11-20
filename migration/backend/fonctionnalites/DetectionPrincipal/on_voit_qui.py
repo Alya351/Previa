@@ -930,7 +930,12 @@ def _run_pose(model, frame, conf):
     if model is None:
         return []
     try:
-        result = model.predict(frame, conf=conf, verbose=False)[0]
+        # Même résolution d'inférence que la détection des personnes (PREVIA_IMGSZ_PERSONNES) :
+        # à 640 px les personnes assises/éloignées d'un groupe ne sont pas détectées.
+        kwargs_pose = {"conf": conf, "verbose": False}
+        if IMGSZ_PERSONNES:
+            kwargs_pose["imgsz"] = IMGSZ_PERSONNES
+        result = model.predict(frame, **kwargs_pose)[0]
         detections = []
         if result.keypoints is None:
             return detections
@@ -998,6 +1003,11 @@ def detect_faces(face_app, frame_bgr, poses=None):
                 fb = f.bbox.tolist()
                 fw = fb[2] - fb[0]
                 fh = fb[3] - fb[1]
+                # Visage trop petit (≈ moins de 40 px sur une image de 1600 px) : inexploitable
+                # pour la reconnaissance, et source de cadres « fantômes » permanents sur des
+                # personnes/objets lointains du fond. Réglable : PREVIA_FACE_MIN_LARGEUR (fraction).
+                if fw < frame_bgr.shape[1] * float(os.environ.get("PREVIA_FACE_MIN_LARGEUR", "0.025")):
+                    continue
                 # Cadrage harmonieux du visage avec marge naturelle de 8%
                 pad_w = fw * 0.08
                 pad_h = fh * 0.08
@@ -1836,7 +1846,11 @@ def analyser(id_camera: str, frame) -> dict:
         elif has_valid_pose:
             # Présence d'un squelette humain articulé certifié
             personnes_valides.append(p)
-        elif p.get("score", 0.0) >= 0.45 and ratio_vertical >= 1.25 and h_box >= 60 and w_box >= 30:
+        elif (p.get("score", 0.0) >= 0.55 and ratio_vertical >= 1.25 and h_box >= 60 and w_box >= 30
+              and (w_box * h_box) <= 0.45 * float(frame.shape[0] * frame.shape[1])):
+            # Silhouette seule (ni visage ni pose valide) : on exige une confiance plus haute et
+            # une taille raisonnable. Un doigt ou une main collés à l'objectif donnent une énorme
+            # tache que le modèle prend pour une personne : elle ne doit pas déclencher d'alerte.
             # Silhouette nettement verticale à confiance élevée (humain debout/assis de dos)
             personnes_valides.append(p)
 
@@ -1844,6 +1858,52 @@ def analyser(id_camera: str, frame) -> dict:
     centroides_personnes = [p["centroid"] for p in personnes]
     assignation_visages = _assign_faces_to_people(centroides_personnes, face_centroids)
     assignation_poses = _assign_faces_to_people(centroides_personnes, pose_centroids)
+
+    # Doublons : une même personne peut ressortir deux fois (une détection « avec visage » et une
+    # « corps seul » qui se superposent, p. ex. quand un écran de portable cache le corps), ce qui
+    # affichait deux cadres. On retire la détection SANS visage dont la TÊTE est là où se trouve le
+    # visage d'une autre détection, ainsi que les quasi-copies (très fort recouvrement).
+    def _tete_au_meme_endroit(box_corps, centre_visage):
+        x1, y1, x2, y2 = box_corps
+        w, h = x2 - x1, y2 - y1
+        return (x1 - 0.25 * w <= centre_visage[0] <= x2 + 0.25 * w
+                and y1 - 0.10 * h <= centre_visage[1] <= y1 + 0.35 * h)
+
+    def _recouvrement(a, b):
+        ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+        iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+        inter = ix * iy
+        aire_a = max(1.0, (a[2] - a[0]) * (a[3] - a[1]))
+        aire_b = max(1.0, (b[2] - b[0]) * (b[3] - b[1]))
+        return inter / (aire_a + aire_b - inter), inter / min(aire_a, aire_b)
+
+    if len(personnes) > 1:
+        a_retirer = set()
+        for i, pi in enumerate(personnes):
+            if assignation_visages.get(i) is not None:
+                continue
+            for j in range(len(personnes)):
+                if j == i or j in a_retirer:
+                    continue
+                fj = assignation_visages.get(j)
+                if fj is not None and _tete_au_meme_endroit(pi["box"], face_centroids[fj]):
+                    a_retirer.add(i)
+                    break
+        for i in range(len(personnes)):
+            for j in range(i + 1, len(personnes)):
+                if i in a_retirer or j in a_retirer:
+                    continue
+                iou, min_rec = _recouvrement(personnes[i]["box"], personnes[j]["box"])
+                if iou > 0.6 or min_rec > 0.9:
+                    # garde celle qui a un visage, sinon la plus sûre
+                    cle_i = (assignation_visages.get(i) is not None, personnes[i].get("score", 0.0))
+                    cle_j = (assignation_visages.get(j) is not None, personnes[j].get("score", 0.0))
+                    a_retirer.add(j if cle_i >= cle_j else i)
+        if a_retirer:
+            personnes = [p for k, p in enumerate(personnes) if k not in a_retirer]
+            centroides_personnes = [p["centroid"] for p in personnes]
+            assignation_visages = _assign_faces_to_people(centroides_personnes, face_centroids)
+            assignation_poses = _assign_faces_to_people(centroides_personnes, pose_centroids)
 
     # Zones suspectes ANONYMES (voir CONF_RODEUR_ANONYME plus haut) : une
     # deuxième passe à seuil bas, uniquement pour repérer une présence
@@ -2048,9 +2108,12 @@ def analyser(id_camera: str, frame) -> dict:
         if employe_trouve:
             if cle_track:
                 _cache_track_employe[cle_track] = (employe_trouve, now)
-        elif cle_track and cle_track in _cache_track_employe:
+        elif cle_track and cle_track in _cache_track_employe and face is None:
+            # L'identité n'est reportée sur le suivi QUE si aucun visage n'est visible (visage caché,
+            # tête baissée...). Si un visage est visible mais ne correspond à personne, ce n'est pas
+            # la même personne : on ne lui prête pas l'identité d'un collaborateur.
             emp_cached, ts_cached = _cache_track_employe[cle_track]
-            if (now - ts_cached) <= 4.0:
+            if (now - ts_cached) <= float(os.environ.get("PREVIA_LISSAGE_IDENTITE_S", "10")):
                 employe_trouve = emp_cached
                 pid = employe_trouve.get("id")
                 identite["statut"] = "connu"

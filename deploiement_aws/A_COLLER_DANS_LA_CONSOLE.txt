@@ -1,0 +1,181 @@
+cat > ~/installer_vitrine.sh <<'FIN_SCRIPT'
+#!/bin/bash
+# =============================================================================
+# PREVIA — Nom de domaine previa-bf.com
+#   previa-bf.com + www.previa-bf.com  -> site vitrine (Next.js, service local :3000)
+#   app.previa-bf.com                  -> application Previa (identique au lien
+#                                         previa-odc.duckdns.org, qui reste valable)
+# Caddy obtient et renouvelle tout seul les certificats HTTPS (Let's Encrypt).
+#
+# Fichiers à placer dans le dossier personnel (~) AVANT de lancer (facultatif au
+# 1er passage : sans eux, une page provisoire est servie) :
+#   ~/vitrine.tgz  : le code du site (previa-SV), envoyé par scp
+#   ~/vitrine.env  : les variables NEXT_PUBLIC_* du site (une par ligne, NOM=valeur)
+#
+# Lancer avec :  bash ~/installer_vitrine.sh
+# Relançable sans risque (pour mettre à jour le site, par exemple).
+# =============================================================================
+set -u
+DOM=previa-bf.com
+APP=app.previa-bf.com
+ANCIEN=previa-odc.duckdns.org
+CADDYFILE=/etc/caddy/Caddyfile
+WEBROOT=/var/www/previa-vitrine-provisoire
+APPDIR=$HOME/previa-vitrine
+TGZ=$HOME/vitrine.tgz
+ENVF=$HOME/vitrine.env
+PORT=3000
+[ -s ~/.nvm/nvm.sh ] && . ~/.nvm/nvm.sh
+
+command -v caddy >/dev/null || { echo "ERREUR : Caddy n'est pas installé."; exit 1; }
+[ -f "$CADDYFILE" ] || { echo "ERREUR : $CADDYFILE introuvable."; exit 1; }
+
+MODE=provisoire
+echo "=== 1. Site vitrine ==="
+if [ -f "$TGZ" ]; then
+  # Next.js 16 demande Node >= 20.9
+  NODE_OK=0
+  if command -v node >/dev/null; then
+    node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>20||(a===20&&b>=9)?0:1)' && NODE_OK=1
+  fi
+  if [ $NODE_OK -eq 0 ]; then
+    echo "Node >= 20.9 absent : installation via nvm..."
+    [ -s ~/.nvm/nvm.sh ] || curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+    . ~/.nvm/nvm.sh && nvm install 20 || { echo "ERREUR : installation de Node impossible."; exit 1; }
+  fi
+  echo "Node : $(node -v)"
+
+  mkdir -p "$APPDIR"
+  tar -xzf "$TGZ" -C "$APPDIR" --strip-components=0 || { echo "ERREUR : décompression de $TGZ."; exit 1; }
+  # le tgz peut contenir un dossier unique : on remonte son contenu
+  if [ ! -f "$APPDIR/package.json" ]; then
+    SUB=$(find "$APPDIR" -maxdepth 2 -name package.json -not -path '*/node_modules/*' | head -1)
+    [ -n "$SUB" ] && { cp -a "$(dirname "$SUB")"/. "$APPDIR"/; }
+  fi
+  [ -f "$APPDIR/package.json" ] || { echo "ERREUR : package.json introuvable dans $TGZ."; exit 1; }
+
+  if [ -f "$ENVF" ]; then
+    cp "$ENVF" "$APPDIR/.env.production"
+    echo "Variables : $(grep -c '=' "$ENVF") ligne(s) lue(s) dans $ENVF"
+  else
+    echo "ATTENTION : $ENVF absent. Sans NEXT_PUBLIC_API_URL / NEXT_PUBLIC_SUPABASE_*, la connexion ne marchera pas."
+  fi
+
+  echo "Compilation (quelques minutes)..."
+  (cd "$APPDIR" && { npm ci || npm install; } && npm run build) \
+    || { echo "ERREUR de compilation du site vitrine."; exit 1; }
+
+  NODEBIN=$(command -v node)
+  sudo tee /etc/systemd/system/previa-vitrine.service >/dev/null <<EOF
+[Unit]
+Description=PREVIA site vitrine (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=$(id -un)
+WorkingDirectory=$APPDIR
+Environment=NODE_ENV=production
+ExecStart=$NODEBIN $APPDIR/node_modules/next/dist/bin/next start -p $PORT -H 127.0.0.1
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo systemctl daemon-reload
+  sudo systemctl enable previa-vitrine >/dev/null 2>&1
+  sudo systemctl restart previa-vitrine
+  sleep 5
+  if curl -s -o /dev/null -m 10 "http://127.0.0.1:$PORT/"; then
+    echo "OK : site vitrine démarré sur 127.0.0.1:$PORT"
+    MODE=next
+  else
+    echo "ERREUR : le service ne répond pas. Détails : sudo journalctl -u previa-vitrine -n 30"
+    exit 1
+  fi
+elif systemctl is-active --quiet previa-vitrine 2>/dev/null; then
+  echo "Aucun nouveau site fourni : le service déjà installé est conservé."
+  MODE=next
+else
+  echo "Site vitrine absent ($TGZ) : page provisoire installée."
+  sudo mkdir -p "$WEBROOT"
+  printf '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PREVIA</title><body style="font-family:sans-serif;text-align:center;margin-top:20vh"><h1>PREVIA</h1><p>Site en cours de mise en place.</p><p><a href="https://%s">Acc&eacute;der &agrave; l'"'"'application</a></p>' "$APP" | sudo tee "$WEBROOT/index.html" >/dev/null
+  sudo chmod -R a+rX "$WEBROOT"
+fi
+
+echo "=== 2. Caddy ==="
+sudo cp "$CADDYFILE" "$CADDYFILE.avant_domaine"
+
+# 2a. L'application répond aussi sur app.previa-bf.com (même bloc que le lien actuel)
+if grep -q "$APP" "$CADDYFILE"; then
+  echo "Bloc application déjà présent."
+elif grep -qE "^$ANCIEN[[:space:]]*\{" "$CADDYFILE"; then
+  sudo sed -i -E "s/^$ANCIEN[[:space:]]*\{/$ANCIEN, $APP {/" "$CADDYFILE"
+  echo "OK : $APP ajouté au bloc de $ANCIEN"
+else
+  echo "ATTENTION : bloc '$ANCIEN {' introuvable dans $CADDYFILE, application non branchée sur $APP."
+  echo "           Ajoutez $APP à l'adresse du bloc de l'application, à la main."
+fi
+
+# 2b. Site vitrine : on retire l'ancien bloc vitrine (s'il existe) puis on le réécrit
+TMP=$(mktemp)
+awk '
+  /^# (BEGIN previa-vitrine|PREVIA — site vitrine)/ {skip=1}
+  skip { if ($0 ~ /^}/ || $0 ~ /^# END previa-vitrine/) {skip=0}; next }
+  {print}
+' "$CADDYFILE" > "$TMP" && sudo cp "$TMP" "$CADDYFILE"; rm -f "$TMP"
+
+if [ "$MODE" = next ]; then
+  sudo tee -a "$CADDYFILE" >/dev/null <<EOF
+
+# BEGIN previa-vitrine
+$DOM, www.$DOM {
+	encode gzip
+	reverse_proxy 127.0.0.1:$PORT
+}
+# END previa-vitrine
+EOF
+else
+  sudo tee -a "$CADDYFILE" >/dev/null <<EOF
+
+# BEGIN previa-vitrine
+$DOM, www.$DOM {
+	encode gzip
+	root * $WEBROOT
+	try_files {path} /index.html
+	file_server
+}
+# END previa-vitrine
+EOF
+fi
+echo "OK : bloc vitrine ($MODE)"
+
+if caddy validate --config "$CADDYFILE" >/tmp/caddy_valid.log 2>&1; then
+  echo "Configuration valide."
+  sudo systemctl reset-failed caddy 2>/dev/null
+  sudo systemctl reload caddy || sudo systemctl restart caddy
+else
+  echo "ERREUR : configuration refusée, ancienne configuration remise :"; tail -8 /tmp/caddy_valid.log
+  sudo cp "$CADDYFILE.avant_domaine" "$CADDYFILE"; exit 1
+fi
+
+echo "=== 3. Vérification ==="
+IP=$(curl -s https://checkip.amazonaws.com | tr -d '[:space:]')
+for H in $DOM www.$DOM $APP; do
+  IP_DNS=$(getent hosts "$H" | awk '{print $1}' | head -1)
+  if [ "$IP_DNS" = "$IP" ]; then
+    echo "DNS $H -> OK ($IP)"
+  else
+    echo "DNS $H -> '${IP_DNS:-introuvable}' (attendu : $IP) : à régler chez Hostinger, puis : sudo systemctl reload caddy"
+  fi
+done
+sleep 20
+for H in $DOM www.$DOM $APP; do
+  curl -s -o /dev/null -m 15 -w "https://$H -> %{http_code}\n" "https://$H/"
+done
+echo
+echo "Site vitrine : https://$DOM   (mode : $MODE)"
+echo "Application  : https://$APP   (ancien lien toujours actif : https://$ANCIEN)"
+FIN_SCRIPT
+bash ~/installer_vitrine.sh

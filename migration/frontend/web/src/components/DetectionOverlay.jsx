@@ -8,8 +8,26 @@ import React from 'react';
 // Avec object-fit: cover/contain l'image est rognée ou entourée de bandes : sans ce
 // cadre les pourcentages du backend se plaquent sur le conteneur et le cadre dérive
 // (ex. sur la poitrine au lieu du visage).
+// Deux états seulement : AUTORISÉ (vert) ou INTRUSION (rouge). Pour que l'état ne change pas
+// « au hasard » d'une analyse à l'autre :
+//  - une personne reconnue reste AUTORISÉE pendant MAINTIEN_AUTORISE_MS même si une analyse
+//    suivante ne la reconnaît pas (visage de profil, image floue...) ;
+//  - une personne non reconnue n'est déclarée INTRUSION qu'après DELAI_IDENTIFICATION_MS
+//    (le temps que la reconnaissance faciale confirme), sauf si le serveur la signale déjà
+//    comme suspecte ou en zone interdite.
+const MAINTIEN_AUTORISE_MS = 10000;
+const DELAI_IDENTIFICATION_MS = 4000;
+
 export function DetectionOverlay({ detections = [], width = 640, height = 480, cadre = null }) {
+  const memoire = React.useRef(new Map());
   if (!detections || detections.length === 0) return null;
+  const maintenant = Date.now();
+  const occurrences = {};
+  const reclames = new Set();
+  // Oublie les personnes plus vues depuis longtemps
+  for (const [cle, m] of memoire.current) {
+    if (maintenant - m.vuLe > 30000) memoire.current.delete(cle);
+  }
 
   return (
     <div
@@ -49,12 +67,40 @@ export function DetectionOverlay({ detections = [], width = 640, height = 480, c
           hPercent = Math.max(3, Math.min(100 - topPercent, ((y2 - y1) / resH) * 100));
         }
 
-        // RÈGLE DE SÉCURITÉ HUD PREVIA STRICTE :
-        // 1. VERT  = Collaborateur autorisé identifié (Face ID / personnel officiel)
-        // 2. ROUGE = Suspect / Intrusion (Toute personne non autorisée dans une zone délimitée ou comportement anormal)
-        // 3. BLEU  = Visiteur normal (UNIQUEMENT si la personne circule normalement HORS de toute zone sensible)
-        const isEmployee = Boolean(det.nom) || det.statut === 'connu' || det.statut === 'vient_d_etre_confirme';
-        
+        // RÈGLE HUD : VERT = AUTORISÉ (reconnu), ROUGE = INTRUSION (non reconnu).
+        // AUTORISÉ = uniquement une personne ENREGISTRÉE (le serveur renvoie `nom` seulement quand
+        // le visage correspond à une fiche du personnel) et dont l'accès n'est pas révoqué.
+        // Le statut `connu`/`vient_d_etre_confirme` ne suffit PAS : le serveur l'attribue aussi à
+        // tout visage simplement revu plusieurs fois, même s'il n'est pas enregistré.
+        const reconnu = Boolean(det.nom) && !/r[ée]voqu/i.test(String(det.motif_suspicion || ''));
+        // Deux personnes peuvent recevoir le même identifiant du serveur : on les distingue
+        // pour que leurs états (autorisé/intrusion) et leurs cadres ne se mélangent pas.
+        const base = String(det.id || det.pid || idx);
+        occurrences[base] = (occurrences[base] || 0) + 1;
+        const cle = occurrences[base] > 1 ? `${base}#${occurrences[base]}` : base;
+        const cx = leftPercent + wPercent / 2;
+        const cy = topPercent + hPercent / 2;
+        let m = memoire.current.get(cle);
+        if (!m) {
+          // Nouvel identifiant : si une personne suivie était juste là à l'analyse précédente
+          // (l'identifiant a changé alors que c'est la même personne), on hérite de son état.
+          let proche = null;
+          let dmin = 8; // % de l'image : assez serré pour ne pas confondre deux personnes voisines
+          for (const [k2, m2] of memoire.current) {
+            if (reclames.has(k2) || maintenant - m2.vuLe > 3000) continue;
+            const d = Math.hypot((m2.cx ?? 1e3) - cx, (m2.cy ?? 1e3) - cy);
+            if (d < dmin) { dmin = d; proche = k2; }
+          }
+          m = proche ? { ...memoire.current.get(proche) } : { premiereVue: maintenant, derniereReconnu: 0, vuLe: maintenant };
+        }
+        reclames.add(cle);
+        m.cx = cx;
+        m.cy = cy;
+        m.vuLe = maintenant;
+        if (reconnu) m.derniereReconnu = maintenant;
+        memoire.current.set(cle, m);
+        const isEmployee = reconnu || (maintenant - m.derniereReconnu < MAINTIEN_AUTORISE_MS);
+
         // Détection de présence en zone sensible délimitée
         const inForbiddenZone = Boolean(
           det.intrusionZoneActive ||
@@ -63,36 +109,35 @@ export function DetectionOverlay({ detections = [], width = 640, height = 480, c
           (det.intrusionZone && det.intrusionZone !== 'Hors zone')
         );
 
-        // RÈGLE ABSOLUE : Dans une zone délimitée, AUCUN visiteur normal n'est toléré !
-        // Quiconque n'est pas un collaborateur autorisé dans une zone délimitée est STRICTEMENT un suspect/intrus.
-        const isSuspect = (!isEmployee && inForbiddenZone) ||
-          det.est_suspect === true ||
-          (det.riskPct !== undefined && det.riskPct >= 60) ||
-          (!isEmployee && (det.rodageClass === 'danger' || det.infiltrationClass === 'danger'));
+        // Deux états : AUTORISÉ (reconnu) ou INTRUSION (non reconnu). Pendant les premières
+        // secondes (reconnaissance en cours) on affiche « IDENTIFICATION » sans conclure,
+        // sauf si le serveur signale déjà une zone interdite ou un comportement suspect.
+        const signaleParServeur = inForbiddenZone || det.est_suspect === true ||
+          det.rodageClass === 'danger' || det.infiltrationClass === 'danger';
+        const isIntrusion = !isEmployee &&
+          (signaleParServeur || (maintenant - m.premiereVue >= DELAI_IDENTIFICATION_MS));
+        const enIdentification = !isEmployee && !isIntrusion;
+        const isSuspect = isIntrusion;
 
-        // Visiteur = NON employé ET NON suspect ET NON en zone délimitée
-        const isVisitor = !isSuspect && !isEmployee && !inForbiddenZone;
-
-        const color = isSuspect ? '#ef4444' : isVisitor ? '#0284c7' : '#10b981';
-        const bgColor = isSuspect ? 'rgba(239, 68, 68, 0.20)' : isVisitor ? 'rgba(2, 132, 199, 0.18)' : 'rgba(16, 185, 129, 0.20)';
-        const borderColor = isSuspect ? '#ef4444' : isVisitor ? '#0284c7' : '#10b981';
-        const shadow = isSuspect
+        const couleurEtat = isIntrusion ? '#ef4444' : enIdentification ? '#64748b' : '#10b981';
+        const color = couleurEtat;
+        const bgColor = isIntrusion ? 'rgba(239, 68, 68, 0.20)' : enIdentification ? 'rgba(100, 116, 139, 0.15)' : 'rgba(16, 185, 129, 0.20)';
+        const borderColor = couleurEtat;
+        const shadow = isIntrusion
           ? '0 0 18px rgba(239, 68, 68, 0.8), inset 0 0 10px rgba(239, 68, 68, 0.35)'
-          : isVisitor
-          ? '0 0 16px rgba(2, 132, 199, 0.7), inset 0 0 8px rgba(2, 132, 199, 0.25)'
+          : enIdentification
+          ? '0 0 12px rgba(100, 116, 139, 0.5)'
           : '0 0 18px rgba(16, 185, 129, 0.8), inset 0 0 10px rgba(16, 185, 129, 0.3)';
 
         const labelTexte = isEmployee
-          ? (det.nom ? `✅ ${det.nom} (${det.matricule || 'COLLABORATEUR'})` : '✅ COLLABORATEUR AUTORISÉ')
-          : isSuspect
-          ? (inForbiddenZone
-              ? '🚨 INTRUSION EN ZONE INTERDITE'
-              : (det.motif_suspicion ? `🚨 ${det.motif_suspicion.toUpperCase()}` : '🚨 INDIVIDU SUSPECT'))
-          : '👤 VISITEUR (NORMAL)';
+          ? (det.nom ? `✅ ${det.nom} · AUTORISÉ` : '✅ AUTORISÉ')
+          : isIntrusion
+          ? '🚨 INTRUSION'
+          : '⏳ IDENTIFICATION…';
 
         return (
           <div
-            key={det.id || idx}
+            key={cle}
             style={{
               position: 'absolute',
               left: `${leftPercent}%`,
@@ -103,7 +148,9 @@ export function DetectionOverlay({ detections = [], width = 640, height = 480, c
               borderRadius: '6px',
               backgroundColor: bgColor,
               boxShadow: shadow,
-              transition: 'all 0.15s ease-out',
+              // Les cadres arrivent environ toutes les 1-2 s : on les fait glisser jusqu'à la
+              // nouvelle position au lieu de les téléporter par saccades.
+              transition: 'left 0.9s linear, top 0.9s linear, width 0.9s linear, height 0.9s linear, background-color 0.2s, border-color 0.2s, box-shadow 0.2s',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'flex-start',
@@ -115,7 +162,7 @@ export function DetectionOverlay({ detections = [], width = 640, height = 480, c
                 position: 'absolute',
                 top: '-26px',
                 left: '-2px',
-                background: isSuspect ? '#ef4444' : isVisitor ? '#0284c7' : '#10b981',
+                background: couleurEtat,
                 color: '#ffffff',
                 fontSize: '0.68rem',
                 fontWeight: 800,

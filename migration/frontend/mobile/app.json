@@ -51,7 +51,7 @@
       ]
     ],
     "extra": {
-      "adresseServeurDistant": "https://previa-bf.duckdns.org,https://13.63.163.100:8012,http://13.63.163.100:8012",
+      "adresseServeurDistant": "https://app.previa-bf.com,https://13.63.163.100:8012,http://13.63.163.100:8012",
       "eas": {
         "projectId": "44b1927c-ca89-42ef-b7da-5427ab4d567e"
       }

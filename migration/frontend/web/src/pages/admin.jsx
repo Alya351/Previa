@@ -6424,7 +6424,9 @@ export default function Admin() {
       .catch(() => { if (!annule) setProfil('entreprise'); });
     return () => { annule = true; };
   }, []);
-  const afficherOrganisation = profil === 'entreprise' && estParDefaut;
+  // Organisation : compte principal OU administrateur (un opérateur ne la voit pas).
+  const estAdmin = sessionStorage.getItem('previa_utilisateur_role') === 'admin';
+  const afficherOrganisation = profil === 'entreprise' && (estParDefaut || estAdmin);
   const afficherParticuliers = profil === 'particulier' && estParDefaut;
   const afficherPersonnes = profil === 'entreprise';
   const libellePersonneConnue = profil === 'particulier' ? 'Membre de la famille' : 'Collaborateur';
@@ -6523,8 +6525,27 @@ export default function Admin() {
     }
   }
 
+  // Une seule relecture à la fois : on relit toutes les INTERVALLE_MS, mais jamais en
+  // empilant des requêtes quand le réseau est lent (elles reviendraient dans le désordre).
+  const rafraichirEnCoursRef = useRef(false);
   async function rafraichir() {
-    rafraichirAlertes();
+    if (rafraichirEnCoursRef.current) return;
+    rafraichirEnCoursRef.current = true;
+    try {
+      await rafraichirComplet();
+    } finally {
+      rafraichirEnCoursRef.current = false;
+    }
+  }
+
+  // Les alertes changent rarement et coûtent cher au serveur (relecture de toutes les alertes) :
+  // on ne les relit que toutes les 3 s, alors que les cadres de détection sont relus à chaque tour.
+  const derniereLectureAlertesRef = useRef(0);
+  async function rafraichirComplet() {
+    if (Date.now() - derniereLectureAlertesRef.current > 3000) {
+      derniereLectureAlertesRef.current = Date.now();
+      rafraichirAlertes();
+    }
     try {
       const v = await appelApi('/vue-ensemble');
       setVueEnsemble(v);
@@ -6544,7 +6565,14 @@ export default function Admin() {
         const camCtx = { id_camera: c.id_camera, num: c.num, piece: c.piece, batiment: c.batiment };
         const personnesVues = e.personnesVues || {};
         const vueActuelle = e.vueActuelle || {};
-        (personnesVues.personnes || []).forEach((p, idx) => nouvellesPersonnes.push(mapPersonneApi(p, idx, camCtx)));
+        // Les cadres ne sont affichés que s'ils viennent d'une analyse RÉCENTE : sinon, quand la
+        // personne est partie (ou que l'analyse a pris du retard), le dernier cadre resterait
+        // figé à l'écran.
+        const ageVue = personnesVues.updated_at
+          ? (Date.now() / 1000 - g_decalageServeurSec - personnesVues.updated_at)
+          : 0;
+        const vueFraiche = ageVue <= 5;
+        (vueFraiche ? (personnesVues.personnes || []) : []).forEach((p, idx) => nouvellesPersonnes.push(mapPersonneApi(p, idx, camCtx)));
         // Si l'analyse détaillée est encore en cours mais que YOLO a détecté des personnes en direct :
         const nbDirect = Math.max(c.nombrePersonnes || 0, vueActuelle.nombre_personnes || 0, (vueActuelle.personnes_suivies || []).length);
         if ((!personnesVues.personnes || personnesVues.personnes.length === 0) && nbDirect > 0) {

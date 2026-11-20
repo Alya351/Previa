@@ -1,0 +1,20 @@
+﻿Bonjour Monsieur @BESSIN Ivan,
+
+Voici les liens de notre projet PREVIA :
+Site vitrine : https://previa-bf.com
+Application : https://app.previa-bf.com
+
+PREVIA propose 2 offres : Entreprise et Particulier.
+
+1. Tester la version Entreprise
+Connectez-vous avec :
+- Email : entreprise@previa.com
+- Mot de passe : PREVIA2026
+
+2. Tester la version Particulier (domicile)
+Connectez-vous avec :
+- Email : particulier@previa.com
+- Mot de passe : PREVIA2026
+(Vous pouvez aussi créer votre propre compte : cliquez sur « S'inscrire », choisissez « Mon domicile », puis saisissez le code d'amorçage : ODC-PARTICULIER.)
+
+Cordialement,

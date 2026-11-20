@@ -38,16 +38,16 @@ QUALITE_JPEG = 62
 # Identification (/qui) à chaque analyse (1) ou une analyse sur N
 QUI_TOUS_LES_N = 1
 # Détection d'objets (/voir) une analyse sur N (les personnes passent par /qui)
-VOIR_TOUS_LES_N = 3
+VOIR_TOUS_LES_N = 10
 
 # Image envoyée à l'analyse IA (visages) : plus grande et moins compressée que l'aperçu
-LARGEUR_ANALYSE = 1600
-QUALITE_ANALYSE = 85
+LARGEUR_ANALYSE = 1920
+QUALITE_ANALYSE = 90
 
 # Apercu fluide : images par seconde envoyees sans analyse
 FPS_APERCU = 4.0
 # Analyse IA : une image toutes les N secondes par camera
-DELAI_ANALYSE_S = 1.0
+DELAI_ANALYSE_S = 0.4
 # Sans nouvelle image pendant ce délai, la caméra est jugée coupée
 DELAI_CAMERA_MUETTE_S = 6.0
 # Nombre d'envois d'apercu simultanes par camera
@@ -56,7 +56,7 @@ ENVOIS_PARALLELES = 3
 # --- Vidéo en direct WebRTC (voir emetteur_webrtc.py) -----------------------
 VIDEO_WEBRTC = True
 SERVEUR_WSS = SERVEUR_AWS.replace("https://", "wss://")
-LARGEUR_VIDEO = 960
+LARGEUR_VIDEO = 720
 # Aperçu JPEG réduit pendant que quelqu'un regarde la vidéo (économise le débit)
 FPS_APERCU_PENDANT_VIDEO = 1.0
 SERVEURS_ICE = [
@@ -77,7 +77,8 @@ CAMERAS = [
             "rtsp://admin:admin@192.168.11.102:554/11",
             "rtsp://admin:11Avril2002@@192.168.11.102:554/Streaming/Channels/101"
         ],
-        "fps_cible": 3.0
+        "fps_cible": 3.0,
+        "analyse": False  # filme l'intérieur d'une boîte : rien à analyser, on économise le serveur
     },
     {
         "nom": "Camera_Exterieure",
@@ -187,7 +188,11 @@ def worker_relais_camera(camera_info):
 
         def lire_camera(cap=cap, lecteur=lecteur):
             while not lecteur["fin"]:
-                ok, img = cap.read()
+                try:
+                    ok, img = cap.read()
+                except Exception as erreur:  # cv2.error : exception interne d'OpenCV/FFmpeg
+                    print(f"[{nom}] Erreur de lecture caméra ({erreur}). Reconnexion...", flush=True)
+                    ok, img = False, None
                 if not ok or img is None:
                     lecteur["fin"] = True
                     break
@@ -236,7 +241,11 @@ def worker_relais_camera(camera_info):
             regarde_en_video = emetteur_webrtc.spectateurs.get(cam_id, 0) > 0
             fps_apercu = FPS_APERCU_PENDANT_VIDEO if regarde_en_video else camera_info.get("fps_cible", FPS_APERCU)
             apercu_du = maintenant - dernier_apercu >= 1.0 / fps_apercu
-            analyse_due = (maintenant - etat["derniere_analyse"] >= DELAI_ANALYSE_S) and not analyse_en_cours.is_set()
+            # "analyse": False dans CAMERAS = aperçu et vidéo seulement, pas d'analyse IA
+            # (libère environ la moitié du serveur pour les caméras qui comptent).
+            analyse_due = (camera_info.get("analyse", True)
+                           and (maintenant - etat["derniere_analyse"] >= DELAI_ANALYSE_S)
+                           and not analyse_en_cours.is_set())
             if not (apercu_du or analyse_due):
                 continue
 

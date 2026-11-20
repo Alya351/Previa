@@ -1,0 +1,15 @@
+DEPLOIEMENT PREVIA SUR AWS (16.171.13.89)
+
+1) Copier sur le serveur, en gardant les memes chemins que dans ce dossier :
+   migration/backend/fonctionnalites/DetectionPrincipal/on_voit_qui.py
+   migration/backend/fonctionnalites/main/main.py
+   migration/backend/fonctionnalites/zoneCam/detectionEnZone.py
+   (front) soit migration/frontend/web/src/components/FluxCamera.jsx + DetectionOverlay.jsx
+           puis reconstruire, soit remplacer le contenu de .../frontend/web/dist par front_dist.zip
+
+2) Variables d'environnement du backend :
+   PREVIA_AUTO_ORIENTATION=0
+   PREVIA_MAX_DIM=1280
+
+3) Redemarrer le backend (docker compose up -d --build backend, ou votre commande habituelle).
+   Attendre que les modeles soient charges (premier appel lent), puis Ctrl+F5 sur la page.

@@ -76,7 +76,7 @@ const ADRESSE_SERVEUR = detecterAdresseServeur();
 const ADRESSE_DISTANTE = String(Constants.expoConfig?.extra?.adresseServeurDistant || '').trim();
 
 // Cible officielle du backend PREVIA sur AWS
-const ADRESSE_AWS_DEFAUT = 'https://previa-bf.duckdns.org';
+const ADRESSE_AWS_DEFAUT = 'https://app.previa-bf.com';
 
 export let API_BASE = ADRESSE_SERVEUR ? `http://${ADRESSE_SERVEUR}:8012` : ADRESSE_AWS_DEFAUT;
 

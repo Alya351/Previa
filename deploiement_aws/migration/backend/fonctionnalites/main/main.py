@@ -1,0 +1,2226 @@
+"""Point d'entrée unique de l'API PREVIA — n'expose lui-même aucune
+logique de détection ni de gestion de comptes : ce fichier COLLECTE les
+fonctions exposées par chaque module de fonctionnalites/ et les branche à
+de vraies routes HTTP. Toute la logique vit dans son module ; main.py ne
+fait que router.
+
+Lancement (depuis migration/backend/, pour que le package
+"fonctionnalites" soit résoluble) — le certificat HTTPS est préparé tout
+seul à l'import (voir plus bas), il suffit de pointer uvicorn dessus :
+    cd migration/backend
+    uvicorn fonctionnalites.main.main:app --host 0.0.0.0 --port 8012 \
+        --ssl-certfile certs/cert.pem --ssl-keyfile certs/key.pem
+
+Port 8012, JAMAIS 8011 — 8011 est le port de l'ancien backend/ (utilisé
+par previarun, voir ~/.local/bin/previarun) : les deux systèmes doivent
+pouvoir tourner en même temps sans se marcher dessus, ni qu'un test de
+cette migration bloque un lancement normal de previarun par erreur.
+
+État actuel : comptes (fonctionnalites/users/ — admin par défaut, admins,
+users), hiérarchie caméra (fonctionnalites/cam/ — bâtiments, pièces,
+caméras), analyse par caméra (fonctionnalites/DetectionPrincipal/ —
+/voir, /qui), profils croisés entre caméras (fonctionnalites/ComportementsSupects/
+profil_suspect.py) et vue d'ensemble du bâtiment (fonctionnalites/VueEnsemble/)."""
+import os
+import socket
+import time
+import uuid
+from pathlib import Path
+
+import cv2
+import numpy as np
+import requests
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import StreamingResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from fonctionnalites.Alertes import alertes as alertes_module
+from fonctionnalites.Alertes import comparaison_ia
+from fonctionnalites.cam.batiment import batiment
+from fonctionnalites.cam.camera import camera, rtsp_service
+from fonctionnalites.cam.pieces import piece
+from fonctionnalites.ComportementsSupects import profil_suspect
+from fonctionnalites.Infrastructure import alarme_physique, clips_service, derniere_image, gestion_thermique, licence, profil_usage, rapport_cam, reboot, signalisation_webrtc
+from fonctionnalites.VueEnsemble import vue_ensemble as vue_ensemble_module
+from fonctionnalites.zoneCam import enregitre as zone_module
+from fonctionnalites.Infrastructure.local_store import db
+from fonctionnalites.users import admin, compte, defaultAdmin, user, session
+from fonctionnalites.Infrastructure import sqlite_db, etat_persistant, generer_certificat
+
+# 1. Initialisation instantanée de la base de données SQLite embarquée (0ms)
+try:
+    sqlite_db.get_connection()
+    print("[sqlite_db] Base de donnees embarquee SQLite (previa.db) READY au demarrage", flush=True)
+except Exception as _e_db:
+    print(f"[sqlite_db] Erreur initialisation DB : {_e_db}", flush=True)
+
+# Désactiver le check de version réseau Albumentations en mode 100% hors-ligne Edge
+os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
+
+# Importés ici, une seule fois au démarrage
+from fonctionnalites.DetectionPrincipal.on_voit_quoi import analyser as analyser_quoi
+from fonctionnalites.DetectionPrincipal.on_voit_qui import analyser as analyser_qui, _get_models, oublier_suivi as oublier_suivi_personnes
+
+# Préchargement asynchrone des modèles IA pour démarrer l'API et l'interface Web instantanément (0ms)
+def _charger_modeles_arrière_plan():
+    try:
+        _get_models()
+        print("[main] 🧠 Modèles IA préchargés avec succès en arrière-plan.", flush=True)
+    except Exception as _e_init:
+        print(f"[main] Avertissement préchargement modèles : {_e_init}", flush=True)
+
+import threading
+threading.Thread(target=_charger_modeles_arrière_plan, daemon=True).start()
+
+
+
+from fonctionnalites.Infrastructure import etat_persistant, generer_certificat
+
+# Restaure l'état comportemental court terme (rôdage en cours par caméra,
+# votes de posture/genre/vêtements...) depuis le dernier enregistrement —
+# voir etat_persistant.py pour le détail de ce qui est restauré et
+# pourquoi (et ce qui ne l'est délibérément pas). Appelé ICI, après les
+# imports ci-dessus : c'est leur import qui déclenche l'auto-
+# enregistrement de chaque module auprès de etat_persistant (voir la fin
+# de rodeur.py, qui_fait_quoi.py, on_voit_qui.py).
+etat_persistant.charger_tout()
+
+CERT_DIR = Path(__file__).resolve().parent.parent.parent / "certs"
+
+
+def _ip_locale() -> str | None:
+    """Adresse IP de CETTE machine sur le réseau local — même principe
+    que `ip route get 1.1.1.1` (utilisé par l'ancien previarun) : une
+    connexion UDP "à vide" (rien n'est réellement envoyé) vers une IP
+    publique quelconque force l'OS à choisir la bonne interface de
+    sortie, dont on lit l'adresse. None si aucun réseau n'est joignable
+    (pas de carte réseau active).
+
+    `PREVIA_IP_PUBLIQUE`, si définie, prend le pas sur cette détection —
+    nécessaire en Docker avec un réseau standard (pont), voir
+    docker-compose.yml : la détection automatique donnerait alors
+    l'adresse interne du conteneur (invisible depuis un téléphone sur le
+    même Wi-Fi), pas celle de la vraie machine. Sur Linux avec
+    `network_mode: host`, la détection automatique suffit déjà (le
+    conteneur partage le réseau de la machine) ; cette variable sert
+    surtout pour Windows/Mac, où `network_mode: host` ne donne pas accès
+    au vrai réseau de la machine (Docker Desktop tourne dans une VM)."""
+    ip_forcee = os.environ.get("PREVIA_IP_PUBLIQUE")
+    if ip_forcee:
+        return ip_forcee
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(0.5)
+    try:
+        s.connect(("1.1.1.1", 80))
+        return s.getsockname()[0]
+    except Exception:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return "127.0.0.1"
+    finally:
+        s.close()
+
+
+def _preparer_certificat_https() -> None:
+    try:
+        ip = _ip_locale() or "127.0.0.1"
+        CERT_DIR.mkdir(parents=True, exist_ok=True)
+        chemin_cert = CERT_DIR / "cert.pem"
+        chemin_key = CERT_DIR / "key.pem"
+        if chemin_cert.exists() and generer_certificat.couvre_deja_cette_ip(str(chemin_cert), ip):
+            print(f"[main] certificat HTTPS déjà valide pour {ip}, inchangé", flush=True)
+        else:
+            generer_certificat.generer(ip, str(chemin_cert), str(chemin_key))
+            print(f"[main] certificat HTTPS régénéré pour {ip} ({chemin_cert})", flush=True)
+    except Exception as exc:
+        print(f"[main] échec de préparation du certificat HTTPS (pas bloquant) : {exc}", flush=True)
+
+
+_preparer_certificat_https()
+
+app = FastAPI(
+    title="PREVIA — API",
+    description=(
+        "API de PREVIA. Comptes (admin par défaut, admins, users, connexion), "
+        "hiérarchie caméra (bâtiments, pièces, caméras), analyse par caméra "
+        "(/voir, /qui), profils de suspicion croisés entre caméras, et vue "
+        "d'ensemble du bâtiment. Pas encore branché : vraie session/jeton, "
+        "/systeme/*, doc unifiée."
+    ),
+    version="0.1.0",
+    # /docs et /redoc SERVIS EN LOCAL (voir plus bas), pas via le CDN par
+    # défaut de FastAPI (cdn.jsdelivr.net) — constaté en conditions
+    # réelles : sur une machine/réseau sans accès à ce CDN précis (DNS
+    # bloqué, pas d'accès internet du tout...), la doc Swagger par défaut
+    # ne charge jamais (ERR_NAME_NOT_RESOLVED), page vide. Cohérent avec
+    # le reste du projet, pensé pour tourner 100% en local (voir
+    # local_store.py) — la doc de l'API ne devrait pas dépendre
+    # d'internet non plus.
+    docs_url=None,
+    redoc_url=None,
+)
+
+# Configuration des origines autorisées (CORS) :
+# Restreint aux origines applicatives locales (ports Vite 5173-5176, backend 8012/8080)
+# et extensible via la variable d'environnement PREVIA_CORS_ORIGINS.
+cors_env = os.environ.get("PREVIA_CORS_ORIGINS", "").strip()
+if cors_env:
+    ORIGINES_AUTORISEES = [o.strip() for o in cors_env.split(",") if o.strip()]
+elif os.environ.get("PREVIA_MODE_DEV", "").strip() == "1":
+    ORIGINES_AUTORISEES = ["*"]
+else:
+    ORIGINES_AUTORISEES = [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:5176",
+        "https://localhost:5173",
+        "https://localhost:5174",
+        "https://localhost:5175",
+        "https://localhost:5176",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        "http://127.0.0.1:5176",
+        "https://127.0.0.1:5173",
+        "https://127.0.0.1:5174",
+        "https://127.0.0.1:5175",
+        "https://127.0.0.1:5176",
+        "http://localhost:8012",
+        "http://127.0.0.1:8012",
+        "https://localhost:8012",
+        "https://127.0.0.1:8012",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    ]
+    ip_loc = _ip_locale()
+    if ip_loc and ip_loc not in ("127.0.0.1", "localhost"):
+        for port in (5173, 5174, 5175, 5176, 8012, 8080):
+            ORIGINES_AUTORISEES.append(f"http://{ip_loc}:{port}")
+            ORIGINES_AUTORISEES.append(f"https://{ip_loc}:{port}")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ORIGINES_AUTORISEES,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|previa\.local|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Assets Swagger/Redoc téléchargés une fois et gardés en local (voir
+# static_docs/) — voir la note sur docs_url=None plus haut.
+STATIC_DOCS_DIR = Path(__file__).resolve().parent.parent.parent / "static_docs"
+app.mount("/static-docs", StaticFiles(directory=STATIC_DOCS_DIR), name="static-docs")
+
+
+@app.get("/docs", include_in_schema=False)
+def docs_locaux():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} — Swagger UI",
+        swagger_js_url="/static-docs/swagger-ui-bundle.js",
+        swagger_css_url="/static-docs/swagger-ui.css",
+    )
+
+
+@app.get("/redoc", include_in_schema=False)
+def redoc_local():
+    return get_redoc_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} — ReDoc",
+        redoc_js_url="/static-docs/redoc.standalone.js",
+    )
+
+
+@app.get("/", include_in_schema=False)
+def racine():
+    return {
+        "service": "PREVIA API Backend",
+        "statut": "en ligne",
+        "documentation": "/docs",
+        "simulateur_mobile_web": "http://192.168.11.108:8081",
+        "expo_go_url": "exp://192.168.11.108:8081"
+    }
+
+
+class DemandeCreationCompte(BaseModel):
+    nom: str
+    prenom: str
+    email: str
+    mot_de_passe: str
+    id_admin: str | None = None
+
+
+class DemandeAmorcage(BaseModel):
+    """Comme DemandeCreationCompte, plus le code secret exigé pour
+    amorcer le tout premier admin (voir defaultAdmin.py)."""
+    nom: str
+    prenom: str
+    email: str
+    mot_de_passe: str
+    code_secret: str
+    profil: str = "entreprise"
+
+
+class DemandeConnexion(BaseModel):
+    email: str
+    mot_de_passe: str
+
+
+class DemandeModificationCompte(BaseModel):
+    """Tous les champs sont optionnels : seuls ceux fournis sont changés."""
+    nom: str | None = None
+    prenom: str | None = None
+    email: str | None = None
+    mot_de_passe: str | None = None
+
+
+class DemandeCreationBatiment(BaseModel):
+    id_admin: str
+    nom: str
+    lieu: str
+    responsable_id: str | None = None
+
+
+class DemandeModificationBatiment(BaseModel):
+    nom: str | None = None
+    lieu: str | None = None
+    responsable_id: str | None = None
+
+
+class DemandeCreationPiece(BaseModel):
+    id_admin: str
+    nom: str
+    batiment_id: str
+
+
+class DemandeModificationPiece(BaseModel):
+    nom: str | None = None
+    batiment_id: str | None = None
+
+
+class DemandeCreationCamera(BaseModel):
+    id_admin: str
+    num: str
+    piece_id: str
+    est_entree: bool = False
+    url_flux: str | None = None
+    rotation: int = 0
+
+
+class DemandeModificationCamera(BaseModel):
+    num: str | None = None
+    piece_id: str | None = None
+    est_entree: bool | None = None
+    url_flux: str | None = None
+    rotation: int | None = None
+
+
+class DemandeRotationCamera(BaseModel):
+    rotation: int = 0  # 0, 90, 180, 270
+
+
+class DemandeTestFlux(BaseModel):
+    url_flux: str
+
+
+class PointZone(BaseModel):
+    x: float
+    y: float
+
+
+class PlageHoraireZone(BaseModel):
+    active_24h: bool = True
+    heure_debut: str = "20:00"
+    heure_fin: str = "06:00"
+    jours_actifs: list[int] = [0, 1, 2, 3, 4, 5, 6]
+
+
+class DemandeZone(BaseModel):
+    id_admin: str
+    points: list[PointZone]
+    nom_zone: str | None = None
+    plage_horaire: PlageHoraireZone | None = None
+
+
+
+# ========================================================================
+# Admin par défaut — amorçage (une seule fois, au tout premier lancement)
+# ========================================================================
+@app.post(
+    "/utilisateurs/amorcer",
+    tags=["Utilisateurs"],
+    summary="Créer le tout premier compte admin",
+    description=(
+        "À utiliser une seule fois, au tout premier lancement de PREVIA chez "
+        "une entreprise : personne n'est encore enregistré, ce compte devient "
+        "le premier admin. Exige `code_secret` — un vrai code d'amorçage à 8 "
+        "caractères obtenu sur previa-SV (voir Infrastructure/licence.py), "
+        "vérifié en ligne puis actif 1 an. Refusé (409) si un compte "
+        "existe déjà — voir DELETE /utilisateurs/admin-defaut pour pouvoir "
+        "refaire l'amorçage."
+    ),
+    responses={
+        403: {"description": "Code d'amorçage invalide, désactivé ou impossible à vérifier"},
+        409: {"description": "Un compte existe déjà, l'amorçage n'est plus possible"},
+    },
+)
+def amorcer_admin_par_defaut(demande: DemandeAmorcage):
+    if demande.profil not in profil_usage.PROFILS:
+        raise HTTPException(422, f"Profil inconnu : attendu {' ou '.join(profil_usage.PROFILS)}")
+    try:
+        admin_cree = defaultAdmin.initialiser_admin_par_defaut(
+            demande.nom, demande.prenom, demande.email, demande.mot_de_passe, demande.code_secret,
+        )
+        profil_usage.appliquer_a_l_amorcage(demande.profil, admin_cree)
+        return admin_cree
+    except defaultAdmin.CodeSecretInvalide as exc:
+        raise HTTPException(403, str(exc))
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+
+
+# Contournements de connexion de démonstration (admin sans mot de passe,
+# création automatique de comptes admin, mot de passe écrasé) : DÉSACTIVÉS
+# par défaut. À n'activer que sur une machine de développement :
+#   PREVIA_MODE_DEV=1
+MODE_DEV_CONNEXION = os.environ.get("PREVIA_MODE_DEV", "").strip() == "1"
+if MODE_DEV_CONNEXION:
+    print("[main] ⚠️ PREVIA_MODE_DEV=1 : connexion permissive ACTIVE — jamais en production.", flush=True)
+
+
+@app.post(
+    "/utilisateurs/connexion",
+    tags=["Utilisateurs"],
+    summary="Se connecter (email + mot de passe)",
+    description=(
+        "Vérifie l'email et le mot de passe (401 sinon). Le comportement "
+        "permissif de démonstration (admin sans mot de passe, création "
+        "automatique de comptes) n'existe que si PREVIA_MODE_DEV=1."
+    ),
+    responses={401: {"description": "Email ou mot de passe incorrect"}},
+)
+def se_connecter(demande: DemandeConnexion):
+    # 1. Authentification standard — seule voie en production.
+    u = compte.authentifier(demande.email, demande.mot_de_passe)
+    if u is not None:
+        rep = dict(u)
+        rep["token"] = session.creer_session(u)
+        return rep
+
+    # 2. Aucun contournement hors mode développement explicite.
+    if not MODE_DEV_CONNEXION:
+        raise HTTPException(401, "Email ou mot de passe incorrect")
+
+    # --- MODE DÉVELOPPEMENT UNIQUEMENT (PREVIA_MODE_DEV=1) ----------------
+    email_clean = demande.email.strip().lower()
+
+    # Admin local sans mot de passe
+    if email_clean in ("admin@previa.local", "admin@previa.fr", "admin"):
+        rep = {
+            "id": "admin_local",
+            "nom": "Administrateur",
+            "prenom": "Previa",
+            "email": demande.email,
+            "role": "admin",
+            "est_par_defaut": True,
+        }
+        rep["token"] = session.creer_session(rep)
+        return rep
+
+    # Si le compte n'existe pas encore dans la base, on le crée en tant qu'admin
+    existant = compte.trouver_par_email(demande.email)
+    if existant is None:
+        nom_extrait = demande.email.split("@")[0].capitalize()
+        u_nouveau = compte.creer_utilisateur(
+            nom=nom_extrait,
+            prenom="Admin",
+            email=demande.email,
+            mot_de_passe=demande.mot_de_passe,
+            role="admin",
+            est_par_defaut=True,
+        )
+        rep = dict(u_nouveau)
+        rep["token"] = session.creer_session(rep)
+        return rep
+
+    # Si le compte existe mais mot de passe différent, mise à jour pour ne jamais bloquer l'administrateur
+    u_maj = compte.modifier_utilisateur(
+        existant["id"],
+        mot_de_passe=demande.mot_de_passe,
+    )
+    rep = dict(u_maj if u_maj else existant)
+    rep["token"] = session.creer_session(rep)
+    return rep
+
+
+@app.post(
+    "/utilisateurs/deconnexion",
+    tags=["Utilisateurs"],
+    summary="Se déconnecter (révoque le jeton de session courant)",
+    description="Inscrit le jeton d'authentification en liste noire pour invalider la session immédiatement.",
+)
+def se_deconnecter(utilisateur: dict = Depends(session.exiger_authentification)):
+    token = utilisateur.get("_token_brut")
+    if token:
+        session.revoquer_session(token)
+    return {"message": "Déconnexion réussie"}
+
+
+@app.get(
+    "/utilisateurs/admin-defaut",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Voir le compte admin par défaut",
+    description="Le compte créé par l'amorçage initial, s'il existe encore (accès admin requis).",
+    responses={404: {"description": "Aucun admin par défaut (jamais amorcé, ou supprimé depuis)"}},
+)
+def voir_admin_par_defaut():
+    u = defaultAdmin.obtenir_admin_par_defaut()
+    if u is None:
+        raise HTTPException(404, "Aucun admin par défaut")
+    return u
+
+
+@app.put(
+    "/utilisateurs/admin-defaut",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Modifier le compte admin par défaut",
+    description="Modifie nom/prénom/email/mot de passe de l'admin par défaut (accès admin requis). Seuls les champs fournis changent.",
+    responses={404: {"description": "Aucun admin par défaut"}, 409: {"description": "Email déjà pris"}},
+)
+def modifier_admin_par_defaut(demande: DemandeModificationCompte):
+    try:
+        u = defaultAdmin.modifier_admin_par_defaut(
+            nom=demande.nom, prenom=demande.prenom, email=demande.email, mot_de_passe=demande.mot_de_passe,
+        )
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    if u is None:
+        raise HTTPException(404, "Aucun admin par défaut")
+    return u
+
+
+@app.delete(
+    "/utilisateurs/admin-defaut",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Supprimer le compte admin par défaut",
+    description="Supprime l'admin par défaut — permet de refaire POST /utilisateurs/amorcer après (accès admin requis).",
+    responses={404: {"description": "Aucun admin par défaut"}},
+)
+def supprimer_admin_par_defaut():
+    if not defaultAdmin.supprimer_admin_par_defaut():
+        raise HTTPException(404, "Aucun admin par défaut")
+    return {"supprime": True}
+
+
+# ========================================================================
+# Admins (accès complet)
+# ========================================================================
+@app.post(
+    "/utilisateurs/admins",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Créer un compte admin",
+    description="Crée un nouveau compte admin (accès complet). Réservé à un administrateur connecté.",
+    responses={409: {"description": "Un compte existe déjà avec cet email"}},
+)
+def creer_admin(demande: DemandeCreationCompte):
+    try:
+        return admin.creer_admin(demande.nom, demande.prenom, demande.email, demande.mot_de_passe)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+
+
+@app.get(
+    "/utilisateurs/admins",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Lister les comptes admin",
+    description="Tous les comptes admin (y compris l'admin par défaut), mot de passe exclu (accès admin requis).",
+)
+def lister_admins():
+    return admin.lister_admins()
+
+
+@app.put(
+    "/utilisateurs/admins/{id_utilisateur}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Modifier un compte admin",
+    description="Seuls les champs fournis changent (accès admin requis). Sans effet sur un id qui n'est pas un admin.",
+    responses={404: {"description": "Aucun admin avec cet id"}, 409: {"description": "Email déjà pris"}},
+)
+def modifier_admin(id_utilisateur: str, demande: DemandeModificationCompte):
+    try:
+        u = admin.modifier_admin(
+            id_utilisateur,
+            nom=demande.nom, prenom=demande.prenom, email=demande.email, mot_de_passe=demande.mot_de_passe,
+        )
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    if u is None:
+        raise HTTPException(404, "Aucun admin avec cet id")
+    return u
+
+
+@app.delete(
+    "/utilisateurs/admins/{id_utilisateur}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Supprimer un compte admin",
+    description="Refuse (404) si l'id n'existe pas ou n'est pas un admin (accès admin requis).",
+    responses={404: {"description": "Aucun admin avec cet id"}},
+)
+def supprimer_admin(id_utilisateur: str):
+    if not admin.supprimer_admin(id_utilisateur):
+        raise HTTPException(404, "Aucun admin avec cet id")
+    return {"supprime": True}
+
+
+# ========================================================================
+# Users (accès restreint aux notifications)
+# ========================================================================
+@app.post(
+    "/utilisateurs/users",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Créer un compte user (accès notifications uniquement)",
+    description="Crée un nouveau compte user. Réservé à un administrateur connecté.",
+    responses={409: {"description": "Un compte existe déjà avec cet email"}},
+)
+def creer_utilisateur_standard(demande: DemandeCreationCompte):
+    try:
+        return user.creer_utilisateur_standard(
+            demande.nom, demande.prenom, demande.email, demande.mot_de_passe
+        )
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+
+
+@app.get(
+    "/utilisateurs/users",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Lister les comptes user",
+    description="Tous les comptes user, mot de passe exclu (accès admin requis).",
+)
+def lister_utilisateurs_standard():
+    return user.lister_utilisateurs_standard()
+
+
+@app.put(
+    "/utilisateurs/users/{id_utilisateur}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Modifier un compte user",
+    description="Seuls les champs fournis changent (accès admin requis). Sans effet sur un id qui n'est pas un user.",
+    responses={404: {"description": "Aucun user avec cet id"}, 409: {"description": "Email déjà pris"}},
+)
+def modifier_utilisateur_standard(id_utilisateur: str, demande: DemandeModificationCompte):
+    try:
+        u = user.modifier_utilisateur_standard(
+            id_utilisateur,
+            nom=demande.nom, prenom=demande.prenom, email=demande.email, mot_de_passe=demande.mot_de_passe,
+        )
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    if u is None:
+        raise HTTPException(404, "Aucun user avec cet id")
+    return u
+
+
+@app.delete(
+    "/utilisateurs/users/{id_utilisateur}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Supprimer un compte user",
+    description="Refuse (404) si l'id n'existe pas ou n'est pas un user (accès admin requis).",
+    responses={404: {"description": "Aucun user avec cet id"}},
+)
+def supprimer_utilisateur_standard(id_utilisateur: str):
+    if not user.supprimer_utilisateur_standard(id_utilisateur):
+        raise HTTPException(404, "Aucun user avec cet id")
+    return {"supprime": True}
+
+
+# ========================================================================
+# Vue d'ensemble
+# ========================================================================
+@app.get(
+    "/utilisateurs",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Utilisateurs"],
+    summary="Lister tous les comptes",
+    description="Tous les comptes (admins et users confondus), mot de passe exclu (accès admin requis).",
+)
+def lister_tous_les_utilisateurs():
+    return compte.lister_utilisateurs()
+
+
+# ========================================================================
+# Bâtiments — sommet de la hiérarchie caméra (bâtiment -> pièces -> caméras)
+# ========================================================================
+@app.post(
+    "/batiments",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Bâtiments"],
+    summary="Créer un bâtiment",
+    description="Crée un bâtiment (nom, lieu). Réservé à un administrateur connecté.",
+    responses={403: {"description": "id_admin ne correspond à aucun compte admin"}},
+)
+def creer_batiment(demande: DemandeCreationBatiment):
+    try:
+        return admin.creer_batiment(demande.id_admin, demande.nom, demande.lieu, responsable_id=demande.responsable_id)
+    except admin.AccesRefuse as exc:
+        raise HTTPException(403, str(exc))
+
+
+@app.get(
+    "/batiments",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Bâtiments"],
+    summary="Lister les bâtiments",
+    description="Tous les bâtiments existants.",
+)
+def lister_batiments():
+    return batiment.lister_batiments()
+
+
+@app.get(
+    "/batiments/{id_batiment}",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Bâtiments"],
+    summary="Voir un bâtiment",
+    description="Un seul bâtiment par son id.",
+    responses={404: {"description": "Aucun bâtiment avec cet id"}},
+)
+def voir_batiment(id_batiment: str):
+    b = batiment.trouver_par_id(id_batiment)
+    if b is None:
+        raise HTTPException(404, "Aucun bâtiment avec cet id")
+    return b
+
+
+@app.put(
+    "/batiments/{id_batiment}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Bâtiments"],
+    summary="Modifier un bâtiment",
+    description="Seuls les champs fournis (nom, lieu, responsable_id) changent.",
+    responses={404: {"description": "Aucun bâtiment avec cet id"}},
+)
+def modifier_batiment(id_batiment: str, demande: DemandeModificationBatiment):
+    b = batiment.modifier_batiment(id_batiment, nom=demande.nom, lieu=demande.lieu, responsable_id=demande.responsable_id)
+    if b is None:
+        raise HTTPException(404, "Aucun bâtiment avec cet id")
+    return b
+
+
+def _supprimer_camera_et_nettoyer(id_camera: str) -> bool:
+    """Supprime UNE caméra et tout ce qui en dépend en mémoire/disque :
+    flux vidéo, dernière image, zone dessinée, suivi des personnes.
+    Utilisé par la suppression d'une caméra ET par la suppression en
+    cascade d'une pièce ou d'un bâtiment (un seul endroit, pour qu'aucun
+    flux ne continue à tourner sur une caméra qui n'existe plus).
+    L'historique (alertes, clips, événements) est conservé volontairement."""
+    if not camera.supprimer_camera(id_camera):
+        return False
+    rtsp_service.arreter_worker_camera(id_camera)
+    derniere_image.oublier(id_camera)
+    zone_module.supprimer_zone(id_camera)
+    oublier_suivi_personnes(id_camera)
+    return True
+
+
+def _supprimer_piece_en_cascade(id_piece: str) -> int:
+    """Supprime les caméras de la pièce puis la pièce. Renvoie le nombre
+    de caméras supprimées. Le bâtiment n'est JAMAIS touché."""
+    cameras = camera.lister_par_piece(id_piece)
+    for c in cameras:
+        _supprimer_camera_et_nettoyer(c["id"])
+    piece.supprimer_piece(id_piece)
+    return len(cameras)
+
+
+@app.delete(
+    "/batiments/{id_batiment}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Bâtiments"],
+    summary="Supprimer un bâtiment",
+    description=(
+        "Supprime le bâtiment ET, en cascade, toutes ses pièces et toutes leurs caméras "
+        "(IRRÉVERSIBLE — l'interface demande une confirmation détaillée avant l'appel). "
+        "L'historique (alertes, clips, événements) est conservé."
+    ),
+    responses={404: {"description": "Aucun bâtiment avec cet id"}},
+)
+def supprimer_batiment(id_batiment: str):
+    if batiment.trouver_par_id(id_batiment) is None:
+        raise HTTPException(404, "Aucun bâtiment avec cet id")
+    nb_pieces = 0
+    nb_cameras = 0
+    for p in piece.lister_par_batiment(id_batiment):
+        nb_cameras += _supprimer_piece_en_cascade(p["id"])
+        nb_pieces += 1
+    batiment.supprimer_batiment(id_batiment)
+    return {"supprime": True, "pieces_supprimees": nb_pieces, "cameras_supprimees": nb_cameras}
+
+
+# ========================================================================
+# Pièces — appartiennent à UN bâtiment
+# ========================================================================
+@app.post(
+    "/pieces",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Pièces"],
+    summary="Créer une pièce",
+    description="Crée une pièce rattachée à un bâtiment. Réservé à un administrateur connecté.",
+    responses={
+        403: {"description": "id_admin ne correspond à aucun compte admin"},
+        404: {"description": "Aucun bâtiment avec ce batiment_id"},
+        409: {"description": "Une pièce porte déjà ce nom dans ce bâtiment"},
+    },
+)
+def creer_piece(demande: DemandeCreationPiece):
+    try:
+        return admin.creer_piece(demande.id_admin, demande.nom, demande.batiment_id)
+    except admin.AccesRefuse as exc:
+        raise HTTPException(403, str(exc))
+    except piece.NomDejaUtilise as exc:
+        raise HTTPException(409, str(exc))
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+
+
+@app.get(
+    "/pieces",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Pièces"],
+    summary="Lister les pièces",
+    description="Toutes les pièces, ou seulement celles d'un bâtiment si `batiment_id` est fourni.",
+)
+def lister_pieces(batiment_id: str | None = None):
+    if batiment_id is not None:
+        return piece.lister_par_batiment(batiment_id)
+    return piece.lister_pieces()
+
+
+@app.get(
+    "/pieces/{id_piece}",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Pièces"],
+    summary="Voir une pièce",
+    description="Une seule pièce par son id.",
+    responses={404: {"description": "Aucune pièce avec cet id"}},
+)
+def voir_piece(id_piece: str):
+    p = piece.trouver_par_id(id_piece)
+    if p is None:
+        raise HTTPException(404, "Aucune pièce avec cet id")
+    return p
+
+
+@app.put(
+    "/pieces/{id_piece}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Pièces"],
+    summary="Modifier une pièce",
+    description="Seuls les champs fournis (nom, batiment_id) changent.",
+    responses={404: {"description": "Aucune pièce avec cet id, ou aucun bâtiment avec le nouveau batiment_id"}},
+)
+def modifier_piece(id_piece: str, demande: DemandeModificationPiece):
+    try:
+        p = piece.modifier_piece(id_piece, nom=demande.nom, batiment_id=demande.batiment_id)
+    except piece.NomDejaUtilise as exc:
+        raise HTTPException(409, str(exc))
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+    if p is None:
+        raise HTTPException(404, "Aucune pièce avec cet id")
+    return p
+
+
+@app.delete(
+    "/pieces/{id_piece}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Pièces"],
+    summary="Supprimer une pièce",
+    description=(
+        "Supprime la pièce ET, en cascade, toutes ses caméras (IRRÉVERSIBLE — l'interface demande "
+        "une confirmation détaillée avant l'appel). Le bâtiment n'est jamais supprimé. "
+        "L'historique (alertes, clips, événements) est conservé."
+    ),
+    responses={404: {"description": "Aucune pièce avec cet id"}},
+)
+def supprimer_piece(id_piece: str):
+    if piece.trouver_par_id(id_piece) is None:
+        raise HTTPException(404, "Aucune pièce avec cet id")
+    nb_cameras = _supprimer_piece_en_cascade(id_piece)
+    return {"supprime": True, "cameras_supprimees": nb_cameras}
+
+
+# ========================================================================
+# Caméras — appartiennent à UNE pièce (une pièce peut en avoir plusieurs)
+# ========================================================================
+@app.on_event("startup")
+def demarrer_services_arriere_plan():
+    """Démarre l'analyse IA automatique pour toutes les caméras physiques/RTSP enregistrées et confirme SQLite."""
+    try:
+        from fonctionnalites.Infrastructure import sqlite_db
+        conn = sqlite_db.get_connection()
+        nb_tables = conn.execute("SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table'").fetchone()["cnt"]
+        print(f"[sqlite_db] Base de donnees embarquee SQLite (previa.db) ACTIVE & INITIALISEE ({nb_tables} tables)", flush=True)
+
+        toutes_cams = camera.lister_cameras()
+        for c in toutes_cams:
+            if c.get("url_flux"):
+                rtsp_service.demarrer_worker_camera(c["id"], c["url_flux"])
+    except Exception as exc:
+        print(f"[main] Erreur démarrage workers caméras: {exc}", flush=True)
+
+
+
+@app.post(
+    "/cameras",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Caméras"],
+    summary="Créer une caméra",
+    description="Crée une caméra rattachée à une pièce. Réservé à un administrateur connecté.",
+    responses={
+        403: {"description": "id_admin ne correspond à aucun compte admin"},
+        404: {"description": "Aucune pièce avec ce piece_id"},
+        409: {"description": "Une caméra porte déjà ce nom dans cette pièce"},
+    },
+)
+def creer_camera(demande: DemandeCreationCamera):
+    try:
+        res = admin.creer_camera(demande.id_admin, demande.num, demande.piece_id, est_entree=demande.est_entree, url_flux=demande.url_flux)
+        if demande.url_flux:
+            rtsp_service.demarrer_worker_camera(res["id"], demande.url_flux)
+        return res
+    except admin.AccesRefuse as exc:
+        raise HTTPException(403, str(exc))
+    except camera.NomDejaUtilise as exc:
+        raise HTTPException(409, str(exc))
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+
+
+@app.get(
+    "/cameras",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Caméras"],
+    summary="Lister les caméras",
+    description="Toutes les caméras, ou seulement celles d'une pièce si `piece_id` est fourni.",
+)
+def lister_cameras(piece_id: str | None = None):
+    if piece_id is not None:
+        return camera.lister_par_piece(piece_id)
+    return camera.lister_cameras()
+
+
+SEUIL_CAMERA_DECONNECTEE_S = float(os.environ.get("PREVIA_CAMERA_DECONNECTEE_S", "30"))
+
+
+@app.get(
+    "/cameras-statuts",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Caméras"],
+    summary="État de connexion de chaque caméra",
+    description=(
+        "Pour chaque caméra : `connectee` (image reçue il y a moins de 30 s), `deconnectee` "
+        "(plus d'image depuis plus de 30 s, ou caméra réseau qui n'a jamais répondu depuis le "
+        "démarrage) ou `inconnue` (caméra sans adresse réseau qui n'a encore rien envoyé "
+        "depuis le démarrage du serveur)."
+    ),
+)
+def statuts_cameras():
+    resultat = []
+    for c in camera.lister_cameras():
+        age = derniere_image.age_secondes(c["id"])
+        if age is not None and age <= SEUIL_CAMERA_DECONNECTEE_S:
+            statut = "connectee"
+        elif age is not None or c.get("url_flux"):
+            statut = "deconnectee"
+        else:
+            statut = "inconnue"
+        resultat.append({"id": c["id"], "statut": statut, "age_s": None if age is None else round(age, 1)})
+    return resultat
+
+
+@app.get(
+    "/cameras/{id_camera}",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Caméras"],
+    summary="Voir une caméra",
+    description="Une seule caméra par son id.",
+    responses={404: {"description": "Aucune caméra avec cet id"}},
+)
+def voir_camera(id_camera: str):
+    c = camera.trouver_par_id(id_camera)
+    if c is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    return c
+
+
+@app.put(
+    "/cameras/{id_camera}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Caméras"],
+    summary="Modifier une caméra",
+    description="Seuls les champs fournis (num, piece_id, rotation) changent (accès admin requis).",
+    responses={404: {"description": "Aucune caméra avec cet id, ou aucune pièce avec le nouveau piece_id"}},
+)
+def modifier_camera(id_camera: str, demande: DemandeModificationCamera):
+    try:
+        c = camera.modifier_camera(
+            id_camera,
+            num=demande.num,
+            piece_id=demande.piece_id,
+            est_entree=demande.est_entree,
+            url_flux=demande.url_flux,
+            rotation=demande.rotation,
+        )
+        if demande.rotation is not None:
+            try:
+                from fonctionnalites.DetectionPrincipal import on_voit_qui as _qui
+                _qui.reinitialiser_orientation(id_camera)
+                rtsp_service.redemarrer_worker_camera(id_camera)
+            except Exception:
+                pass
+        if demande.url_flux:
+            rtsp_service.demarrer_worker_camera(id_camera, demande.url_flux)
+        elif demande.url_flux == "":
+            rtsp_service.arreter_worker_camera(id_camera)
+    except camera.NomDejaUtilise as exc:
+        raise HTTPException(409, str(exc))
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+    if c is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    return c
+
+
+@app.post(
+    "/cameras/{id_camera}/rotation",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Caméras"],
+    summary="Pivoter une caméra (0°, 90°, 180°, 270°)",
+    description="Met à jour l'orientation physique de la caméra, redémarre le worker vidéo et synchronise l'IA.",
+    responses={404: {"description": "Aucune caméra avec cet id"}},
+)
+def changer_rotation_camera(id_camera: str, demande: DemandeRotationCamera):
+    c = camera.definir_rotation(id_camera, demande.rotation)
+    if c is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+
+    try:
+        from fonctionnalites.DetectionPrincipal import on_voit_qui as _qui
+        _qui.reinitialiser_orientation(id_camera)
+    except Exception:
+        pass
+
+    try:
+        rtsp_service.redemarrer_worker_camera(id_camera)
+    except Exception:
+        pass
+
+    return {"status": "ok", "id_camera": id_camera, "rotation": c.get("rotation", 0)}
+
+
+@app.delete(
+    "/cameras/{id_camera}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Caméras"],
+    summary="Supprimer une caméra",
+    responses={404: {"description": "Aucune caméra avec cet id"}},
+)
+def supprimer_camera(id_camera: str):
+    if not _supprimer_camera_et_nettoyer(id_camera):
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    return {"supprime": True}
+
+
+# ========================================================================
+# Vue d'ensemble — tout le bâtiment, toutes les caméras confondues
+# ========================================================================
+@app.get(
+    "/vue-ensemble",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Vue d'ensemble"],
+    summary="État de tout le bâtiment, toutes caméras confondues",
+    description=(
+        "Résumé de CHAQUE caméra active (objets vus, nombre de personnes, "
+        "alertes feu/fumée) et la liste des personnes actuellement suspectes "
+        "n'importe où dans le bâtiment (rôdage en cours, regard qui scanne, "
+        "objet proche disparu), avec la caméra qui les voit et, si connu, où "
+        "elles ont déjà été suspectes ailleurs."
+    ),
+)
+def voir_vue_ensemble():
+    return vue_ensemble_module.vue_ensemble()
+
+
+# ========================================================================
+# Analyse par caméra — /voir (objets) et /qui (personnes)
+# ========================================================================
+
+# Endpoints en `def` classique (pas `async def`) : l'analyse (plusieurs
+# modèles YOLO/torch/transformers par appel) est un long calcul bloquant.
+# FastAPI exécute automatiquement les endpoints synchrones dans un thread
+# séparé — en `async def`, ce calcul bloquerait la boucle d'événements
+# entière.
+@app.get(
+    "/cameras/{id_camera}/voir",
+    include_in_schema=False,
+)
+def voir_navigateur_get(id_camera: str):
+    """Redirige les requêtes GET (ex: navigateur web) vers l'aperçu image."""
+    return RedirectResponse(url=f"/cameras/{id_camera}/image", status_code=307)
+
+
+@app.post(
+    "/cameras/{id_camera}/voir",
+    tags=["Analyse"],
+    summary="Détecter les objets vus par cette caméra",
+    description=(
+        "Reçoit une image (multipart/form-data) de la caméra `id_camera` et "
+        "renvoie les objets détectés (vélo, sac, valise...), le nombre de "
+        "personnes visibles, et les éventuelles alertes feu/fumée. N'identifie "
+        "PAS les personnes individuellement — voir /qui pour ça. Écrit le "
+        "résultat dans le rapport de CETTE caméra (voir GET .../etat)."
+    ),
+    responses={
+        400: {"description": "Fichier envoyé illisible comme image"},
+        404: {"description": "Aucune caméra enregistrée avec cet id"},
+    },
+)
+def voir(id_camera: str, file: UploadFile = File(..., description="Image JPEG capturée par la caméra")):
+    if camera.trouver_par_id(id_camera) is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    data = file.file.read()
+    frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if frame is None:
+        raise HTTPException(400, "Image invalide")
+
+    # Gardée UNIQUEMENT en mémoire (voir derniere_image.py) pour
+    # GET /cameras/{id}/image — l'aperçu "quasi temps réel" du dashboard
+    # admin. Appelé ici (pas dans /qui) : /voir est systématiquement
+    # appelé en premier par camera.jsx à chaque cycle, sur l'image brute
+    # avant tout traitement.
+    derniere_image.enregistrer(id_camera, data)
+
+    return analyser_quoi(id_camera, frame)
+
+
+@app.post(
+    "/cameras/{id_camera}/trame",
+    tags=["Analyse"],
+    summary="Envoyer une image pour l'aperçu en direct, sans analyse",
+    description=(
+        "Reçoit une image (multipart/form-data) et la garde en mémoire pour "
+        "GET /cameras/{id_camera}/image. N'exécute AUCUN modèle : sert à "
+        "garder l'aperçu fluide quand l'analyse (/voir, /qui) tourne à une "
+        "cadence plus basse."
+    ),
+    responses={404: {"description": "Aucune caméra enregistrée avec cet id"}},
+)
+def trame(id_camera: str, file: UploadFile = File(..., description="Image JPEG capturée par la caméra")):
+    if camera.trouver_par_id(id_camera) is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    derniere_image.enregistrer(id_camera, file.file.read())
+    return {"ok": True}
+
+
+def _convertir_types_numpy(obj):
+    """Rend un résultat d'analyse sérialisable en JSON : numpy.float32/int64/array -> types Python.
+    Sans cela /qui répondait 500 (et le cadre n'était pas mis à jour) dès qu'un score numpy
+    se glissait dans la réponse."""
+    if isinstance(obj, dict):
+        return {k: _convertir_types_numpy(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_convertir_types_numpy(v) for v in obj]
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
+
+
+@app.post(
+    "/cameras/{id_camera}/qui",
+    tags=["Analyse"],
+    summary="Identifier et décrire les personnes vues par cette caméra",
+    description=(
+        "Reçoit une image (multipart/form-data) de la caméra `id_camera` et "
+        "renvoie, pour chaque personne détectée : son identifiant stable "
+        "(visage ou apparence corporelle, global — la même personne est "
+        "reconnue quelle que soit la caméra), genre, vêtements, posture/"
+        "activité, et son comportement SUR CETTE caméra (rôdage, regarde "
+        "autour) — plus, si elle a déjà été suspecte sur une AUTRE caméra "
+        "récemment, `comportement.deja_suspect_ailleurs`. Appelé juste après "
+        "/voir, sur la même image, pour que les objets de cet appel soient "
+        "déjà connus (corrélation rôdage/objet disparu)."
+    ),
+    responses={
+        400: {"description": "Fichier envoyé illisible comme image"},
+        404: {"description": "Aucune caméra enregistrée avec cet id"},
+    },
+)
+def qui(id_camera: str, file: UploadFile = File(..., description="Image JPEG capturée par la caméra")):
+    if camera.trouver_par_id(id_camera) is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    data = file.file.read()
+    frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if frame is None:
+        raise HTTPException(400, "Image invalide")
+
+    resultat = _convertir_types_numpy(analyser_qui(id_camera, frame))
+    # Appelé à chaque cycle caméra, mais n'écrit réellement sur disque
+    # qu'au maximum toutes les SAUVEGARDE_INTERVALLE_S secondes (voir
+    # etat_persistant.py) — négligeable comparé au temps que /qui prend
+    # déjà (plusieurs modèles lourds par appel).
+    etat_persistant.sauvegarder_si_temps()
+    return resultat
+
+
+@app.get(
+    "/cameras/{id_camera}/etat",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Analyse"],
+    summary="Dernier état connu de cette caméra",
+    description="Le dernier résultat de /voir (vueActuelle) et /qui (personnesVues) pour CETTE caméra.",
+    responses={404: {"description": "Aucune caméra enregistrée avec cet id"}},
+)
+def etat_camera(id_camera: str):
+    if camera.trouver_par_id(id_camera) is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    return rapport_cam.lire_etat(id_camera)
+
+
+@app.get(
+    "/cameras/{id_camera}/image",
+    tags=["Analyse"],
+    summary="Dernière image reçue de cette caméra (aperçu quasi temps réel)",
+    description=(
+        "Renvoie tel quel le dernier JPEG reçu via /voir pour cette caméra — "
+        "sert d'aperçu \"quasi temps réel\" côté dashboard admin : celui-ci "
+        "réinterroge cette route toutes les ~2s (la cadence de capture de "
+        "camera.jsx), ce n'est PAS un flux vidéo continu. L'image est gardée "
+        "UNIQUEMENT en mémoire (voir Infrastructure/derniere_image.py), "
+        "jamais sur disque : redémarrer le serveur l'efface, et chaque "
+        "nouvel appel à /voir remplace la précédente — cohérent avec le "
+        "choix de ne jamais conserver durablement une image (voir "
+        "DetectionPrincipal/on_voit_quoi.py)."
+    ),
+    responses={
+        404: {"description": "Aucune caméra avec cet id, ou aucune image reçue pour l'instant"},
+    },
+)
+def image_camera(id_camera: str):
+    cam = camera.trouver_par_id(id_camera)
+    if cam is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    contenu = derniere_image.lire(id_camera)
+    if contenu is None and cam.get("url_flux"):
+        # Tente une capture fraîche depuis le flux RTSP
+        contenu = rtsp_service.capturer_snapshot_unique(cam["url_flux"])
+        if contenu:
+            derniere_image.enregistrer(id_camera, contenu)
+    if contenu is None:
+        raise HTTPException(404, "Aucune image reçue pour cette caméra pour l'instant")
+    return Response(content=contenu, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@app.post(
+    "/cameras/tester_flux",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Caméras"],
+    summary="Tester la joignabilité d'un flux vidéo RTSP",
+)
+def tester_flux_rtsp(demande: DemandeTestFlux):
+    return rtsp_service.tester_connexion_rtsp(demande.url_flux)
+
+
+@app.get(
+    "/cameras/{id_camera}/flux",
+    tags=["Caméras"],
+    summary="Flux vidéo continu MJPEG pour navigateur web",
+    description="Convertit le flux RTSP IP en direct en flux multipart/x-mixed-replace compatible avec les balises <img> web.",
+)
+def flux_camera_mjpeg(id_camera: str):
+    cam = camera.trouver_par_id(id_camera)
+    if cam is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    url_flux = cam.get("url_flux")
+    if not url_flux:
+        raise HTTPException(400, "Cette caméra n'a pas d'URL de flux RTSP configurée")
+    return StreamingResponse(
+        rtsp_service.generer_flux_mjpeg(id_camera, url_flux),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+@app.get(
+    "/cameras/{id_camera}/snapshot",
+    tags=["Caméras"],
+    summary="Télécharger un instantané JPEG autonome de la caméra",
+    description="Fournit un cliché JPEG unique prêt au téléchargement direct, sans flux continu.",
+)
+def snapshot_camera(id_camera: str):
+    cam = camera.trouver_par_id(id_camera)
+    if cam is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+
+    # 1. Vérifier si une trame récente existe en mémoire
+    contenu = derniere_image.lire(id_camera)
+
+    # 2. Si absence d'image en mémoire et caméra RTSP, chercher dans le buffer RTSP actif
+    if contenu is None and cam.get("url_flux"):
+        with rtsp_service._condition_frame:
+            contenu = rtsp_service._buffer_derniere_frame.get(id_camera)
+
+    # 3. Si toujours rien et caméra RTSP, tenter capture fraîche
+    if contenu is None and cam.get("url_flux"):
+        contenu = rtsp_service.capturer_snapshot_unique(cam["url_flux"])
+        if contenu:
+            derniere_image.enregistrer(id_camera, contenu)
+
+    # 4. Si toujours rien, générer la trame d'attente informative
+    if contenu is None:
+        nom_cam = cam.get("num") or "Caméra"
+        contenu = rtsp_service._generer_frame_attente(id_camera, nom_cam)
+
+    nom_fichier = f"previa_snapshot_{id_camera}_{int(time.time())}.jpg"
+    return Response(
+        content=contenu,
+        media_type="image/jpeg",
+        headers={
+            "Content-Disposition": f'attachment; filename="{nom_fichier}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+# ========================================================================
+# Flux en direct — signalisation WebRTC (voir Infrastructure/
+# signalisation_webrtc.py pour le "pourquoi" complet et le protocole des
+# messages échangés). Séparé de /voir et /qui, inchangés : ce WebSocket
+# ne porte PAS la vidéo, juste les messages de négociation SDP/ICE — la
+# vidéo elle-même circule directement entre le navigateur de la caméra
+# et celui du spectateur une fois la connexion établie (WebRTC
+# pair-à-pair), exactement comme un appel Google Meet en pair-à-pair.
+# ========================================================================
+@app.websocket("/cameras/{id_camera}/direct/emettre")
+async def direct_emettre(websocket: WebSocket, id_camera: str):
+    if camera.trouver_par_id(id_camera) is None:
+        await websocket.close(code=4404)
+        return
+    await websocket.accept()
+    signalisation_webrtc.gestionnaire.enregistrer_emetteur(id_camera, websocket)
+
+    # Prévient la caméra des spectateurs DÉJÀ connectés avant elle — sans
+    # ça, un spectateur arrivé avant que la caméra ne se mette à émettre
+    # ne reçoit jamais d'offre (direct_regarder ne prévient la caméra que
+    # des NOUVEAUX spectateurs, pas de ceux déjà en attente) et reste
+    # bloqué indéfiniment, même une fois la caméra active. Bug réel
+    # trouvé en testant : caméra démarrée après ouverture de l'app
+    # mobile → jamais de flux, malgré une reconnexion WebSocket saine.
+    for id_spectateur_existant in signalisation_webrtc.gestionnaire.ids_spectateurs(id_camera):
+        await websocket.send_json({"type": "nouveau_spectateur", "id": id_spectateur_existant})
+
+    try:
+        while True:
+            message = await websocket.receive_json()
+            id_spectateur = message.get("pour")
+            if message.get("type") in ("offre", "ice") and id_spectateur:
+                ws_spectateur = signalisation_webrtc.gestionnaire.spectateur(id_camera, id_spectateur)
+                if ws_spectateur is not None:
+                    await ws_spectateur.send_json(message)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        signalisation_webrtc.gestionnaire.retirer_emetteur(id_camera, websocket)
+
+
+@app.websocket("/cameras/{id_camera}/direct/regarder")
+async def direct_regarder(websocket: WebSocket, id_camera: str):
+    if camera.trouver_par_id(id_camera) is None:
+        await websocket.close(code=4404)
+        return
+    await websocket.accept()
+    id_spectateur = uuid.uuid4().hex
+    signalisation_webrtc.gestionnaire.ajouter_spectateur(id_camera, id_spectateur, websocket)
+    await websocket.send_json({"type": "bienvenue", "id": id_spectateur})
+
+    # Prévient la caméra (si elle est en train d'émettre) qu'un nouveau
+    # spectateur vient d'arriver — c'est elle qui initie la connexion
+    # WebRTC vers lui (crée l'offre), voir camera.jsx.
+    emetteur = signalisation_webrtc.gestionnaire.emetteur_de(id_camera)
+    if emetteur is not None:
+        await emetteur.send_json({"type": "nouveau_spectateur", "id": id_spectateur})
+
+    try:
+        while True:
+            message = await websocket.receive_json()
+            if message.get("type") in ("reponse", "ice"):
+                emetteur = signalisation_webrtc.gestionnaire.emetteur_de(id_camera)
+                if emetteur is not None:
+                    message["de"] = id_spectateur
+                    await emetteur.send_json(message)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        signalisation_webrtc.gestionnaire.retirer_spectateur(id_camera, id_spectateur)
+        emetteur = signalisation_webrtc.gestionnaire.emetteur_de(id_camera)
+        if emetteur is not None:
+            try:
+                await emetteur.send_json({"type": "spectateur_parti", "id": id_spectateur})
+            except Exception:
+                pass
+
+
+# ========================================================================
+# Zones à surveiller — un polygone dessiné par caméra (voir
+# zoneCam/enregitre.py). Stockage seul pour l'instant : aucune détection
+# n'utilise encore ce polygone (viendra plus tard dans
+# ComportementsSupects/).
+# ========================================================================
+@app.post(
+    "/cameras/{id_camera}/zone",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Zones"],
+    summary="Enregistrer la zone à surveiller de cette caméra",
+    description="Remplace (ou crée) le polygone de zone de CETTE caméra. Réservé à un administrateur connecté.",
+    responses={
+        400: {"description": "Moins de 3 points, ou coordonnées hors de [0, 1]"},
+        403: {"description": "id_admin ne correspond à aucun compte admin"},
+        404: {"description": "Aucune caméra avec cet id"},
+    },
+)
+def enregistrer_zone_camera(id_camera: str, demande: DemandeZone):
+    if camera.trouver_par_id(id_camera) is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    try:
+        points = [{"x": p.x, "y": p.y} for p in demande.points]
+        plage = demande.plage_horaire.dict() if demande.plage_horaire else None
+        return admin.enregistrer_zone(
+            demande.id_admin,
+            id_camera,
+            points,
+            nom_zone=demande.nom_zone,
+            plage_horaire=plage,
+        )
+    except admin.AccesRefuse as exc:
+        raise HTTPException(403, str(exc))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get(
+    "/cameras/{id_camera}/zone",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Zones"],
+    summary="Lire la zone à surveiller de cette caméra",
+    description="Le polygone actuellement enregistré pour CETTE caméra, ou 404 si aucun n'a encore été dessiné.",
+    responses={404: {"description": "Aucune caméra avec cet id, ou aucune zone enregistrée"}},
+)
+def lire_zone_camera(id_camera: str):
+    if camera.trouver_par_id(id_camera) is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    zone = zone_module.lire_zone(id_camera)
+    if zone is None:
+        raise HTTPException(404, "Aucune zone enregistrée pour cette caméra")
+    return zone
+
+
+@app.delete(
+    "/cameras/{id_camera}/zone",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Zones"],
+    summary="Supprimer la zone à surveiller de cette caméra",
+    responses={404: {"description": "Aucune zone enregistrée pour cette caméra"}},
+)
+def supprimer_zone_camera(id_camera: str):
+    if not zone_module.supprimer_zone(id_camera):
+        raise HTTPException(404, "Aucune zone enregistrée pour cette caméra")
+    return {"supprime": True}
+
+
+@app.get(
+    "/cameras/{id_camera}/historique",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Analyse"],
+    summary="Historique des événements de cette caméra",
+    description="Événements horodatés (rôdage, objet abandonné, feu/fumée, posture...) de CETTE caméra, les plus récents en dernier.",
+    responses={404: {"description": "Aucune caméra enregistrée avec cet id"}},
+)
+def historique_camera(id_camera: str):
+    if camera.trouver_par_id(id_camera) is None:
+        raise HTTPException(404, "Aucune caméra avec cet id")
+    return rapport_cam.lire_historique(id_camera)
+
+
+# ========================================================================
+# Profils — identité croisée entre caméras
+# ========================================================================
+@app.get(
+    "/profils/{pid}",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Profils"],
+    summary="Profil de suspicion global d'une personne",
+    description="Tous les événements suspects connus pour cette identité (pid), toutes caméras confondues.",
+)
+def profil_personne(pid: str):
+    return profil_suspect.profil_de(pid)
+
+
+# ========================================================================
+# Alertes — "ce qui nous intéresse le plus", isolé du reste
+# ========================================================================
+@app.get(
+    "/alertes",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Alertes"],
+    summary="Lister les alertes confirmées",
+    description=(
+        "Comportements anormaux CONFIRMÉS (rôdage, objet abandonné, objet "
+        "disparu, feu/fumée, infiltration), toutes caméras confondues, avec "
+        "l'avis du comparateur IA et le contexte de la caméra. Les plus récentes en premier."
+    ),
+)
+def lister_alertes(id_camera: str | None = None, pid: str | None = None):
+    resultat = []
+    for alerte in alertes_module.lister_alertes(id_camera=id_camera, pid=pid):
+        resultat.append({**alerte, **vue_ensemble_module.contexte_camera(alerte["id_camera"])})
+    return resultat
+
+
+@app.get(
+    "/alertes/{id_alerte}/image",
+    tags=["Alertes"],
+    summary="Instantané au moment de l'alerte",
+    description=(
+        "L'image de la caméra AU MOMENT où cette alerte s'est déclenchée — "
+        "directement accessible pour les balises <img> web."
+    ),
+    responses={404: {"description": "Aucun instantané enregistré pour cette alerte"}},
+)
+def image_alerte(id_alerte: str, telecharger: bool = False):
+    contenu = alertes_module.lire_instantane(id_alerte)
+    if contenu is None:
+        raise HTTPException(404, "Aucun instantané enregistré pour cette alerte.")
+    disp = "attachment" if telecharger else "inline"
+    return Response(
+        content=contenu,
+        media_type="image/jpeg",
+        headers={
+            "Content-Disposition": f'{disp}; filename="capture_{id_alerte}.jpg"',
+            "Content-Length": str(len(contenu)),
+            "Cache-Control": "public, max-age=31536000, immutable",
+        },
+    )
+
+
+@app.get(
+    "/alertes/{id_alerte}/clip",
+    tags=["Alertes"],
+    summary="Extrait vidéo (MP4) de 10 secondes au moment de l'alerte",
+    description="Extrait vidéo probant capturé automatiquement au déclenchement de l'alerte d'incident.",
+    responses={404: {"description": "Aucun clip vidéo disponible pour cette alerte"}},
+)
+def clip_alerte(id_alerte: str, telecharger: bool = False):
+    contenu = clips_service.lire_clip(id_alerte)
+    if contenu is None:
+        raise HTTPException(404, "Aucun clip vidéo enregistré pour cette alerte.")
+    disp = "attachment" if telecharger else "inline"
+    return Response(
+        content=contenu,
+        media_type="video/mp4",
+        headers={
+            "Content-Disposition": f'{disp}; filename="incident_{id_alerte}.mp4"',
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(len(contenu)),
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
+
+
+@app.delete(
+    "/alertes/{id_alerte}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Alertes"],
+    summary="Supprimer une alerte",
+    description="Supprime définitivement une alerte ainsi que son image et son extrait vidéo associé (accès admin requis).",
+)
+def supprimer_alerte(id_alerte: str):
+    succes = alertes_module.supprimer_alerte(id_alerte)
+    if not succes:
+        raise HTTPException(404, "Alerte introuvable.")
+    return {"statut": "succes", "message": f"Alerte {id_alerte} supprimée"}
+
+
+@app.delete(
+    "/alertes",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Alertes"],
+    summary="Supprimer toutes les alertes",
+    description="Supprime l'ensemble des alertes et notifications archivées (accès admin requis).",
+)
+def supprimer_toutes_alertes():
+    nb = alertes_module.supprimer_toutes_alertes()
+    return {"statut": "succes", "nombre_supprimees": nb}
+
+
+class TraitementAlerteSchema(BaseModel):
+    traitement: str  # 'confirmee' ou 'erreur'
+    motif: str | None = None
+    auteur: str | None = "Opérateur"
+
+
+@app.post(
+    "/alertes/{id_alerte}/traiter",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Alertes"],
+    summary="Qualifier/Traiter une alerte avec motif",
+    description="Permet à l'opérateur de qualifier une alerte comme 'confirmee' ou 'erreur' avec justification."
+)
+def traiter_alerte_route(id_alerte: str, me: TraitementAlerteSchema):
+    if me.traitement not in {"confirmee", "erreur"}:
+        raise HTTPException(400, "Le champ 'traitement' doit être 'confirmee' ou 'erreur'.")
+    res = alertes_module.traiter_alerte(id_alerte, me.traitement, me.motif, me.auteur or "Opérateur")
+    if not res:
+        raise HTTPException(404, "Alerte introuvable.")
+    return {"statut": "succes", "alerte": res}
+
+
+@app.get(
+    "/journal-actions",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Audit & Journal"],
+    summary="Consulter le journal des actions d'audit",
+    description="Affiche la liste chronologique des actions effectuées sur le système (validations d'alertes, sirène, etc.)."
+)
+def journal_actions():
+    return alertes_module.lister_journal_actions()
+
+
+@app.get(
+    "/export/alertes/csv",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Export & Rapports"],
+    summary="Exporter les alertes au format CSV",
+    description="Génère un fichier CSV téléchargeable récapitulant les alertes et leurs traitements."
+)
+def exporter_alertes_csv():
+    import io
+    import csv
+
+    alertes = alertes_module.lister_alertes()
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(["ID Alerte", "Date & Heure", "Type d'événement", "Caméra", "Personne ID", "Statut Traitement", "Motif / Commentaire", "Opérateur"])
+
+    for a in alertes:
+        dt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(a.get("horodatage", time.time())))
+        writer.writerow([
+            a.get("id", ""),
+            dt,
+            a.get("type_evenement", ""),
+            a.get("id_camera", ""),
+            a.get("pid", "Non identifié"),
+            a.get("statut_traitement", "En attente"),
+            a.get("motif_traitement", ""),
+            a.get("traitee_par", "")
+        ])
+
+    response = Response(content=output.getvalue(), media_type="text/csv; charset=utf-8")
+    response.headers["Content-Disposition"] = 'attachment; filename="rapport_alertes_previa.csv"'
+    return response
+
+
+
+
+# ========================================================================
+# Alarme physique (lampe + sirène) — voir Infrastructure/alarme_physique.py.
+# Le Raspberry pilote lui-même deux relais par ses broches GPIO (voir
+# raspberry/CABLAGE_RELAIS.md) ; hors Raspberry, le module bascule en
+# simulation (seul l'état change). Plus aucun appareil externe n'est
+# nécessaire.
+# ========================================================================
+@app.get(
+    "/alarme/etat",
+    tags=["Alarme"],
+    summary="État courant de l'alarme physique (lampe + sirène)",
+    description="État des deux relais (lampe, sirène) pilotés par les broches GPIO du Raspberry ; lu par l'app mobile et le tableau de bord web.",
+)
+def etat_alarme():
+    return alarme_physique.etat()
+
+
+@app.get(
+    "/alarme/diagnostic",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Alarme"],
+    summary="Diagnostic du branchement lampe + sirène (mode gpio ou simulation)",
+    description="Indique si les relais sont réellement pilotés (mode `gpio`) ou si le serveur est en `simulation` et pourquoi, avec les broches BCM utilisées (accès admin requis).",
+)
+def diagnostic_alarme():
+    return alarme_physique.diagnostic()
+
+
+@app.post(
+    "/alarme/arreter",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Alarme"],
+    summary="Éteint la lampe et la sirène",
+    description="Appelé par \"Arrêter l'alerte\" (app mobile/web) — coupe immédiatement les deux relais GPIO.",
+)
+def arreter_alarme():
+    return alarme_physique.arreter()
+
+
+@app.post(
+    "/alarme/reactiver",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Alarme"],
+    summary="Rallume la lampe et la sirène",
+    description="Appelé par \"Réarmer\" (app mobile/web).",
+)
+def reactiver_alarme():
+    return alarme_physique.activer()
+
+
+# ========================================================================
+# Système — accès direct à ce qui peut raisonnablement se tester seul,
+# parmi les modules sans route dédiée
+# ========================================================================
+class DemandeComparateur(BaseModel):
+    comportement: str
+
+
+# ------------------------------------------------------------------------
+# Licence — voir Infrastructure/licence.py. `/systeme/licence/etat` est
+# appelée par le frontend à chaque chargement de /admin (voir admin.jsx)
+# pour décider d'afficher l'app normale ou l'écran "système désactivé" —
+# fonctionne hors ligne, voir la docstring du module. `/activer` sert
+# aussi bien au tout premier amorçage (voir defaultAdmin.py) qu'à
+# renouveler la licence d'une installation déjà amorcée avec un nouveau
+# code, sans avoir à recréer le compte admin.
+# ------------------------------------------------------------------------
+class DemandeCodeLicence(BaseModel):
+    code: str
+
+
+@app.get(
+    "/systeme/thermique",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Système"],
+    summary="État thermique et régime anti-surchauffe du processeur Edge AI",
+    description="Renvoie la température CPU, le régime thermique (NOMINAL, ECO_TIEDE, PROTECTION_SURCHAUFFE) et la cadence d'inférence recommandée.",
+)
+def obtenir_etat_thermique():
+    return gestion_thermique.obtenir_profil_thermique()
+
+
+@app.get(
+    "/systeme/licence/etat",
+    tags=["Système"],
+    summary="État de la licence de cette installation",
+    description="Voir Infrastructure/licence.py — calculable entièrement hors ligne.",
+)
+def etat_licence():
+    return licence.etat()
+
+
+class DemandeReboot(BaseModel):
+    code: str | None = None
+
+
+@app.get("/systeme/profil", tags=["Système"], summary="Profil d'usage (particulier / entreprise)")
+def profil_systeme():
+    return profil_usage.description()
+
+
+@app.post(
+    "/systeme/reboot",
+    tags=["Système"],
+    summary="Réinitialise complètement l'installation (efface TOUTES les données)",
+    description="Admin connecté OU code d'amorçage de l'installation (mot de passe perdu). IRRÉVERSIBLE.",
+)
+def rebooter_systeme(
+    demande: DemandeReboot | None = None,
+    utilisateur: dict | None = Depends(session.utilisateur_optionnel),
+):
+    est_admin = bool(utilisateur) and utilisateur.get("role") == "admin"
+    code_ok = bool(demande) and licence.code_correspond(demande.code)
+    rien_a_perdre = not compte.lister_utilisateurs()
+    if not (est_admin or code_ok or rien_a_perdre):
+        raise HTTPException(403, "Réinitialisation refusée : connectez-vous en admin ou fournissez le code d'amorçage.")
+    reboot.reinitialiser()
+    session.regenerer_secret()
+    return {"reinitialise": True}
+
+
+@app.post(
+    "/systeme/licence/activer",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Système"],
+    summary="Active (ou renouvelle) la licence avec un code d'amorçage",
+    description="Vérifie `code` en ligne auprès de previa-SV (accès admin requis).",
+    responses={403: {"description": "Code invalide, désactivé, ou previa-SV injoignable"}},
+)
+def activer_licence(demande: DemandeCodeLicence):
+    try:
+        return licence.activer(demande.code)
+    except licence.CodeInvalide as exc:
+        raise HTTPException(403, str(exc))
+
+
+@app.post(
+    "/systeme/comparateur/tester",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Système"],
+    summary="Tester le comparateur IA avec une phrase libre",
+    description="Appelle directement comparaison_ia.comparer() (accès admin requis).",
+)
+def tester_comparateur(demande: DemandeComparateur):
+    return comparaison_ia.comparer(demande.comportement)
+
+
+@app.post(
+    "/systeme/sauvegarder",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Système"],
+    summary="Forcer une sauvegarde immédiate de l'état comportemental",
+    description="Appelle etat_persistant.sauvegarder_maintenant() (accès admin requis).",
+)
+def forcer_sauvegarde():
+    etat_persistant.sauvegarder_maintenant()
+    return {"sauvegarde": True}
+
+
+@app.get(
+    "/systeme/identites",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Système"],
+    summary="Registres d'identité bruts (visages/corps)",
+    description="Contenu brut sous faces/ et corps/ (identités confirmées et candidates).",
+)
+def voir_identites():
+    return {
+        "faces_registry": db.reference("faces/registry").get() or {},
+        "faces_candidates": db.reference("faces/candidates").get() or {},
+        "corps_registry": db.reference("corps/registry").get() or {},
+        "corps_candidates": db.reference("corps/candidates").get() or {},
+    }
+
+
+# ============================================================================
+# GESTION DU PERSONNEL & BIOMÉTRIE FACE ID (Persistance locale permanente)
+# ============================================================================
+
+PERSONNEL_INITIAL_DEFAULT = []
+
+
+class PersonnelModel(BaseModel):
+    id: str | None = None
+    prenom: str
+    nom: str
+    matricule: str | None = None
+    poste: str | None = "Collaborateur"
+    departement: str | None = "Informatique"
+    statut: str | None = "actif"
+    zonesAutorisees: list[str] | None = None
+    photoUrl: str | None = None
+    photos: dict[str, str] | None = None
+    embeddings: list[list[float]] | None = None
+    dateEnrolement: str | None = None
+    confianceBiometrique: str | None = "Excellente (99%)"
+
+
+class PersonnelUpdateModel(BaseModel):
+    prenom: str | None = None
+    nom: str | None = None
+    matricule: str | None = None
+    poste: str | None = None
+    departement: str | None = None
+    statut: str | None = None
+    zonesAutorisees: list[str] | None = None
+    photoUrl: str | None = None
+    photos: dict[str, str] | None = None
+    embeddings: list[list[float]] | None = None
+    confianceBiometrique: str | None = None
+
+
+@app.get(
+    "/personnel",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Personnel"],
+    summary="Liste du personnel enregistré pour la reconnaissance Face ID",
+)
+def lister_personnel():
+    ref = db.reference("personnel")
+    donnees = ref.get()
+    mock_ids = {"emp_001", "emp_002", "emp_003", "emp_004"}
+    
+    if not donnees:
+        return []
+    if isinstance(donnees, dict):
+        # Nettoyage automatique des anciens profils fictifs si présents
+        for m_id in mock_ids:
+            if m_id in donnees:
+                try:
+                    db.reference(f"personnel/{m_id}").delete()
+                except Exception:
+                    pass
+        return [p for k, p in donnees.items() if p and k not in mock_ids and p.get("id") not in mock_ids]
+    elif isinstance(donnees, list):
+        return [p for p in donnees if p is not None and p.get("id") not in mock_ids]
+    return []
+
+
+def extraire_embedding_depuis_photo(photo_str: str) -> list[float] | None:
+    """Extrait l'embedding facial ArcFace 512D depuis une image photoUrl (base64 ou URL)."""
+    if not photo_str or not isinstance(photo_str, str):
+        return None
+    try:
+        import base64
+        import io
+        from PIL import Image
+        from fonctionnalites.DetectionPrincipal import on_voit_qui
+
+        raw = photo_str
+        if "," in raw:
+            raw = raw.split(",", 1)[1]
+        img_bytes = base64.b64decode(raw)
+        pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        img_bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
+        models = on_voit_qui._get_models()
+        faces = on_voit_qui.detect_faces(models["face"], img_bgr, poses=None)
+        if faces and len(faces) > 0:
+            meilleur = max(faces, key=lambda f: f.get("confidence", 0.0))
+            return meilleur.get("embedding")
+    except Exception as e:
+        print(f"[personnel] Erreur extraction embedding photo: {e}", flush=True)
+    return None
+
+
+def synchroniser_biometrie_personnel():
+    """Synchronise rétroactivement les embeddings Face ID pour tous les collaborateurs enregistrés."""
+    try:
+        personnel_dict = db.reference("personnel").get() or {}
+        if not isinstance(personnel_dict, dict):
+            return
+        for emp_id, emp in personnel_dict.items():
+            if not emp or not isinstance(emp, dict):
+                continue
+            photo = emp.get("photoUrl")
+            photos = emp.get("photos") or {}
+            emb = emp.get("embedding")
+            embs = emp.get("embeddings") or []
+            reg_entry = db.reference(f"faces/registry/{emp_id}").get()
+
+            if (photo or photos) and (not emb or not reg_entry or not embs):
+                print(f"[personnel] Synchronisation biométrique multi-angles pour {emp.get('prenom')} {emp.get('nom')} ({emp_id})...", flush=True)
+                nouveaux_embs = []
+                # Extraction sur toutes les photos d'angles
+                for angle, img_data in photos.items():
+                    if img_data:
+                        e = extraire_embedding_depuis_photo(img_data)
+                        if e:
+                            nouveaux_embs.append(e)
+                if photo and not nouveaux_embs:
+                    e = extraire_embedding_depuis_photo(photo)
+                    if e:
+                        nouveaux_embs.append(e)
+
+                if nouveaux_embs:
+                    db.reference(f"personnel/{emp_id}/embedding").set(nouveaux_embs[0])
+                    db.reference(f"personnel/{emp_id}/embeddings").set(nouveaux_embs)
+                    db.reference(f"personnel/{emp_id}/face_id").set(emp_id)
+                    db.reference(f"faces/registry/{emp_id}").set({
+                        "embedding": nouveaux_embs[0],
+                        "embeddings": nouveaux_embs,
+                        "first_seen": time.time(),
+                        "last_seen": time.time(),
+                        "emp_id": emp_id,
+                        "nom": f"{emp.get('prenom', '')} {emp.get('nom', '')}".strip(),
+                        "matricule": emp.get("matricule"),
+                    })
+                    print(f"[personnel] ✅ Face ID multi-angles synchronisé ({len(nouveaux_embs)} angles) pour {emp.get('prenom')} {emp.get('nom')}", flush=True)
+    except Exception as e:
+        print(f"[personnel] Erreur synchronisation biométrique: {e}", flush=True)
+
+
+@app.on_event("startup")
+def _demarrage_serveur():
+    """Au démarrage, synchroniser la biométrie du personnel et démarrer les workers."""
+    try:
+        threading.Thread(target=synchroniser_biometrie_personnel, daemon=True).start()
+    except Exception:
+        pass
+
+
+@app.post(
+    "/personnel",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Personnel"],
+    summary="Enregistrer ou ajouter un collaborateur avec son Face ID multi-angles",
+)
+def enregistrer_personnel(donnees: PersonnelModel):
+    id_personne = donnees.id or f"emp_{int(time.time() * 1000)}"
+    data = donnees.dict()
+    data["id"] = id_personne
+    if not data.get("matricule"):
+        data["matricule"] = f"PRV-{int(time.time() % 10000):04d}"
+    if not data.get("dateEnrolement"):
+        data["dateEnrolement"] = time.strftime("%d/%m/%Y")
+    if not data.get("zonesAutorisees"):
+        data["zonesAutorisees"] = ["Toutes les zones"]
+
+    # Extraction multi-angles ArcFace
+    tous_embeddings = []
+    photos_dict = data.get("photos") or {}
+    for angle_key, p_str in photos_dict.items():
+        if p_str:
+            emb_a = extraire_embedding_depuis_photo(p_str)
+            if emb_a:
+                tous_embeddings.append(emb_a)
+
+    if not tous_embeddings and data.get("photoUrl"):
+        emb_single = extraire_embedding_depuis_photo(data.get("photoUrl"))
+        if emb_single:
+            tous_embeddings.append(emb_single)
+
+    if tous_embeddings:
+        data["embedding"] = tous_embeddings[0]
+        data["embeddings"] = tous_embeddings
+        data["face_id"] = id_personne
+        db.reference(f"faces/registry/{id_personne}").set({
+            "embedding": tous_embeddings[0],
+            "embeddings": tous_embeddings,
+            "first_seen": time.time(),
+            "last_seen": time.time(),
+            "emp_id": id_personne,
+            "nom": f"{data.get('prenom', '')} {data.get('nom', '')}".strip(),
+            "matricule": data.get("matricule"),
+        })
+
+    db.reference(f"personnel/{id_personne}").set(data)
+    return data
+
+
+@app.put(
+    "/personnel/{id_personne}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Personnel"],
+    summary="Mettre à jour les informations ou le statut d'un collaborateur",
+)
+def mettre_a_jour_personnel(id_personne: str, modifs: PersonnelUpdateModel):
+    ref = db.reference(f"personnel/{id_personne}")
+    existant = ref.get()
+    if not existant:
+        raise HTTPException(404, f"Personnel {id_personne} introuvable")
+
+    maj_dict = {k: v for k, v in modifs.dict().items() if v is not None}
+    
+    # Mise à jour des photos / embeddings multi-angles
+    tous_embeddings = []
+    photos_dict = maj_dict.get("photos") or existant.get("photos") or {}
+    for angle_key, p_str in photos_dict.items():
+        if p_str:
+            emb_a = extraire_embedding_depuis_photo(p_str)
+            if emb_a:
+                tous_embeddings.append(emb_a)
+
+    if not tous_embeddings:
+        photo_a_tester = maj_dict.get("photoUrl") or existant.get("photoUrl")
+        if photo_a_tester:
+            emb_s = extraire_embedding_depuis_photo(photo_a_tester)
+            if emb_s:
+                tous_embeddings.append(emb_s)
+
+    if tous_embeddings:
+        maj_dict["embedding"] = tous_embeddings[0]
+        maj_dict["embeddings"] = tous_embeddings
+        maj_dict["face_id"] = id_personne
+        db.reference(f"faces/registry/{id_personne}").set({
+            "embedding": tous_embeddings[0],
+            "embeddings": tous_embeddings,
+            "first_seen": time.time(),
+            "last_seen": time.time(),
+            "emp_id": id_personne,
+            "nom": f"{maj_dict.get('prenom') or existant.get('prenom', '')} {maj_dict.get('nom') or existant.get('nom', '')}".strip(),
+            "matricule": maj_dict.get("matricule") or existant.get("matricule"),
+        })
+
+    ref.update(maj_dict)
+    existant.update(maj_dict)
+    return existant
+
+
+class VerificationVisageModel(BaseModel):
+    image: str
+
+
+@app.post(
+    "/personnel/verifier-visage",
+    dependencies=[Depends(session.exiger_authentification)],
+    tags=["Personnel"],
+    summary="Vérifie si un visage humain est détecté avant de valider le scan",
+)
+def verifier_visage_scan(payload: VerificationVisageModel):
+    import base64
+    import io
+    from PIL import Image
+    import numpy as np
+
+    raw = payload.image
+    if "," in raw:
+        raw = raw.split(",", 1)[1]
+
+    try:
+        img_bytes = base64.b64decode(raw)
+        pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        img_np = np.array(pil_img)
+    except Exception as e:
+        return {"valide": False, "erreur": f"Format d'image invalide: {e}"}
+
+    visage_detecte = False
+    confiance_score = 0.0
+    qualite_texte = "Bonne (95%)"
+    img_amelioree_b64 = payload.image
+
+    # 1. Tentative avec InsightFace si disponible
+    try:
+        from fonctionnalites.DetectionPrincipal import on_voit_qui
+        face_app = getattr(on_voit_qui, "_face_app", None)
+        if face_app is None and hasattr(on_voit_qui, "_get_models"):
+            try:
+                models = on_voit_qui._get_models()
+                face_app = models.get("face") if isinstance(models, dict) else None
+            except Exception as e:
+                print(f"[main] Impossible d'initialiser face_app : {e}", flush=True)
+        if face_app is not None:
+            faces = face_app.get(img_np[:, :, ::-1])
+            if faces and len(faces) > 0:
+                meilleur = max(faces, key=lambda f: getattr(f, "det_score", 0.0))
+                score = float(getattr(meilleur, "det_score", 0.0))
+                if score >= 0.5:
+                    visage_detecte = True
+                    confiance_score = score
+                    qualite_texte = f"Excellente ({int(min(99, score * 100))}%)"
+    except Exception as _e_face:
+        print(f"[main] Erreur détection visage InsightFace : {_e_face}", flush=True)
+
+    # 2. Détection via modèle YOLO Pose (Keypoints visage : nez, yeux, oreilles)
+    if not visage_detecte:
+        try:
+            from ultralytics import YOLO
+            models_dir = Path(__file__).resolve().parent.parent.parent.parent / "models"
+            pose_path = models_dir / "yolo11x-pose.pt"
+            if not pose_path.exists():
+                pose_path = "yolo11n-pose.pt"
+
+            pose_model = YOLO(str(pose_path))
+            results = pose_model(img_np, verbose=False)
+            for r in results:
+                if hasattr(r, "keypoints") and r.keypoints is not None and len(r.keypoints.data) > 0:
+                    kps = r.keypoints.data.cpu().numpy()
+                    for kp in kps:
+                        # 0: nose, 1: left_eye, 2: right_eye, 3: left_ear, 4: right_ear
+                        conf_nez = float(kp[0][2])
+                        conf_oeil_g = float(kp[1][2])
+                        conf_oeil_d = float(kp[2][2])
+
+                        # Un visage face caméra a au moins le nez et un œil clairement visibles
+                        if conf_nez > 0.45 and (conf_oeil_g > 0.4 or conf_oeil_d > 0.4):
+                            visage_detecte = True
+                            moyenne_conf = (conf_nez + max(conf_oeil_g, conf_oeil_d)) / 2.0
+                            confiance_score = float(moyenne_conf)
+                            qualite_texte = f"Excellente ({int(min(99, moyenne_conf * 100))}%)"
+                            break
+                if visage_detecte:
+                    break
+        except Exception as e:
+            print(f"[verifier_visage] Erreur fallback YOLO: {e}", flush=True)
+
+    if not visage_detecte:
+        return {
+            "valide": False,
+            "visage_detecte": False,
+            "erreur": "Aucun visage net détecté. Veuillez vous positionner bien face à la caméra.",
+        }
+
+    return {
+        "valide": True,
+        "visage_detecte": True,
+        "confiance": confiance_score,
+        "confianceBiometrique": qualite_texte,
+        "image_amelioree": img_amelioree_b64,
+    }
+
+
+@app.delete(
+    "/personnel/{id_personne}",
+    dependencies=[Depends(session.exiger_admin)],
+    tags=["Personnel"],
+    summary="Supprimer définitivement un collaborateur et ses données biométriques",
+)
+def supprimer_personnel(id_personne: str):
+    db.reference(f"personnel/{id_personne}").delete()
+    db.reference(f"faces/registry/{id_personne}").delete()
+    return {"succes": True, "id": id_personne}
+
+
+# --------------------------------------------------------------------------
+# SERVIR L'INTERFACE WEB STATIQUE (DASHBOARD REACT / VITE)
+# --------------------------------------------------------------------------
+_dist_web = Path(__file__).resolve().parent.parent.parent / "frontend" / "web" / "dist"
+if _dist_web.exists():
+    app.mount("/", StaticFiles(directory=str(_dist_web), html=True), name="static_web")
+
+
+@app.on_event("startup")
+def _demarrer_workers_cameras_existants():
+    """Au démarrage du serveur FastAPI, lance automatiquement les workers
+    FFmpeg permanents pour TOUTES les caméras IP existantes enregistrées."""
+    try:
+        cams = camera.lister_cameras()
+        for c in cams:
+            if c.get("url_flux"):
+                print(f"[main] 🚀 Démarrage worker caméra existante {c['id']} ({rtsp_service.masquer_url_rtsp(c['url_flux'])})", flush=True)
+                rtsp_service.demarrer_worker_camera(c["id"], c["url_flux"])
+    except Exception as exc:
+        print(f"[main] Erreur démarrage auto workers caméras : {exc}", flush=True)
+
+
+@app.on_event("shutdown")
+def _sauvegarder_a_larret():
+    """Filet de sécurité en plus de la sauvegarde périodique (voir /qui) :
+    un arrêt propre (uvicorn reçoit SIGTERM, ex. `pkill` sans -9) laisse
+    jusqu'à SAUVEGARDE_INTERVALLE_S secondes d'état non sauvegardé — cet
+    évènement force une dernière écriture avant que le process ne
+    termine. N'aide pas contre un `kill -9`/crash brutal."""
+    etat_persistant.sauvegarder_maintenant()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    _racine = Path(__file__).resolve().parent.parent.parent
+    _cert = _racine / "certs" / "cert.pem"
+    _key = _racine / "certs" / "key.pem"
+    _ssl = {}
+    if _cert.exists() and _key.exists():
+        _ssl = {"ssl_certfile": str(_cert), "ssl_keyfile": str(_key)}
+    uvicorn.run("fonctionnalites.main.main:app", host="0.0.0.0", port=8012, **_ssl)
